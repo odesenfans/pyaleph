@@ -240,27 +240,28 @@ def main(args):
         manager = prepare_manager(config_values)
 
     with Manager() as shared_memory_manager:
-        tasks: List[Coroutine] = []
+        background_tasks: List[Coroutine] = []
         # This dictionary is shared between all the process so we can expose some internal stats
         # handle with care as it's shared between process.
         shared_stats = shared_memory_manager.dict()
         if not args.no_jobs:
             LOGGER.debug("Creating jobs")
-            tasks += start_jobs(config, shared_stats=shared_stats,
+            background_tasks += start_jobs(config, shared_stats=shared_stats,
                                 manager=manager, use_processes=False)
 
         loop = asyncio.get_event_loop()
 
         # handler = app.make_handler(loop=loop)
         LOGGER.debug("Initializing p2p")
-        f = p2p.init_p2p(config)
-        p2p_tasks = loop.run_until_complete(f)
-        tasks += p2p_tasks
+        p2p_tasks = loop.run_until_complete(
+            p2p.init_p2p(config)
+        )
+        background_tasks += p2p_tasks
         LOGGER.debug("Initialized p2p")
 
         LOGGER.debug("Initializing listeners")
-        tasks += listener_tasks(config)
-        tasks += connector_tasks(config, outgoing=(not args.no_commit))
+        background_tasks += listener_tasks(config)
+        background_tasks += connector_tasks(config, outgoing=(not args.no_commit))
         LOGGER.debug("Initialized listeners")
 
         # Need to be passed here otherwise it get lost in the fork
@@ -306,7 +307,7 @@ def main(args):
         # srv = loop.run_until_complete(f)
         # LOGGER.info('Serving on %s', srv.sockets[0].getsockname())
         LOGGER.debug("Running event loop")
-        loop.run_until_complete(asyncio.gather(*tasks))
+        loop.run_until_complete(asyncio.gather(*background_tasks))
 
 def run():
     """Entry point for console_scripts

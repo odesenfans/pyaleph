@@ -41,7 +41,7 @@ async def initialize_host(key, host='0.0.0.0', port=4025, listen=True, protocol_
 
     assert key, "Host cannot be initialized without a key"
 
-    tasks: List[Coroutine]
+    background_tasks: List[Coroutine] = []
 
     priv = import_key(key)
     private_key = RSAPrivateKey(priv)
@@ -58,7 +58,7 @@ async def initialize_host(key, host='0.0.0.0', port=4025, listen=True, protocol_
     psub = Pubsub(host, flood, host.get_id())
     if protocol_active:
         protocol = AlephProtocol(host)
-    tasks = [
+    background_tasks += [
         reconnect_p2p_job(),
         tidy_http_peers_job(),
     ]
@@ -76,7 +76,7 @@ async def initialize_host(key, host='0.0.0.0', port=4025, listen=True, protocol_
 
         LOGGER.info("Probable public on " + public_address)
         # TODO: set correct interests and args here
-        tasks += [
+        background_tasks += [
             publish_host(public_address, psub, peer_type="P2P"),
             publish_host(public_http_address, psub, peer_type="HTTP"),
             monitor_hosts(psub),
@@ -85,4 +85,4 @@ async def initialize_host(key, host='0.0.0.0', port=4025, listen=True, protocol_
         # Enable message exchange using libp2p
         # host.set_stream_handler(PROTOCOL_ID, stream_handler)
 
-    return (host, psub, protocol, tasks)
+    return host, psub, protocol, background_tasks
