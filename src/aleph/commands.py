@@ -23,10 +23,14 @@ from aleph import __version__
 from aleph import model
 from aleph.chains import connector_tasks
 from aleph.config import get_defaults
-from aleph.jobs import start_jobs, prepare_loop, prepare_manager
+from aleph.jobs import start_jobs, prepare_loop, prepare_manager, reconnect_ipfs_job, \
+    messages_task_loop, txs_task_loop
 from aleph.network import listener_tasks
 from aleph.services import p2p
+from aleph.services.ipfs.pubsub import run_ipfs_incoming_channel
+from aleph.services.p2p import run_p2p
 from aleph.services.p2p.manager import generate_keypair
+from aleph.services.p2p.protocol import run_p2p_incoming_channel
 from aleph.web import app, init_cors
 
 
@@ -165,14 +169,31 @@ def run_server_coroutine(config_values, host, port, manager, idx, shared_stats, 
     # Use a try-catch-capture_exception to work with multiprocessing, see
     # https://github.com/getsentry/raven-python/issues/1110
     try:
-        loop, tasks = prepare_loop(config_values, manager, idx=idx)
-        loop.run_until_complete(
-            asyncio.gather(*tasks, run_server(host, port, shared_stats, extra_web_config)))
+        loop, tasks = prepare_loop(loop, config_values, manager, idx=idx)
+        # The initialisation of libp2p registered multiple coroutines in
+        # the event loop using `asyncio.ensure_future()`, so we cannot
+        # use `loop.run_until_complete()` on the background tasks.
+        for task in tasks:
+            loop.create_task(task)
+        loop.create_task(run_server(host, port, shared_stats, extra_web_config))
+        loop.run_forever()
     except Exception as e:
         if enable_sentry:
             sentry_sdk.capture_exception(e)
             sentry_sdk.flush()
         raise
+
+
+def run_coroutine(coroutine):
+    loop = asyncio.get_event_loop()
+    return loop.run_until_complete(coroutine)
+
+
+def run_in_process(coroutine):
+    return Process(
+        run_coroutine,
+        args=(coroutine, ),
+    )
 
 
 def main(args):
@@ -240,26 +261,47 @@ def main(args):
         manager = prepare_manager(config_values)
 
     with Manager() as shared_memory_manager:
-        tasks: List[Coroutine] = []
         # This dictionary is shared between all the process so we can expose some internal stats
         # handle with care as it's shared between process.
         shared_stats = shared_memory_manager.dict()
-        if not args.no_jobs:
-            LOGGER.debug("Creating jobs")
-            tasks += start_jobs(config, shared_stats=shared_stats,
-                                manager=manager, use_processes=False)
 
-        loop = asyncio.get_event_loop()
+        LOGGER.info("starting jobs")
+
+        if not args.no_jobs:
+            process_messages_task_loop = Process(target=messages_task_loop,
+                                                 args=(
+                                                     config_values, manager and (manager._address, manager._authkey) or None))
+            process_txs_task_loop = Process(target=txs_task_loop,
+                                            args=(
+                                                config_values, manager and (manager._address, manager._authkey) or None))
+
+            process_messages_task_loop.start()
+            process_txs_task_loop.start()
+
+            if config.ipfs.enabled.value:
+                process_reconnect_ipfs = run_in_process(reconnect_ipfs_job(config))
+                process_reconnect_ipfs.start()
+            else:
+                process_reconnect_ipfs = None
 
         # handler = app.make_handler(loop=loop)
         LOGGER.debug("Initializing p2p")
-        f = p2p.init_p2p(config)
-        p2p_tasks = loop.run_until_complete(f)
-        tasks += p2p_tasks
+        process_p2p = Process(run_p2p, args=(config,))
+        process_p2p.start()
         LOGGER.debug("Initialized p2p")
 
         LOGGER.debug("Initializing listeners")
-        tasks += listener_tasks(config)
+        process_ipfs_incoming = Process(run_ipfs_incoming_channel,
+                                        args=(config, config.aleph.queue_topic.value))
+        process_ipfs_incoming.start()
+
+        process_p2p_incoming = Process(run_p2p_incoming_channel,
+                                       args=(config, config.aleph.queue_topic.value))
+        process_p2p_incoming.start()
+
+        # tasks += listener_tasks(config)
+
+        # TODO: This will be more tricky since it uses global variables
         tasks += connector_tasks(config, outgoing=(not args.no_commit))
         LOGGER.debug("Initialized listeners")
 
@@ -269,7 +311,7 @@ def main(args):
             'public_adresses': p2p_manager.public_adresses
         }
 
-        p1 = Process(target=run_server_coroutine, args=(
+        process_server_http_1 = Process(target=run_server_coroutine, args=(
             config_values,
             config.p2p.host.value,
             config.p2p.http_port.value,
@@ -280,7 +322,7 @@ def main(args):
             extra_web_config,
 
         ))
-        p2 = Process(target=run_server_coroutine, args=(
+        process_serve_http_2 = Process(target=run_server_coroutine, args=(
             config_values,
             config.aleph.host.value,
             config.aleph.port.value,
@@ -290,8 +332,8 @@ def main(args):
             args.sentry_disabled is False and app['config'].sentry.dsn.value,
             extra_web_config
         ))
-        p1.start()
-        p2.start()
+        process_server_http_1.start()
+        process_serve_http_2.start()
         LOGGER.debug("Started processes")
 
         # fp2p = loop.create_server(handler,

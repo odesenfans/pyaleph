@@ -131,12 +131,12 @@ async def check_message(message, from_chain=False, from_network=False,
             return None
 
 
-def listener_tasks(config) -> List[Coroutine]:
-    from aleph.services.p2p import incoming_channel as incoming_p2p_channel
-    # for now (1st milestone), we only listen on a single global topic...
-    tasks: List[Coroutine] = [
-        incoming_p2p_channel(config, config.aleph.queue_topic.value)
-    ]
-    if config.ipfs.enabled.value:
-        tasks.append(incoming_ipfs_channel(config, config.aleph.queue_topic.value))
-    return tasks
+# def listener_tasks(config) -> List[Coroutine]:
+#     from aleph.services.p2p import incoming_channel as incoming_p2p_channel
+#     # for now (1st milestone), we only listen on a single global topic...
+#     tasks: List[Coroutine] = [
+#         incoming_p2p_channel(config, config.aleph.queue_topic.value)
+#     ]
+#     if config.ipfs.enabled.value:
+#         tasks.append(incoming_ipfs_channel(config, config.aleph.queue_topic.value))
+#     return tasks

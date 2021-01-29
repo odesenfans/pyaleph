@@ -1,3 +1,5 @@
+import asyncio
+import logging
 from typing import Coroutine, List
 
 from . import singleton
@@ -5,6 +7,8 @@ from .manager import initialize_host
 from .peers import connect_peer
 from .protocol import incoming_channel
 from .pubsub import pub, sub
+
+logger = logging.getLogger(__name__)
 
 
 async def init_p2p(config, listen=True, port_id=0) -> List[Coroutine]:
@@ -21,3 +25,9 @@ async def get_host():
 
 async def get_pubsub():
     return singleton.pubsub
+
+def run_p2p(config):
+    # logger.debug("Initializing p2p")
+    loop = asyncio.get_event_loop()
+    tasks = loop.run_until_complete(init_p2p(config=config))
+    loop.run_until_complete(asyncio.gather(tasks))

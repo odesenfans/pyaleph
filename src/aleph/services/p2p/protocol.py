@@ -221,5 +221,6 @@ async def request_hash(item_hash):
     else:
         return None
 
-        
-
+def run_p2p_incoming_channel(config, topic):
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(incoming_channel(config=config, topic=topic))
