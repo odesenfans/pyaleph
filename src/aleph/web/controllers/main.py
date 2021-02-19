@@ -1,4 +1,5 @@
 import asyncio
+import json
 from dataclasses import asdict
 from typing import Dict
 
@@ -82,3 +83,21 @@ async def metrics_json(request):
 
 
 app.router.add_get('/metrics.json', metrics_json)
+
+
+async def routes_html(request):
+    html = "<!doctype html><html><head><style>body {font-family: mono}</style></head><body>"
+    for route in app.router.routes():
+        path = route.get_info().get('path')
+        if path is None:
+            continue
+        if route.method == 'GET':
+            html += f"{route.method:~>8} <a href='{path}'>{path}</a><br/>\n"
+        else:
+            html += f"{route.method:~>8} {path}<br/>\n"
+
+    html += "</body></html>"
+    html = html.replace("~", "&nbsp;")
+    return web.Response(body=html, content_type='text/html')
+
+app.router.add_get('/private/routes', routes_html)
