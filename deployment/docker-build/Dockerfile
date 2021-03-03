@@ -11,7 +11,8 @@ RUN apt-get update && apt-get -y upgrade && apt-get install -y \
      python3-pip \
      python3-venv \
      build-essential \
-     git && \
+     git \
+     curl && \
      rm -rf /var/lib/apt/lists/*
 
 # Install system dependencies
