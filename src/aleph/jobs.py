@@ -329,7 +329,9 @@ def prepare_loop(config_values, manager=None, idx=1):
     app['config'] = config
     config.load_values(config_values)
 
-    init_db(config, ensure_indexes=False)
+    init_db(mongodb_uri=config.mongodb.uri.value,
+            mongodb_database=config.mongodb.database.value,
+            ensure_indexes=False)
     loop.run_until_complete(get_ipfs_api(timeout=2, reset=True))
     tasks = loop.run_until_complete(init_p2p(config, listen=False, port_id=idx))
     return loop, tasks

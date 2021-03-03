@@ -18,15 +18,13 @@ db = None
 fs = None
 
 
-def init_db(config, ensure_indexes=True):
+def init_db(mongodb_uri: str, mongodb_database: str, ensure_indexes: bool=True):
     global connection, db, fs
-    connection = AsyncIOMotorClient(config.mongodb.uri.value,
-                                    tz_aware=True)
-    db = connection[config.mongodb.database.value]
+    connection = AsyncIOMotorClient(mongodb_uri, tz_aware=True)
+    db = connection[mongodb_database]
     fs = AsyncIOMotorGridFSBucket(db)
-    sync_connection = MongoClient(config.mongodb.uri.value,
-                                  tz_aware=True)
-    sync_db = sync_connection[config.mongodb.database.value]
+    sync_connection = MongoClient(mongodb_uri, tz_aware=True)
+    sync_db = sync_connection[mongodb_database]
 
     if ensure_indexes:
         LOGGER.info('Inserting indexes')
