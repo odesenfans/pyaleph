@@ -1,3 +1,4 @@
+from functools import lru_cache
 from logging import getLogger
 
 try:
@@ -39,3 +40,13 @@ def init_db(mongodb_uri: str, mongodb_database: str, ensure_indexes: bool=True):
         Peer.ensure_indexes(sync_db)
         # from aleph.model.hashes import Hash
         # Hash.ensure_indexes(sync_db)
+
+
+@lru_cache()
+def get_db(mongodb_uri: str, mongodb_database: str):
+    connection = AsyncIOMotorClient(mongodb_uri, tz_aware=True)
+    db = connection[mongodb_database]
+    # fs = AsyncIOMotorGridFSBucket(db)
+    # sync_connection = MongoClient(mongodb_uri, tz_aware=True)
+    # sync_db = sync_connection[mongodb_database]
+    return db

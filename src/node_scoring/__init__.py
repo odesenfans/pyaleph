@@ -14,7 +14,10 @@ from libp2p.crypto.secp256k1 import create_new_key_pair
 from libp2p.peer.peerinfo import info_from_p2p_addr
 from multiaddr import multiaddr, Multiaddr
 
+from aleph.model import get_db
+
 logger = logging.getLogger()
+logger.setLevel(logging.ERROR)
 Url = NewType('Url', str)
 
 
@@ -58,14 +61,16 @@ class NodeMetrics:
         if self.error:
             return str(self.error)
         else:
-            return f"{self.p2p_connect_latency} {self.http_index_latency} {self.http_aggregate_latency} {self.http_store_latency} -> {self.global_score()}"
+            return f"{self.p2p_connect_latency:.3f} {self.http_index_latency:.3f} " \
+                   f"{self.http_aggregate_latency:.3f} {self.http_store_latency:.3f} " \
+                   f"-> {self.global_score():.3f}"
 
 
 async def get_aggregate(url: Url):
     timeout = aiohttp.ClientTimeout(total=60)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         async with session.get(url) as resp:
-            print(resp.status)
+            resp.raise_for_status()
             return await resp.json()
 
 
@@ -82,7 +87,7 @@ async def measure_coroutine_latency(coroutine: Coroutine, timeout: float=2.) -> 
         await asyncio.wait_for(coroutine, timeout=timeout)
         return time.time() - t0
     except asyncio.TimeoutError:
-        return None
+        raise TimeoutError(f"Cancelled '{coroutine.__name__}' after {timeout} seconds")
 
 
 async def p2p_connect(host: BasicHost, address: Multiaddr) -> Optional[float]:
@@ -156,6 +161,19 @@ store_message = {
 }
 
 
+async def get_random_message():
+    """Get a random message in MongoDB"""
+    db = get_db(mongodb_uri="mongodb://127.0.0.1",
+                mongodb_database="alephtest")
+
+    matches = db.messages.aggregate([
+        {'$match': {'type': 'STORE'}},
+        {'$sample': {'size': 1 } },  # Random message
+    ])
+    async for item in matches:
+        return item
+
+
 def get_ipfs_cid_from_url(url: str) -> bytes:
     """Compute the IPFS CID of the data downloaded at an url.
 
@@ -175,14 +193,40 @@ def get_ipfs_cid_from_url(url: str) -> bytes:
     return out.strip()
 
 
-async def http_get_stored_file(address: Multiaddr) -> bool:
+def get_sha256_from_url(url: str) -> bytes:
+    """Compute the sha256 sum of the data downloaded at an url.
+
+    This could be implemented in Python, but it was easy to fork the IPFS version above
+    and may be more performant this way - or not.
+    $ curl --output - "https://releases.ubuntu.com/20.04.1/ubuntu-20.04.1-desktop-amd64.iso" | sha256sum
+    """
+    from subprocess import Popen, PIPE
+    curl_process = Popen(['curl', '--output', '-', '--no-progress-meter', url], stdout=PIPE)
+    sha256_process = Popen(['sha256sum'],
+                         stdin=curl_process.stdout, stdout=PIPE)
+    curl_process.stdout.close()  # enable write error in dd if ssh dies
+    out, err = sha256_process.communicate()
+
+    logger.debug("Downloading URL", url)
+    if err:
+        raise ValueError(err)
+    return out.strip().split(b' ')[0]
+
+
+async def http_get_stored_file(address: Multiaddr, message: Dict) -> bool:
     """Get a file from a node using the HTTP API"""
     ip4 = address.value_for_protocol('ip4')
-    item_hash = store_message['content']['item_hash'].encode()  #TODO: Pick random message
+    item_hash = message['content']['item_hash'].encode()
     url = f"http://{ip4}:4024/api/v0/storage/raw/{item_hash.decode()}"
 
-    loop = asyncio.get_event_loop()
-    served_hash = await loop.run_in_executor(None, partial(get_ipfs_cid_from_url, url))
+    if message['content']['item_type'] == 'ipfs':
+        loop = asyncio.get_event_loop()
+        served_hash = await loop.run_in_executor(None, partial(get_ipfs_cid_from_url, url))
+    elif message['content']['item_type'] == 'storage':
+        loop = asyncio.get_event_loop()
+        served_hash = await loop.run_in_executor(None, partial(get_sha256_from_url, url))
+    else:
+        raise ValueError
 
     if item_hash != served_hash:
         raise ValueError(f"Hashes differ: '{item_hash.decode()}' != '{served_hash.decode()}'")
@@ -209,32 +253,38 @@ async def main():
     nodes = list(nodes_from_aggregate(aggregate))
 
     scores: Dict[str, NodeMetrics] = {}
+
+    # random_message = store_message
+    random_message = await get_random_message()
+    print(f"Scoring using message {random_message['_id']}")
+
     for node in nodes:
         metrics = NodeMetrics()
         try:
             address = Multiaddr(node.multiaddress)
 
-            print('=>', address.protocols())
+            # print('=>', address.protocols())
             metrics.p2p_connect_latency = await measure_coroutine_latency(p2p_connect(p2p_host, address))
             metrics.http_index_latency = await measure_coroutine_latency(http_get_index(address))
             metrics.http_aggregate_latency = await measure_coroutine_latency(http_get_aggregate(address))
-            metrics.http_store_latency = await measure_coroutine_latency(http_get_stored_file(address))
+            metrics.http_store_latency = await measure_coroutine_latency(http_get_stored_file(address, random_message))
 
         except multiaddr.exceptions.StringParseError as error:
             metrics.error = error
-            logger.error(f"Invalid multiaddress {node.multiaddress}")
+            logger.warning(f"Invalid multiaddress {node.multiaddress}")
         except aiohttp.client_exceptions.ClientResponseError as error:
             metrics.error = error
-            logger.error(f"Error {node.multiaddress}")
+            logger.warning(f"Error on {node.multiaddress}")
         except ValueError as error:
             metrics.error = error
-            logger.error(f"Error {node.multiaddress}")
+            logger.warning(f"Error on {node.multiaddress}")
+        except TimeoutError as error:
+            metrics.error = error
+            logger.warning(f"TimeoutError on {node.multiaddress} {error}")
         finally:
             scores[node.hash] = metrics
-            print(node.hash[:12], metrics)
+            print(node.hash, metrics)
 
-    # Get a random message in MongoDB
-    # db.collection.find(query).limit(1).skip(R))
 
 
 loop = asyncio.get_event_loop()
