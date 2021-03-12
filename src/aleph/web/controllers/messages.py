@@ -1,3 +1,5 @@
+import aiohttp
+
 from aleph.model.messages import Message
 from aleph.web import app
 from aiohttp import web
@@ -171,3 +173,23 @@ async def messages_ws(request):
 
 
 app.router.add_get('/api/ws0/messages', messages_ws)
+
+
+async def get_random_message(type: str = 'STORE'):
+    db = Message.collection
+
+    matches = db.aggregate([
+        {'$match': {'type': type}},
+        {'$sample': {'size': 1}},  # Random message
+    ])
+    async for item in matches:
+        return item
+
+
+async def random_message(request: aiohttp.web.Request) -> web.Response:
+    message_type = request.query.get('msgType', 'STORE')
+    message = await get_random_message(type=message_type)
+    message['_id'] = str(message['_id'])
+    return web.json_response(message)
+
+app.router.add_get('/api/v0/messages/random.json', random_message)
