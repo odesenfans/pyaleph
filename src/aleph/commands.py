@@ -115,16 +115,22 @@ def parse_args(args):
     return parser.parse_args(args)
 
 
-def setup_logging(loglevel: int):
+def setup_logging(loglevel: int, filename: Optional[str] = None):
     """Setup basic logging
 
     Args:
       loglevel (int): minimum loglevel for emitting messages
     """
     logformat = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-    logging.basicConfig(
-        level=loglevel, stream=sys.stdout, format=logformat, datefmt="%Y-%m-%d %H:%M:%S"
-    )
+
+    if filename:
+        logging.basicConfig(
+            level=loglevel, filename=filename, format=logformat, datefmt="%Y-%m-%d %H:%M:%S",
+        )
+    else:
+        logging.basicConfig(
+            level=loglevel, stream=sys.stdout, format=logformat, datefmt="%Y-%m-%d %H:%M:%S",
+        )
 
 
 async def run_server(host: str, port: int, shared_stats: dict, extra_web_config: dict):
@@ -170,6 +176,8 @@ def run_server_coroutine(
     Used as target of multiprocessing.Process.
     """
     extra_web_config = extra_web_config or {}
+    setup_logging(loglevel=config_values["logging"]["level"],
+                  filename=f'/tmp/run_server_coroutine-{port}.log')
     if enable_sentry:
         sentry_sdk.init(
             dsn=config_values["sentry"]["dsn"],
@@ -210,6 +218,9 @@ def main(args):
     LOGGER.info("Loading configuration")
     config = Config(schema=get_defaults())
     app["config"] = config
+
+    if args.loglevel:
+        config.logging.level.value = args.loglevel
 
     if args.config_file is not None:
         LOGGER.debug("Loading config file '%s'", args.config_file)

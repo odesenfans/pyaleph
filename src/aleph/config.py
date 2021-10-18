@@ -1,3 +1,6 @@
+import logging
+
+
 def get_defaults():
     return {
         "aleph": {
@@ -74,4 +77,7 @@ def get_defaults():
             "dsn": None,
             "traces_sample_rate": None,
         },
+        "logging": {
+            "level": logging.WARNING,
+        }
     }
