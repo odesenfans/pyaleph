@@ -336,6 +336,7 @@ async def get_chaindata_messages(chaindata, context, seen_ids=None):
             if app["config"].ipfs.enabled.value:
                 # wait for 4 seconds to try to pin that
                 try:
+                    # TODO: Save hash in DB so it can never be unpinned
                     await asyncio.wait_for(pin_hash(chaindata["content"]), timeout=4.0)
                 except asyncio.TimeoutError:
                     LOGGER.warning(f"Can't pin hash {chaindata['content']}")

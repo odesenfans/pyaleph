@@ -37,6 +37,8 @@ async def garbage_collect(storage_hash: str):
 
         if storage == ItemType.IPFS:
             api = await get_ipfs_api(timeout=5)
+            # TODO: Check that the hash is not used to store chaindata messages. These should
+            #  never be unpinned.
             result = await api.pin.rm(storage_hash)
             print(result)
             logger.debug(f"Removed from IPFS: {storage_hash}")
