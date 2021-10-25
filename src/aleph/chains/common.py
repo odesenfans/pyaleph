@@ -8,6 +8,7 @@ from pymongo import UpdateOne
 
 from aleph.handlers.forget import handle_forget_message
 from aleph.handlers.storage import handle_new_storage
+from aleph.model import PermanentPin
 from aleph.model.messages import Message, CappedMessage
 from aleph.model.pending import PendingMessage, PendingTX
 from aleph.network import check_message as check_message_fn
@@ -314,6 +315,7 @@ async def get_chaindata_messages(chaindata, context, seen_ids=None):
         return messages
 
     if protocol == "aleph-offchain" and version == 1:
+        assert type(chaindata["content"]) == "str"
         if seen_ids is not None:
             if chaindata["content"] in seen_ids:
                 # is it really what we want here?
@@ -336,7 +338,13 @@ async def get_chaindata_messages(chaindata, context, seen_ids=None):
             if app["config"].ipfs.enabled.value:
                 # wait for 4 seconds to try to pin that
                 try:
-                    # TODO: Save hash in DB so it can never be unpinned
+                    LOGGER.info(f"chaindatax {chaindata}")
+                    await PermanentPin.register(multihash=chaindata["content"],
+                                                reason={
+                                                    "source": "chaindata",
+                                                    "protocol": chaindata["protocol"],
+                                                    "version": chaindata["version"],
+                                                })
                     await asyncio.wait_for(pin_hash(chaindata["content"]), timeout=4.0)
                 except asyncio.TimeoutError:
                     LOGGER.warning(f"Can't pin hash {chaindata['content']}")
