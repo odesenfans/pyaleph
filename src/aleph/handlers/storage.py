@@ -41,7 +41,7 @@ async def handle_new_storage(message, content):
     if engine == ItemType.IPFS and ipfs_enabled:
         api = await get_ipfs_api(timeout=5)
         try:
-            stats = await asyncio.wait_for(api.files.stat(f"/ipfs/{item_hash}"), 5)
+            stats = await asyncio.wait_for(api.files.stat(f"/ipfs/{item_hash}"), 30)
 
             if (
                 stats["Type"] == "file"
