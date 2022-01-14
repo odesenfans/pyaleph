@@ -19,7 +19,11 @@ sudo apt update && sudo apt install \
     libssl-dev \
     libyaml-dev \
     pkg-config \
+    python3 \
+    python3-pip \
     zlib1g-dev
+
+pip3 install virtualenv
 
 if [ ! -d ${ROOT_DIR}/venv ]; then
     python3 -m virtualenv venv
