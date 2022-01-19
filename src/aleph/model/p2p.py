@@ -2,11 +2,12 @@
 """
 
 from datetime import datetime, timedelta
+from typing import Optional
 
 from pymongo import ASCENDING, DESCENDING, IndexModel
 
-from aleph.types import Protocol
 from aleph.model.base import BaseClass
+from aleph.types import Protocol
 
 
 class Peer(BaseClass):
@@ -21,7 +22,7 @@ class Peer(BaseClass):
     ]
 
 
-async def get_peers(peer_type=None, hours=2):
+async def get_peers(peer_type: Optional[str] = None, hours: int = 2):
     """Returns current peers.
     TODO: handle the last seen, channel preferences, and better way of avoiding "bad contacts".
     NOTE: Currently used in jobs.
@@ -35,7 +36,7 @@ async def get_peers(peer_type=None, hours=2):
         yield peer["address"]
 
 
-async def add_peer(address, peer_type, source: Protocol, sender=None):
+async def add_peer(address: str, peer_type: str, source: Protocol, sender: Optional[str] = None):
     await Peer.collection.replace_one(
         {"address": address, "type": peer_type},
         {

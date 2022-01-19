@@ -2,14 +2,16 @@ import asyncio
 import json
 import logging
 
-from aleph.services.peers.common import ALIVE_TOPIC, IPFS_ALIVE_TOPIC
+from libp2p.pubsub.pubsub import Pubsub
+
 from aleph.services.ipfs.pubsub import pub as pub_ipfs
+from aleph.services.peers.common import ALIVE_TOPIC, IPFS_ALIVE_TOPIC
 
 LOGGER = logging.getLogger("peers.publish")
 
 
 async def publish_host(
-    address, psub, interests=None, delay=120, peer_type="P2P", use_ipfs=True
+    address: str, psub: Pubsub, interests=None, delay: int = 120, peer_type: str = "P2P", use_ipfs: bool = True
 ):
     """Publish our multiaddress regularly, saying we are alive."""
     await asyncio.sleep(2)

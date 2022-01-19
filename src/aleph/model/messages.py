@@ -1,7 +1,7 @@
 import logging
 
 from pymongo import ASCENDING, DESCENDING, IndexModel
-
+from typing import Any, Dict, List, Optional
 from aleph.model.base import BaseClass
 from aleph.network import INCOMING_MESSAGE_AUTHORIZED_FIELDS
 
@@ -74,7 +74,7 @@ class Message(BaseClass):
     ]
 
     @classmethod
-    async def get_unconfirmed_raw(cls, limit=100, for_chain=None):
+    async def get_unconfirmed_raw(cls, limit: int = 100, for_chain=None):
         """Return raw unconfirmed txs, ready for broadcast."""
         if for_chain is None:
             return (
@@ -98,7 +98,7 @@ class Message(BaseClass):
     @classmethod
     def fix_message_confirmations(cls, db):
         logger.info("Fixing message confirmation status...")
-        cls.get_collection(cls, db).update_many(
+        cls.get_collection(db).update_many(
             {
                 "confirmed": {"$exists": False},
                 "confirmations": {"$exists": True, "$ne": []},
@@ -108,7 +108,11 @@ class Message(BaseClass):
         logger.info("Fixed message confirmation status.")
 
 
-async def get_computed_address_aggregates(address_list=None, key_list=None, limit=100):
+async def get_computed_address_aggregates(
+    address_list: Optional[List[str]] = None,
+    key_list: Optional[List[str]] = None,
+    limit: int = 100,
+):
     aggregate = [
         {"$match": {"type": "AGGREGATE"}},
         {"$sort": {"time": -1}},
@@ -156,7 +160,13 @@ async def get_computed_address_aggregates(address_list=None, key_list=None, limi
     return {result["address"]: result["contents"] async for result in results}
 
 
-async def get_merged_posts(filters, sort=None, limit=100, skip=0, amend_limit=1):
+async def get_merged_posts(
+    filters: Dict[str, Any],
+    sort: Optional[Dict[str, int]] = None,
+    limit: int = 100,
+    skip: int = 0,
+    amend_limit: int = 1,
+):
     if sort is None:
         sort = {"confirmed": 1, "time": -1, "confirmations.height": -1}
 

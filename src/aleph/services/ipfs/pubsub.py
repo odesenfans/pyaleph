@@ -1,8 +1,6 @@
 import asyncio
 import base64
 import logging
-from typing import Coroutine, List
-from aiohttp import ClientConnectorError
 import base58
 
 from .common import get_base_url, get_ipfs_api
@@ -52,7 +50,7 @@ async def incoming_channel(config, topic):
 
     # When using some deployment strategies such as docker-compose,
     # the IPFS service may not be ready by the time this function
-    # is called. This variable define how many connection attempts
+    # is called. This variable defines how many connection attempts
     # will not be logged as exceptions.
     trials_before_exception: int = 5
     while True:

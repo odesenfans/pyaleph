@@ -3,7 +3,7 @@ import base64
 import json
 import logging
 import random
-from typing import Coroutine, List
+from typing import Any, Awaitable, Callable, Dict
 
 from libp2p.network.exceptions import SwarmException
 from libp2p.network.notifee_interface import INotifee
@@ -13,6 +13,7 @@ from libp2p.typing import TProtocol
 
 from aleph import __version__
 from aleph.network import incoming_check
+from aleph.storage import get_hash_content
 from aleph.types import InvalidMessageError
 from . import singleton
 from .pubsub import sub
@@ -29,7 +30,37 @@ HELLO_PACKET = {"command": "hello"}
 CONNECT_LOCK = asyncio.Lock()
 
 
+async def process_hash_content_message(message_json: Dict[str, Any]) -> Dict[str, str]:
+    value = await get_hash_content(message_json["hash"], use_network=False, timeout=1)
+    if value is not None and value != -1:
+        return {
+            "status": "success",
+            "hash": message_json["hash"],
+            "content": base64.encodebytes(value).decode("utf-8"),
+        }
+    else:
+        return {"status": "success", "content": None}
+
+
+async def process_hello_message(message_json: Dict[str, Any]) -> Dict[str, str]:
+    return {
+        "status": "success",
+        "content": {"version": __version__},
+    }
+
+
+async def unimplemented_command(message_json: Dict[str, Any]) -> Dict[str, str]:
+    return {"status": "error", "reason": "not implemented"}
+
+
 class AlephProtocol(INotifee):
+    COMMAND_HANDLERS: Dict[str, Callable[[Dict[str, Any]], Awaitable[Dict[str, str]]]] = {
+        "get_message": unimplemented_command,
+        "hash_content": process_hash_content_message,
+        "hello": process_hello_message,
+        "publish_message": unimplemented_command,
+    }
+
     def __init__(self, host, streams_per_host=5):
         self.host = host
         self.streams_per_host = streams_per_host
@@ -41,43 +72,29 @@ class AlephProtocol(INotifee):
         asyncio.ensure_future(self.read_data(stream))
 
     async def read_data(self, stream: INetStream) -> None:
-        from aleph.storage import get_hash_content
-
         while True:
             read_bytes = await stream.read(MAX_READ_LEN)
-            if read_bytes is not None:
-                result = {"status": "error", "reason": "unknown"}
+            if read_bytes is None:
+                continue
+
+            try:
+                read_string = read_bytes.decode("utf-8")
+                message_json = json.loads(read_string)
+                command = message_json("command")
+
                 try:
-                    read_string = read_bytes.decode("utf-8")
-                    message_json = json.loads(read_string)
-                    if message_json["command"] == "hash_content":
-                        value = await get_hash_content(
-                            message_json["hash"], use_network=False, timeout=1
-                        )
-                        if value is not None and value != -1:
-                            result = {
-                                "status": "success",
-                                "hash": message_json["hash"],
-                                "content": base64.encodebytes(value).decode("utf-8"),
-                            }
-                        else:
-                            result = {"status": "success", "content": None}
-                    elif message_json["command"] == "get_message":
-                        result = {"status": "error", "reason": "not implemented"}
-                    elif message_json["command"] == "publish_message":
-                        result = {"status": "error", "reason": "not implemented"}
-                    elif message_json["command"] == "hello":
-                        result = {
-                            "status": "success",
-                            "content": {"version": __version__},
-                        }
-                    else:
-                        result = {"status": "error", "reason": "unknown command"}
-                    LOGGER.debug(f"received {read_string}")
-                except Exception as e:
-                    result = {"status": "error", "reason": repr(e)}
-                    LOGGER.exception("Error while reading data")
-                await stream.write(json.dumps(result).encode("utf-8"))
+                    handler = self.COMMAND_HANDLERS[command]
+                except KeyError:
+                    result = {"status": "error", "reason": "unknown command"}
+                else:
+                    result = handler(message_json)
+
+                LOGGER.debug(f"received {read_string}")
+
+            except Exception as e:
+                result = {"status": "error", "reason": repr(e)}
+                LOGGER.exception("Error while reading data")
+            await stream.write(json.dumps(result).encode("utf-8"))
 
     async def make_request(self, request_structure):
         streams = [
@@ -109,7 +126,7 @@ class AlephProtocol(INotifee):
                                 break
 
                             return value
-                        except (StreamError):
+                        except StreamError:
                             # let's delete this stream so it gets recreated next time
                             # await stream.close()
                             await stream.reset()
@@ -189,7 +206,7 @@ class AlephProtocol(INotifee):
     async def listen_close(self, network, multiaddr) -> None:
         pass
 
-    async def has_active_streams(self, peer_id):
+    async def has_active_streams(self, peer_id) -> bool:
         if peer_id not in self.peers:
             return False
         return bool(len(self.peers[peer_id]))

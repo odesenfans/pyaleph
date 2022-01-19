@@ -3,7 +3,7 @@ import socket
 import aiohttp
 
 
-async def get_IP():
+async def get_IP() -> str:
     ip = None
     try:
         async with aiohttp.ClientSession() as session:

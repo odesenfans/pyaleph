@@ -14,7 +14,7 @@ import asyncio
 import logging
 import sys
 from multiprocessing import Process, set_start_method, Manager
-from typing import List, Coroutine, Dict, Optional
+from typing import Any, List, Coroutine, Dict, Optional
 
 from configmanager import Config
 from setproctitle import setproctitle
@@ -81,14 +81,14 @@ async def run_server(host: str, port: int, shared_stats: dict, extra_web_config:
 
 
 def run_server_coroutine(
-    config_values,
-    host,
-    port,
+    config_values: Dict[str, Any],
+    host: str,
+    port: int,
     manager,
     idx,
     shared_stats,
     enable_sentry: bool = True,
-    extra_web_config: Dict=None,
+    extra_web_config: Optional[Dict] = None,
 ):
     """Run the server coroutine in a synchronous way.
     Used as target of multiprocessing.Process.
@@ -119,7 +119,7 @@ def run_server_coroutine(
         raise
 
 
-def main(args):
+def main(args: List[str]):
     """Main entry point allowing external calls
 
     Args:
@@ -184,8 +184,8 @@ def main(args):
 
     with Manager() as shared_memory_manager:
         tasks: List[Coroutine] = []
-        # This dictionary is shared between all the process so we can expose some internal stats
-        # handle with care as it's shared between process.
+        # This dictionary is shared between all the processes so we can expose some internal stats
+        # handle with care as it is shared between processes.
         shared_stats: Dict = shared_memory_manager.dict()
         if not args.no_jobs:
             LOGGER.debug("Creating jobs")
@@ -207,7 +207,7 @@ def main(args):
         tasks += connector_tasks(config, outgoing=(not args.no_commit))
         LOGGER.debug("Initialized listeners")
 
-        # Need to be passed here otherwise it get lost in the fork
+        # Need to be passed here otherwise it gets lost in the fork
         from aleph.services.p2p import manager as p2p_manager
 
         extra_web_config = {"public_adresses": p2p_manager.public_adresses}

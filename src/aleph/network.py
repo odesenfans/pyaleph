@@ -46,10 +46,17 @@ async def incoming_check(ipfs_pubsub_message):
         message = await check_message(message, from_network=True)
         return message
     except json.JSONDecodeError:
-        raise InvalidMessageError("Data is not JSON: {}".format(ipfs_pubsub_message.get("data", "")))
+        raise InvalidMessageError(
+            "Data is not JSON: {}".format(ipfs_pubsub_message.get("data", ""))
+        )
 
 
-async def check_message(message: Dict, from_chain=False, from_network=False, trusted=False) -> Dict:
+async def check_message(
+    message: Dict,
+    from_chain: bool = False,
+    from_network: bool = False,
+    trusted: bool = False,
+) -> Dict:
     """This function should check the incoming message and verify any
     extraneous or dangerous information for the rest of the process.
     It also checks the data hash if it's not done by an external provider (ipfs)
@@ -70,7 +77,9 @@ async def check_message(message: Dict, from_chain=False, from_network=False, tru
         raise InvalidMessageError("Missing field 'item_hash' in message")
     for field in ("chain", "sender", "signature"):
         if field not in message:
-            raise InvalidMessageError(f"Missing field '{field}' in message {message['item_hash']}")
+            raise InvalidMessageError(
+                f"Missing field '{field}' in message {message['item_hash']}"
+            )
 
     if not isinstance(message["item_hash"], str):
         raise InvalidMessageError("Unknown hash %s" % message["item_hash"])

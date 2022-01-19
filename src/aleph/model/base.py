@@ -108,16 +108,17 @@ class BaseClass(SerializerObject):
 
         return self.COLLECTION
 
-    def get_collection(self, db=None):
+    @classmethod
+    def get_collection(cls, db=None):
         if db is None:
             from aleph import model
 
             db = model.db
-        return db[self._collection_name]
+        return db[cls._collection_name]
 
     @classproperty
     def collection(self):
-        return self.get_collection(self)
+        return self.get_collection()
 
     @classmethod
     async def find_one(cls, **kwargs):
@@ -206,6 +207,6 @@ class BaseClass(SerializerObject):
         if len(indexes) == 0:
             return
 
-        cls.get_collection(cls, db).create_indexes(indexes)
+        cls.get_collection().create_indexes(indexes)
         # for index in indexes:
         #     index.ensure(cls.get_collection(cls, db))

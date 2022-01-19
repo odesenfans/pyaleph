@@ -39,7 +39,11 @@ public_adresses = []
 
 
 async def initialize_host(
-    key, host="0.0.0.0", port=4025, listen=True, protocol_active=True
+    key: str,
+    host: str = "0.0.0.0",
+    port: int = 4025,
+    listen: bool = True,
+    protocol_active: bool = True,
 ) -> Tuple[BasicHost, Pubsub, Any, List]:
     from .protocol import AlephProtocol
     from .jobs import reconnect_p2p_job, tidy_http_peers_job

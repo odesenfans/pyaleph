@@ -33,7 +33,7 @@ class DBManager(SyncManager):
 
 async def handle_pending_message(
     pending: Dict, seen_ids: Dict[Tuple, int], actions_list: List[DeleteOne], messages_actions_list: List[UpdateOne]
-):
+) -> None:
     result = await incoming(
         pending["message"],
         chain_name=pending["source"].get("chain_name"),

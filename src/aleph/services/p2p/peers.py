@@ -1,10 +1,6 @@
-import asyncio
-import json
-
 import multiaddr
 from libp2p.peer.peerinfo import info_from_p2p_addr
 
-from aleph.services.p2p.pubsub import decode_msg
 from . import singleton
 
 

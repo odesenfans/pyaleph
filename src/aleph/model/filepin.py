@@ -14,7 +14,6 @@ class PermanentPin(BaseClass):
         IndexModel([("multihash", HASHED)])
     ]
 
-
     @classmethod
     async def register(cls, multihash: str, reason: Dict):
         assert reason, "A permanent pin requires a reason"
