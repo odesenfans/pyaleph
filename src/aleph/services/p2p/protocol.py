@@ -14,7 +14,7 @@ from p2pclient.libp2p_stubs.peer.id import ID
 from aleph import __version__
 from aleph.network import incoming_check
 from aleph.types import InvalidMessageError
-from .pubsub import sub
+from .pubsub import receive_pubsub_messages, subscribe
 
 MAX_READ_LEN = 2 ** 32 - 1
 
@@ -194,9 +194,11 @@ async def incoming_channel(p2p_client: P2PClient, topic: str) -> None:
     LOGGER.debug("incoming channel started...")
     from aleph.chains.common import delayed_incoming
 
+    stream = await subscribe(p2p_client, topic)
+
     while True:
         try:
-            async for mvalue in sub(p2p_client, topic):
+            async for mvalue in receive_pubsub_messages(stream):
                 LOGGER.debug("Received from P2P:", mvalue)
                 try:
                     message = json.loads(mvalue["data"])
