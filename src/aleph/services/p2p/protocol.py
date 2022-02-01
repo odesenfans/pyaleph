@@ -3,7 +3,7 @@ import base64
 import json
 import logging
 import random
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Set
 
 from anyio.abc import SocketStream
 from p2pclient import Client as P2PClient
@@ -34,22 +34,24 @@ class AlephProtocol:
     def __init__(self, p2p_client: P2PClient, streams_per_host: int = 5):
         self.p2p_client = p2p_client
         self.streams_per_host = streams_per_host
-        self.peers: Dict[ID, List[Tuple[SocketStream, asyncio.Semaphore]]] = dict()
-
-    async def register_stream_handler(self):
-        await self.p2p_client.stream_handler(self.PROTOCOL_ID, self.stream_request_handler)
+        self.peers: Set[ID] = set()
 
     @classmethod
-    async def create(cls, p2p_client: P2PClient, streams_per_host: int = 5) -> "AlephProtocol":
+    async def create(
+        cls, p2p_client: P2PClient, streams_per_host: int = 5
+    ) -> "AlephProtocol":
         """
         Creates a new protocol instance. This factory coroutine must be called instead of calling the constructor
         directly in order to register the stream handlers.
         """
         protocol = cls(p2p_client=p2p_client, streams_per_host=streams_per_host)
-        await protocol.register_stream_handler()
+        await p2p_client.stream_handler(cls.PROTOCOL_ID, cls.stream_request_handler)
         return protocol
 
-    async def stream_request_handler(self, stream_info: StreamInfo, stream: SocketStream) -> None:
+    @staticmethod
+    async def stream_request_handler(
+        stream_info: StreamInfo, stream: SocketStream
+    ) -> None:
         """
         Handles the reception of a message from another peer under the aleph protocol.
 
@@ -95,17 +97,22 @@ class AlephProtocol:
 
         await stream.send_all(json.dumps(result).encode("utf-8"))
 
-    async def make_request(self, request_structure: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        peers = [peer for peer in self.peers]
+    async def make_request(
+        self, request_structure: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        peers = list(self.peers)
         # Randomize the list of peers to contact to distribute the load evenly
         random.shuffle(peers)
 
         for peer in peers:
             stream_info, stream = self.p2p_client.stream_open(peer, (self.PROTOCOL_ID,))
             msg = json.dumps(request_structure).encode("UTF-8")
-            await stream.send_all(msg)
+            try:
+                await stream.send_all(msg)
+                response = await stream.receive_some(MAX_READ_LEN)
+            finally:
+                await stream.close()
 
-            response = await stream.receive_some(MAX_READ_LEN)
             try:
                 value = json.loads(response.decode("UTF-8"))
             except json.JSONDecodeError:
@@ -133,12 +140,12 @@ class AlephProtocol:
             LOGGER.debug(f"can't get hash {item_hash}")
 
     async def _handle_new_peer(self, peer_id: ID) -> None:
-        await self.create_connections(peer_id)
+        await self.add_peer(peer_id)
         LOGGER.debug("added new peer %s", peer_id)
 
-    async def create_connections(self, peer_id: ID) -> None:
-        peer_streams: List[Tuple[SocketStream, asyncio.Semaphore]] = self.peers.get(peer_id, list())
-        for i in range(self.streams_per_host - len(peer_streams)):
+    async def add_peer(self, peer_id: ID) -> None:
+        if peer_id not in self.peers:
+
             try:
                 stream_info, stream = await self.p2p_client.stream_open(
                     peer_id, [self.PROTOCOL_ID]
@@ -153,10 +160,10 @@ class AlephProtocol:
             except Exception as error:
                 LOGGER.debug("failed to add new peer %s, error %s", peer_id, error)
                 return
+            finally:
+                await stream.close()
 
-            peer_streams.append((stream, asyncio.Semaphore(1)))
-
-        self.peers[peer_id] = peer_streams
+            self.peers.add(peer_id)
 
     async def opened_stream(self, network, stream) -> None:
         pass
@@ -183,11 +190,6 @@ class AlephProtocol:
 
     async def listen_close(self, network, multiaddr) -> None:
         pass
-
-    async def has_active_streams(self, peer_id):
-        if peer_id not in self.peers:
-            return False
-        return bool(len(self.peers[peer_id]))
 
 
 async def incoming_channel(p2p_client: P2PClient, topic: str) -> None:

@@ -9,7 +9,7 @@ import anyio
 LOGGER = logging.getLogger("P2P.pubsub")
 
 
-async def subscribe(p2p_client: P2PClient, topic: str) -> anyio.SocketStream:
+async def subscribe(p2p_client: P2PClient, topic: str) -> anyio.abc.SocketStream:
     """
     Subscribes to the specified topic.
     :param p2p_client: P2P daemon client.
@@ -19,7 +19,7 @@ async def subscribe(p2p_client: P2PClient, topic: str) -> anyio.SocketStream:
     return await p2p_client.pubsub_subscribe(topic)
 
 
-async def receive_pubsub_messages(stream: anyio.SocketStream) -> AsyncIterator[PSMessage]:
+async def receive_pubsub_messages(stream: anyio.abc.SocketStream) -> AsyncIterator[PSMessage]:
     """
     Receives messages from a P2P pubsub topic in a loop and yields them one by one.
     :param stream: The stream (= return value of the `subscribe` function) to read data from.

@@ -23,7 +23,7 @@ async def test_pubsub(p2p_clients: Tuple[P2PClient, P2PClient]):
     assert client1_peer_id in [peer.peer_id for peer in await client2.list_peers()]
     assert client2_peer_id in [peer.peer_id for peer in await client1.list_peers()]
 
-    # TODO: without this sleep, the test randomly hangs. Figure out why.
+    # TODO: without this sleep, the test hangs randomly. Figure out why.
     await asyncio.sleep(1)
 
     stream = await subscribe(client2, topic)
@@ -53,7 +53,7 @@ async def test_pubsub_multiple_subscribers(p2p_clients):
     await client2.connect(client1_peer_id, client1_maddrs)
     await client3.connect(client1_peer_id, client1_maddrs)
 
-    # TODO: without this sleep, the test randomly hangs. Figure out why.
+    # TODO: without this sleep, the test hangs randomly. Figure out why.
     await asyncio.sleep(1)
 
     # Check that the peers are connected

@@ -12,7 +12,7 @@ from aleph.services.p2p.protocol import AlephProtocol
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("p2p_clients", [2], indirect=True)
-async def test_pubsub(p2p_clients: Tuple[P2PClient, P2PClient]):
+async def test_request_existing_hash(p2p_clients: Tuple[P2PClient, P2PClient]):
     client1, client2 = p2p_clients
     protocol1 = AlephProtocol.create(client1)
     protocol2 = AlephProtocol.create(client2)
