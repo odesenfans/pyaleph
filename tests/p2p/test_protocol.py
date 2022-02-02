@@ -58,3 +58,61 @@ async def test_request_existing_hash(connected_clients: Tuple[ClientData, Client
 
     content = await client1.streamer.request_hash("123")
     assert content == expected_content
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("p2p_clients", [2], indirect=True)
+async def test_send_message_several_times(p2p_clients: Tuple[P2PClient, P2PClient]):
+
+    client1, client2 = p2p_clients
+    client1_peer_id, client1_maddrs = await client1.identify()
+    client2_peer_id, client2_maddrs = await client2.identify()
+    await client2.connect(client1_peer_id, client1_maddrs)
+
+    client1_peers = await client1.list_peers()
+    client2_peers = await client2.list_peers()
+    assert client1_peer_id in [peer.peer_id for peer in client2_peers]
+    assert client2_peer_id in [peer.peer_id for peer in client1_peers]
+
+    protocol = "/echo/p2p/0.1.0"
+
+    async def echo_server(stream_info, stream):
+        read_bytes = await stream.receive_some(1000)
+        await stream.send_all(read_bytes)
+
+    await client1.stream_handler(protocol, echo_server)
+    await client2.stream_handler(protocol, echo_server)
+
+    # msg1 = b"Hey ooooh"
+    # stream_info, stream = await client1.stream_open(client2_peer_id, [protocol])
+    # await stream.send_all(msg1)
+    # response1 = await stream.receive_some(1000)
+    # assert response1 == msg1
+    #
+    # msg2 = b"Tu m'entends?"
+    # await stream.send_all(msg2)
+    # response2 = await stream.receive_some(1000)
+    # assert response2 == msg2
+
+    msg1 = b"Hey ooooh"
+    stream_info, stream = await client1.stream_open(client2_peer_id, [protocol])
+    try:
+        await stream.send_all(msg1)
+        response1 = await stream.receive_some(1000)
+    finally:
+        await stream.close()
+
+    assert response1 == msg1
+
+    await client1.stream_handler(protocol, echo_server)
+    await client2.stream_handler(protocol, echo_server)
+
+    msg2 = b"Tu m'entends?"
+    stream_info, stream = await client1.stream_open(client2_peer_id, [protocol])
+    try:
+        await stream.send_all(msg2)
+        response2 = await stream.receive_some(1000)
+    finally:
+        await stream.close()
+
+    assert response2 == msg2
