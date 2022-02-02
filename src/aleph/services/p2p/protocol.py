@@ -105,7 +105,7 @@ class AlephProtocol:
         random.shuffle(peers)
 
         for peer in peers:
-            stream_info, stream = self.p2p_client.stream_open(peer, (self.PROTOCOL_ID,))
+            stream_info, stream = await self.p2p_client.stream_open(peer, (self.PROTOCOL_ID,))
             msg = json.dumps(request_structure).encode("UTF-8")
             try:
                 await stream.send_all(msg)
@@ -125,7 +125,7 @@ class AlephProtocol:
         logging.info("Could not retrieve content from any peer")
         return None
 
-    async def request_hash(self, item_hash):
+    async def request_hash(self, item_hash) -> Optional[bytes]:
         # this should be done better, finding best peers to query from.
         query = {"command": "hash_content", "hash": item_hash}
         item = await self.make_request(query)
@@ -138,10 +138,7 @@ class AlephProtocol:
             return base64.decodebytes(item["content"].encode("utf-8"))
         else:
             LOGGER.debug(f"can't get hash {item_hash}")
-
-    async def _handle_new_peer(self, peer_id: ID) -> None:
-        await self.add_peer(peer_id)
-        LOGGER.debug("added new peer %s", peer_id)
+            return None
 
     async def add_peer(self, peer_id: ID) -> None:
         if peer_id not in self.peers:
@@ -164,32 +161,6 @@ class AlephProtocol:
                 await stream.close()
 
             self.peers.add(peer_id)
-
-    async def opened_stream(self, network, stream) -> None:
-        pass
-
-    async def closed_stream(self, network, stream) -> None:
-        pass
-
-    async def connected(self, network, conn) -> None:
-        """
-        Add peer_id to initiator_peers_queue, so that this peer_id can be used to
-        create a stream and we only want to have one pubsub stream with each peer.
-        :param network: network the connection was opened on
-        :param conn: connection that was opened
-        """
-        # await self.initiator_peers_queue.put(conn.muxed_conn.peer_id)
-        peer_id = conn.muxed_conn.peer_id
-        asyncio.ensure_future(self._handle_new_peer(peer_id))
-
-    async def disconnected(self, network, conn) -> None:
-        pass
-
-    async def listen(self, network, multiaddr) -> None:
-        pass
-
-    async def listen_close(self, network, multiaddr) -> None:
-        pass
 
 
 async def incoming_channel(p2p_client: P2PClient, topic: str) -> None:
