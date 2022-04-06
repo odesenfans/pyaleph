@@ -85,7 +85,7 @@ def run_server_coroutine(
     """
     setproctitle(f"pyaleph-run_server_coroutine-{port}")
 
-    loop, config = prepare_subprocess(config_values)
+    config = prepare_subprocess(config_values)
 
     extra_web_config = extra_web_config or {}
     setup_logging(
@@ -102,8 +102,8 @@ def run_server_coroutine(
     # Use a try-catch-capture_exception to work with multiprocessing, see
     # https://github.com/getsentry/raven-python/issues/1110
     try:
-        loop.run_until_complete(run_server(config, host, port, shared_stats, extra_web_config))
-        # asyncio.run(run_server(config, host, port, shared_stats, extra_web_config))
+        # loop.run_until_complete(run_server(config, host, port, shared_stats, extra_web_config))
+        asyncio.run(run_server(config, host, port, shared_stats, extra_web_config))
     except Exception as e:
         if enable_sentry:
             sentry_sdk.capture_exception(e)

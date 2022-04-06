@@ -7,9 +7,6 @@ from aleph.services.p2p import init_p2p_client
 from configmanager import Config
 import asyncio
 
-async def do_something():
-    ...
-
 
 def prepare_subprocess(config_values: Dict) -> Config:
     """
@@ -22,11 +19,8 @@ def prepare_subprocess(config_values: Dict) -> Config:
     app_config = aleph.config.app_config
     app_config.load_values(config_values)
 
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(do_something())
-
-    init_db_globals(app_config, loop)
+    init_db_globals(app_config)
     init_ipfs_globals(app_config)
     _ = init_p2p_client(app_config)
 
-    return loop, app_config
+    return app_config

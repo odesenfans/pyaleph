@@ -187,7 +187,7 @@ def pending_messages_subprocess(config_values: Dict, shared_stats: Dict, api_ser
     """
 
     setproctitle("aleph.jobs.messages_task_loop")
-    loop, config = prepare_subprocess(config_values)
+    config = prepare_subprocess(config_values)
 
     sentry_sdk.init(
         dsn=config.sentry.dsn.value,
@@ -200,5 +200,5 @@ def pending_messages_subprocess(config_values: Dict, shared_stats: Dict, api_ser
     )
     singleton.api_servers = api_servers
 
-    loop.run_until_complete(retry_messages_task(shared_stats))
-    # asyncio.run(retry_messages_task(shared_stats))
+    # loop.run_until_complete(retry_messages_task(shared_stats))
+    asyncio.run(retry_messages_task(shared_stats))

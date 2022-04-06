@@ -23,15 +23,15 @@ db = None
 fs = None
 
 
-def init_db_globals(config: Config, loop):
+def init_db_globals(config: Config):
     global connection, db, fs
-    connection = AsyncIOMotorClient(config.mongodb.uri.value, tz_aware=True, io_loop=loop)
+    connection = AsyncIOMotorClient(config.mongodb.uri.value, tz_aware=True)
     db = connection[config.mongodb.database.value]
     fs = AsyncIOMotorGridFSBucket(db)
 
 
 def init_db(config: Config, ensure_indexes: bool = True):
-    init_db_globals(config, asyncio.get_event_loop())
+    init_db_globals(config)
     sync_connection = MongoClient(config.mongodb.uri.value, tz_aware=True)
     sync_db = sync_connection[config.mongodb.database.value]
 

@@ -134,7 +134,7 @@ async def handle_txs_task():
 
 def pending_txs_subprocess(config_values: Dict, api_servers: List):
     setproctitle("aleph.jobs.txs_task_loop")
-    loop, config = prepare_subprocess(config_values)
+    config = prepare_subprocess(config_values)
 
     sentry_sdk.init(
         dsn=config.sentry.dsn.value,
@@ -147,5 +147,5 @@ def pending_txs_subprocess(config_values: Dict, api_servers: List):
     )
     singleton.api_servers = api_servers
 
-    loop.run_until_complete(handle_txs_task())
-    # asyncio.run(handle_txs_task())
+    # loop.run_until_complete(handle_txs_task())
+    asyncio.run(handle_txs_task())
