@@ -40,13 +40,11 @@ async def initialize_host(
         tidy_http_peers_job(config=config, api_servers=api_servers),
     ]
     if listen:
-        from aleph.web import app
-
         peer_id, _ = await p2p_client.identify()
         LOGGER.info("Listening on " + f"{transport_opt}/p2p/{peer_id}")
         ip = await get_IP()
         public_address = f"/ip4/{ip}/tcp/{port}/p2p/{peer_id}"
-        http_port = app["config"].p2p.http_port.value
+        http_port = config.p2p.http_port.value
         public_adresses.append(public_address)
 
         public_http_address = f"http://{ip}:{http_port}"
@@ -58,19 +56,19 @@ async def initialize_host(
                 public_address,
                 p2p_client,
                 peer_type="P2P",
-                use_ipfs=app["config"].ipfs.enabled.value,
+                use_ipfs=config.ipfs.enabled.value,
             ),
             publish_host(
                 public_http_address,
                 p2p_client,
                 peer_type="HTTP",
-                use_ipfs=app["config"].ipfs.enabled.value,
+                use_ipfs=config.ipfs.enabled.value,
             ),
             monitor_hosts_p2p(p2p_client),
         ]
 
-        if app["config"].ipfs.enabled.value:
-            tasks.append(monitor_hosts_ipfs(app["config"]))
+        if config.ipfs.enabled.value:
+            tasks.append(monitor_hosts_ipfs(config))
             try:
                 public_ipfs_address = await get_public_address()
                 tasks.append(

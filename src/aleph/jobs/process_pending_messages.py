@@ -17,7 +17,7 @@ from aleph.types import ItemType
 from pymongo import DeleteOne, DeleteMany, ASCENDING
 from setproctitle import setproctitle
 
-from .job_utils import prepare_loop
+from .job_utils import prepare_subprocess
 
 LOGGER = getLogger("jobs.pending_messages")
 
@@ -187,16 +187,18 @@ def pending_messages_subprocess(config_values: Dict, shared_stats: Dict, api_ser
     """
 
     setproctitle("aleph.jobs.messages_task_loop")
+    loop, config = prepare_subprocess(config_values)
+
     sentry_sdk.init(
-        dsn=config_values["sentry"]["dsn"],
-        traces_sample_rate=config_values["sentry"]["traces_sample_rate"],
+        dsn=config.sentry.dsn.value,
+        traces_sample_rate=config.sentry.traces_sample_rate.value,
         ignore_errors=[KeyboardInterrupt],
     )
     setup_logging(
-        loglevel=config_values["logging"]["level"],
+        loglevel=config.logging.level.value,
         filename="/tmp/messages_task_loop.log",
     )
     singleton.api_servers = api_servers
 
-    loop = prepare_loop(config_values)
-    loop.run_until_complete(asyncio.gather(retry_messages_task(shared_stats)))
+    loop.run_until_complete(retry_messages_task(shared_stats))
+    # asyncio.run(retry_messages_task(shared_stats))

@@ -8,6 +8,7 @@ from aleph_message.models import MessageType
 from bson import ObjectId
 from pymongo import UpdateOne
 
+from aleph.config import get_config
 from aleph.handlers.forget import handle_forget_message
 from aleph.handlers.storage import handle_new_storage
 from aleph.model.db_bulk_operation import DbBulkOperation
@@ -18,7 +19,6 @@ from aleph.network import check_message as check_message_fn
 from aleph.permissions import check_sender_authorization
 from aleph.storage import get_json, pin_hash, add_json, get_message_content
 from aleph.types import UnknownHashError
-from aleph.web import app
 from aleph.exceptions import (
     AlephStorageException,
     InvalidContent,
@@ -339,6 +339,7 @@ async def get_chaindata(messages, bulk_threshold=2000):
 async def get_chaindata_messages(
     chaindata: Dict, context, seen_ids: Optional[List] = None
 ):
+    config = get_config()
 
     protocol = chaindata.get("protocol", None)
     version = chaindata.get("version", None)
@@ -376,7 +377,7 @@ async def get_chaindata_messages(
             raise
 
         LOGGER.info("Got bulk data with %d items" % len(messages))
-        if app["config"].ipfs.enabled.value:
+        if config.ipfs.enabled.value:
             # wait for 4 seconds to try to pin that
             try:
                 LOGGER.info(f"chaindatax {chaindata}")

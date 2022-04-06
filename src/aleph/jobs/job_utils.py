@@ -1,24 +1,32 @@
-import asyncio
 from typing import Dict
 
+import aleph.config
+from aleph.model import init_db_globals
+from aleph.services.ipfs.common import init_ipfs_globals
+from aleph.services.p2p import init_p2p_client
+from configmanager import Config
+import asyncio
 
-def prepare_loop(config_values: Dict) -> asyncio.AbstractEventLoop:
-    from aleph.model import init_db
-    from aleph.web import app
-    from configmanager import Config
-    from aleph.config import get_defaults
-    from aleph.services.ipfs.common import get_ipfs_api
-    from aleph.services.p2p import http, init_p2p_client
+async def do_something():
+    ...
 
-    http.SESSION = None  # type:ignore
+
+def prepare_subprocess(config_values: Dict) -> Config:
+    """
+    Prepares all the global variables (sigh) needed to run an Aleph subprocess.
+
+    :param config_values: Dictionary of config values, as provided by the main process.
+    :returns: The application configuration object, out of convenience.
+    """
+
+    app_config = aleph.config.app_config
+    app_config.load_values(config_values)
 
     loop = asyncio.get_event_loop()
+    loop.run_until_complete(do_something())
 
-    config = Config(schema=get_defaults())
-    app["config"] = config
-    config.load_values(config_values)
+    init_db_globals(app_config, loop)
+    init_ipfs_globals(app_config)
+    _ = init_p2p_client(app_config)
 
-    init_db(config, ensure_indexes=False)
-    loop.run_until_complete(get_ipfs_api(timeout=2, reset=True))
-    _ = init_p2p_client(config)
-    return loop
+    return loop, app_config
