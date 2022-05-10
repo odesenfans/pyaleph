@@ -10,11 +10,12 @@ from io import StringIO
 
 
 @pytest.mark.asyncio
-async def test_store_temporary_file(test_db, aiohttp_client):
+async def test_store_temporary_file(mock_config, test_db, aiohttp_client):
     app = create_app()
+    app["config"] = mock_config
     client = await aiohttp_client(app)
 
-    file_content = "Some file I'd like to upload"
+    file_content = b"Some file I'd like to upload"
 
     data = FormData()
     data.add_field("file", file_content)
@@ -22,5 +23,5 @@ async def test_store_temporary_file(test_db, aiohttp_client):
     response = await client.post(f"/api/v0/storage/add_file", data=data)
     assert response.status == 200, await response.text()
 
-    response_hash = await response.json()
-    print(response_hash)
+    data = await response.json()
+    print(data)
