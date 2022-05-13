@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import time
 from dataclasses import asdict
 from enum import IntEnum
 from typing import Dict, Optional, Tuple, List
@@ -54,6 +55,9 @@ async def mark_confirmed_data(chain_name, tx_hash, height):
 async def delayed_incoming(message, chain_name=None, tx_hash=None, height=None):
     if message is None:
         return
+
+    message["reception_time"] = time.time()
+
     await PendingMessage.collection.insert_one(
         {
             "message": message,
@@ -118,6 +122,9 @@ async def incoming(
     if existing in database, created if not.
     """
 
+    if "reception_time" not in message:
+        message["reception_time"] = time.time()
+
     item_hash = message["item_hash"]
     sender = message["sender"]
     ids_key = (item_hash, sender, chain_name)
@@ -172,7 +179,7 @@ async def incoming(
             "$set": {
                 "confirmed": True,
             },
-            "$min": {"time": message["time"]},
+            "$min": {"reception_time": message["reception_time"]},
             "$addToSet": {"confirmations": new_values["confirmations"][0]},
         }
     else:

@@ -68,6 +68,10 @@ async def test_process_pending_tx(mocker, test_db):
         expected_message = fixture_messages_by_hash[
             pending_msg_op.operation._doc["message"]["item_hash"]
         ]
-        # TODO: currently, the pending TX job modifies the time of the message.
-        del pending_message["time"]
+
+        # Ignore keys added by the CCN
+        del pending_message["reception_time"]
+
+        print(list(pending_message.keys()))
+        print(list(expected_message.keys()))
         assert set(pending_message.items()).issubset(set(expected_message.items()))

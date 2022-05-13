@@ -38,6 +38,8 @@ async def handle_pending_tx(
     )
     if messages:
         for i, message in enumerate(messages):
+            message["reception_time"] = tx_context.time
+
             try:
                 message = await check_message(
                     message, trusted=True
