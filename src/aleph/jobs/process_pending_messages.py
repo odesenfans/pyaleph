@@ -5,10 +5,9 @@ Job in charge of (re-) processing Aleph messages waiting in the pending queue.
 import asyncio
 from functools import partial
 from logging import getLogger
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Set, Iterable, Callable
 
 import sentry_sdk
-from aleph_message.models import MessageType
 from pymongo import DeleteOne, DeleteMany, ASCENDING
 from setproctitle import setproctitle
 
@@ -17,8 +16,8 @@ from aleph.logging import setup_logging
 from aleph.model.db_bulk_operation import DbBulkOperation
 from aleph.model.pending import PendingMessage
 from aleph.services.p2p import singleton
-from aleph.types import ItemType
-from .job_utils import prepare_loop, gather_and_perform_db_operations
+from .job_utils import prepare_loop, perform_db_operations
+from aleph.toolkit.split import split_iterable
 
 LOGGER = getLogger("jobs.pending_messages")
 
@@ -46,12 +45,38 @@ async def handle_pending_message(
     return operations
 
 
-async def join_pending_message_tasks(tasks):
-    await gather_and_perform_db_operations(
-        tasks,
-        on_error=partial(LOGGER.error, "Error while processing message: %s"),
+async def process_job_results(
+    tasks: Iterable[asyncio.Task],  # TODO: switch to a generic type when moving to 3.9+
+    on_error: Callable[[BaseException], None],
+):
+    successes, errors = split_iterable(tasks, lambda t: t.exception() is None)
+
+    for error in errors:
+        on_error(error.exception())
+
+    db_operations = (op for success in successes for op in success.result())
+
+    await perform_db_operations(db_operations)
+
+
+async def process_message_job_results(message_tasks: Set[asyncio.Task]):
+    await process_job_results(
+        message_tasks,
+        on_error=partial(LOGGER.exception, "Error while processing message: %s"),
     )
-    tasks.clear()
+
+
+def validate_pending_message(pending: Dict):
+    if pending.get("message") is None:
+        raise ValueError(
+            f"Found PendingMessage with empty message: {pending['_id']}. "
+            "This should be caught before insertion"
+        )
+
+    if not isinstance(pending["message"], dict):
+        raise ValueError(
+            f"Pending message is not a dictionary and cannot be read: {pending['_id']}."
+        )
 
 
 async def process_pending_messages(shared_stats: Dict):
@@ -60,74 +85,43 @@ async def process_pending_messages(shared_stats: Dict):
     """
 
     seen_ids: Dict[Tuple, int] = dict()
-    gtasks: List[asyncio.Task] = []
-    tasks: List[asyncio.Task] = []
-    i: int = 0
-    j: int = 0
     find_params: Dict = {}
+
+    message_tasks = set()
+    max_concurrent_tasks = 10
 
     while await PendingMessage.collection.count_documents(find_params):
         async for pending in PendingMessage.collection.find(find_params).sort(
             [("retries", ASCENDING), ("message.time", ASCENDING)]
-        ).batch_size(256):
+        ).batch_size(max_concurrent_tasks):
             LOGGER.debug(
                 f"retry_message_job len_seen_ids={len(seen_ids)} "
-                f"len_gtasks={len(gtasks)} len_tasks={len(tasks)}"
+                f"len_message_tasks={len(message_tasks)}"
             )
 
+            validate_pending_message(pending)
+
             shared_stats["retry_messages_job_seen_ids"] = len(seen_ids)
-            shared_stats["retry_messages_job_gtasks"] = len(gtasks)
-            shared_stats["retry_messages_job_tasks"] = len(tasks)
-            shared_stats["retry_messages_job_i"] = i
-            shared_stats["retry_messages_job_j"] = j
+            shared_stats["retry_messages_job_tasks"] = len(message_tasks)
 
-            if pending.get("message") is None:
-                LOGGER.warning(
-                    "Found PendingMessage with empty message, this should be caught before insertion"
+            if len(message_tasks) == max_concurrent_tasks:
+                done, message_tasks = await asyncio.wait(
+                    message_tasks, return_when=asyncio.FIRST_COMPLETED
                 )
-                await PendingMessage.collection.delete_one({"_id": pending["_id"]})
-                continue
+                await process_message_job_results(done)
 
-            if not isinstance(pending["message"], dict):
-                raise ValueError(
-                    "Pending message is not a dictionary and cannot be read."
-                )
+            message_tasks.add(
+                asyncio.create_task(handle_pending_message(pending, seen_ids))
+            )
 
-            if (
-                pending["message"]["item_type"] == ItemType.IPFS
-                or pending["message"]["type"] == MessageType.store
-            ):
-                i += 15
-                j += 100
-            else:
-                i += 1
-                j += 1
+        # Wait for the last tasks
+        done, _ = await asyncio.wait(
+            message_tasks, return_when=asyncio.ALL_COMPLETED
+        )
+        await process_message_job_results(done)
 
-            tasks.append(asyncio.create_task(handle_pending_message(pending, seen_ids)))
-
-            if j >= 20000:
-                # Group tasks using asyncio.gather in `gtasks`.
-                gtasks.append(
-                    asyncio.create_task(
-                        join_pending_message_tasks(
-                            tasks,
-                        )
-                    )
-                )
-                tasks = []
-                i = 0
-                j = 0
-
-            if i >= 1024:
-                await join_pending_message_tasks(tasks)
-                tasks = []
-                i = 0
-
-        gtasks.append(asyncio.create_task(join_pending_message_tasks(tasks)))
-
-        await asyncio.gather(*gtasks, return_exceptions=True)
-        gtasks = []
-
+        # TODO: move this to a dedicated job and/or check unicity on insertion
+        #       in pending messages
         if await PendingMessage.collection.count_documents(find_params) > 100000:
             LOGGER.info("Cleaning messages")
             clean_actions = []
