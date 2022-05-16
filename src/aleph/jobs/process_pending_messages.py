@@ -112,11 +112,11 @@ async def process_pending_messages(shared_stats: Dict):
 
     task_message_dict = {}
     message_tasks = set()
-    max_concurrent_tasks = 10000
+    max_concurrent_tasks = 2000
 
     semaphores = {
         ItemType.ipfs: asyncio.BoundedSemaphore(10),
-        ItemType.storage: asyncio.BoundedSemaphore(100 ),
+        ItemType.storage: asyncio.BoundedSemaphore(100),
         ItemType.inline: asyncio.BoundedSemaphore(max_concurrent_tasks),
     }
 
