@@ -3,12 +3,13 @@ Job in charge of (re-) processing Aleph messages waiting in the pending queue.
 """
 
 import asyncio
+import json
 from functools import partial
 from logging import getLogger
 from typing import List, Dict, Tuple, Set, Iterable, Callable
 
 import sentry_sdk
-from aleph_message.models import MessageType
+from aleph_message.models import MessageType, ItemType
 from pymongo import DeleteOne, DeleteMany, ASCENDING
 from setproctitle import setproctitle
 
@@ -91,6 +92,16 @@ def validate_pending_message(pending: Dict):
         )
 
 
+def get_item_type(pending) -> ItemType:
+    message_type = MessageType(pending["message"]["type"])
+    if message_type == MessageType.store:
+        # TODO: avoid loading the JSON twice, here and in incoming
+        content = json.loads(pending["message"]["item_content"])
+        return ItemType(content["item_type"])
+
+    return ItemType(pending["message"]["item_type"])
+
+
 async def process_pending_messages(shared_stats: Dict):
     """
     Processes all the messages in the pending message queue.
@@ -101,14 +112,12 @@ async def process_pending_messages(shared_stats: Dict):
 
     task_message_dict = {}
     message_tasks = set()
-    max_concurrent_tasks = 1000
+    max_concurrent_tasks = 10000
 
     semaphores = {
-        MessageType.aggregate: asyncio.BoundedSemaphore(max_concurrent_tasks),
-        MessageType.forget: asyncio.BoundedSemaphore(max_concurrent_tasks),
-        MessageType.post: asyncio.BoundedSemaphore(max_concurrent_tasks),
-        MessageType.store: asyncio.BoundedSemaphore(10),
-        MessageType.program: asyncio.BoundedSemaphore(max_concurrent_tasks),
+        ItemType.ipfs: asyncio.BoundedSemaphore(10),
+        ItemType.storage: asyncio.BoundedSemaphore(100 ),
+        ItemType.inline: asyncio.BoundedSemaphore(max_concurrent_tasks),
     }
 
     shared_stats["retry_messages_job_aggregate_tasks"] = 0
@@ -128,6 +137,7 @@ async def process_pending_messages(shared_stats: Dict):
 
             validate_pending_message(pending)
             message_type = MessageType(pending["message"]["type"])
+            item_type = get_item_type(pending)
 
             shared_stats["retry_messages_job_seen_ids"] = len(seen_ids)
             shared_stats["retry_messages_job_tasks"] = len(message_tasks)
@@ -141,7 +151,7 @@ async def process_pending_messages(shared_stats: Dict):
 
             message_task = asyncio.create_task(
                 handle_pending_message(
-                    pending=pending, sem=semaphores[message_type], seen_ids=seen_ids
+                    pending=pending, sem=semaphores[item_type], seen_ids=seen_ids
                 )
             )
             task_message_dict[message_task] = pending
