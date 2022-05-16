@@ -8,6 +8,7 @@ from logging import getLogger
 from typing import List, Dict, Tuple, Set, Iterable, Callable
 
 import sentry_sdk
+from aleph_message.models import MessageType
 from pymongo import DeleteOne, DeleteMany, ASCENDING
 from setproctitle import setproctitle
 
@@ -16,26 +17,29 @@ from aleph.logging import setup_logging
 from aleph.model.db_bulk_operation import DbBulkOperation
 from aleph.model.pending import PendingMessage
 from aleph.services.p2p import singleton
-from .job_utils import prepare_loop, perform_db_operations
 from aleph.toolkit.split import split_iterable
+from .job_utils import prepare_loop, perform_db_operations
 
 LOGGER = getLogger("jobs.pending_messages")
 
 
 async def handle_pending_message(
     pending: Dict,
+    sem: asyncio.Semaphore,
     seen_ids: Dict[Tuple, int],
 ) -> List[DbBulkOperation]:
-    status, operations = await incoming(
-        pending["message"],
-        chain_name=pending["source"].get("chain_name"),
-        tx_hash=pending["source"].get("tx_hash"),
-        height=pending["source"].get("height"),
-        seen_ids=seen_ids,
-        check_message=pending["source"].get("check_message", True),
-        retrying=True,
-        existing_id=pending["_id"],
-    )
+
+    async with sem:
+        status, operations = await incoming(
+            pending["message"],
+            chain_name=pending["source"].get("chain_name"),
+            tx_hash=pending["source"].get("tx_hash"),
+            height=pending["source"].get("height"),
+            seen_ids=seen_ids,
+            check_message=pending["source"].get("check_message", True),
+            retrying=True,
+            existing_id=pending["_id"],
+        )
 
     if status != IncomingStatus.RETRYING_LATER:
         operations.append(
@@ -59,7 +63,15 @@ async def process_job_results(
     await perform_db_operations(db_operations)
 
 
-async def process_message_job_results(message_tasks: Set[asyncio.Task]):
+async def process_message_job_results(
+    message_tasks: Set[asyncio.Task], task_message_dict, shared_stats
+):
+    for message_task in message_tasks:
+        pending = task_message_dict[message_task]
+        message_type = MessageType(pending["message"]["type"])
+        shared_stats[f"retry_messages_job_{message_type.name}_tasks"] -= 1
+        del task_message_dict[message_task]
+
     await process_job_results(
         message_tasks,
         on_error=partial(LOGGER.exception, "Error while processing message: %s"),
@@ -87,8 +99,23 @@ async def process_pending_messages(shared_stats: Dict):
     seen_ids: Dict[Tuple, int] = dict()
     find_params: Dict = {}
 
+    task_message_dict = {}
     message_tasks = set()
-    max_concurrent_tasks = 10
+    max_concurrent_tasks = 1000
+
+    semaphores = {
+        MessageType.aggregate: asyncio.BoundedSemaphore(max_concurrent_tasks),
+        MessageType.forget: asyncio.BoundedSemaphore(max_concurrent_tasks),
+        MessageType.post: asyncio.BoundedSemaphore(max_concurrent_tasks),
+        MessageType.store: asyncio.BoundedSemaphore(10),
+        MessageType.program: asyncio.BoundedSemaphore(max_concurrent_tasks),
+    }
+
+    shared_stats["retry_messages_job_aggregate_tasks"] = 0
+    shared_stats["retry_messages_job_forget_tasks"] = 0
+    shared_stats["retry_messages_job_post_tasks"] = 0
+    shared_stats["retry_messages_job_program_tasks"] = 0
+    shared_stats["retry_messages_job_store_tasks"] = 0
 
     while await PendingMessage.collection.count_documents(find_params):
         async for pending in PendingMessage.collection.find(find_params).sort(
@@ -100,25 +127,29 @@ async def process_pending_messages(shared_stats: Dict):
             )
 
             validate_pending_message(pending)
+            message_type = MessageType(pending["message"]["type"])
 
             shared_stats["retry_messages_job_seen_ids"] = len(seen_ids)
             shared_stats["retry_messages_job_tasks"] = len(message_tasks)
+            shared_stats[f"retry_messages_job_{message_type.name}_tasks"] += 1
 
             if len(message_tasks) == max_concurrent_tasks:
                 done, message_tasks = await asyncio.wait(
                     message_tasks, return_when=asyncio.FIRST_COMPLETED
                 )
-                await process_message_job_results(done)
+                await process_message_job_results(done, task_message_dict, shared_stats)
 
-            message_tasks.add(
-                asyncio.create_task(handle_pending_message(pending, seen_ids))
+            message_task = asyncio.create_task(
+                handle_pending_message(
+                    pending=pending, sem=semaphores[message_type], seen_ids=seen_ids
+                )
             )
+            task_message_dict[message_task] = pending
+            message_tasks.add(message_task)
 
         # Wait for the last tasks
-        done, _ = await asyncio.wait(
-            message_tasks, return_when=asyncio.ALL_COMPLETED
-        )
-        await process_message_job_results(done)
+        done, _ = await asyncio.wait(message_tasks, return_when=asyncio.ALL_COMPLETED)
+        await process_message_job_results(done, task_message_dict, shared_stats)
 
         # TODO: move this to a dedicated job and/or check unicity on insertion
         #       in pending messages
