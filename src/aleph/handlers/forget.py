@@ -1,17 +1,19 @@
 import logging
-from typing import Dict, Optional, List
+from dataclasses import dataclass
+from typing import Dict
+from typing import Optional, List
 
 from aioipfs.api import RepoAPI
 from aioipfs.exceptions import NotPinnedError
-from aleph_message.models import ForgetMessage, MessageType
-from aleph_message.models import StoreContent
+from aleph_message.models import ForgetMessage, ItemType, MessageType
 
 from aleph.model.filepin import PermanentPin
 from aleph.model.hashes import delete_value
 from aleph.model.messages import Message
 from aleph.services.ipfs.common import get_ipfs_api
-from aleph.types import ItemType
-from dataclasses import dataclass
+from aleph.utils import item_type_from_hash
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -41,9 +43,6 @@ class TargetMessageInfo:
             content_item_hash=content.get("item_hash"),
             content_item_type=content_item_type,
         )
-
-
-logger = logging.getLogger(__name__)
 
 
 async def count_file_references(storage_hash: str) -> int:
@@ -84,7 +83,7 @@ async def garbage_collect(storage_hash: str, storage_type: ItemType):
         return
 
     # Unpin the file from IPFS or remove it from local storage
-    storage_detected: ItemType = ItemType.from_hash(storage_hash)
+    storage_detected: ItemType = item_type_from_hash(storage_hash)
 
     if storage_type != storage_detected:
         raise ValueError(
@@ -92,7 +91,7 @@ async def garbage_collect(storage_hash: str, storage_type: ItemType):
             f"for hash '{storage_hash}'"
         )
 
-    if storage_type == ItemType.IPFS:
+    if storage_type == ItemType.ipfs:
         api = await get_ipfs_api(timeout=5)
         logger.debug(f"Removing from IPFS: {storage_hash}")
         try:
@@ -106,7 +105,7 @@ async def garbage_collect(storage_hash: str, storage_type: ItemType):
         except NotPinnedError:
             logger.debug("File not pinned")
         logger.debug(f"Removed from IPFS: {storage_hash}")
-    elif storage_type == ItemType.Storage:
+    elif storage_type == ItemType.storage:
         logger.debug(f"Removing from Gridfs: {storage_hash}")
         await delete_value(storage_hash)
         logger.debug(f"Removed from Gridfs: {storage_hash}")
