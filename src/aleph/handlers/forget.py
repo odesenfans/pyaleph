@@ -208,11 +208,9 @@ async def get_target_message_info(target_hash: str) -> Optional[TargetMessageInf
     return TargetMessageInfo.from_db_object(message_dict)
 
 
-async def handle_forget_message(forget_message: RawForgetMessage, content: Dict):
-    # Parsing and validation
-    forget_message.content = ForgetContent(**content)
+async def handle_forget_message(forget_message: RawForgetMessage, content: ForgetContent):
 
-    for target_hash in forget_message.content.hashes:
+    for target_hash in content.hashes:
         target_info = await get_target_message_info(target_hash)
 
         if target_info is None:

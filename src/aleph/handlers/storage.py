@@ -14,7 +14,7 @@ from typing import Dict
 
 import aioipfs
 from aioipfs import InvalidCIDError
-from aleph_message.models import ItemType, StoreMessage
+from aleph_message.models import ItemType, StoreMessage, StoreContent
 from pydantic import ValidationError
 
 from aleph.config import get_config
@@ -27,34 +27,24 @@ from aleph.utils import item_type_from_hash
 LOGGER = logging.getLogger("HANDLERS.STORAGE")
 
 
-async def handle_new_storage(message: RawStoreMessage, content: Dict):
+async def handle_new_storage(message: RawStoreMessage, content: StoreContent):
     config = get_config()
     if not config.storage.store_files.value:
         return True  # Ignore
 
-    # TODO: ideally the content should be transformed earlier, but this requires more clean up
-    #       (ex: no more in place modification of content, simplification of the flow)
-    try:
-        store_message = StoreMessage(**message.dict(exclude={"content"}), content=content)
-    except ValidationError as e:
-        print(e)
-        return -1  # Invalid store message, discard
-
-    item_type = store_message.content.item_type
-    try:
-        engine = ItemType(item_type)
-    except ValueError:
-        LOGGER.warning("Got invalid storage engine %s" % item_type)
-        return -1  # not allowed, ignore.
-
+    item_type = content.item_type
     is_folder = False
-    item_hash = store_message.content.item_hash
+    item_hash = content.item_hash
 
     ipfs_enabled = config.ipfs.enabled.value
     do_standard_lookup = True
     size = 0
 
-    if engine == ItemType.ipfs and ipfs_enabled:
+    # TODO: this information was previously stored in the content object.
+    #       Discuss what to do about this.
+    content_info = {}
+
+    if item_type == ItemType.ipfs and ipfs_enabled:
         if item_type_from_hash(item_hash) != ItemType.ipfs:
             LOGGER.warning("Invalid IPFS hash: '%s'", item_hash)
             raise UnknownHashError(f"Invalid IPFS hash: '{item_hash}'")
@@ -76,7 +66,7 @@ async def handle_new_storage(message: RawStoreMessage, content: Dict):
                 do_standard_lookup = True
             else:
                 size = stats["CumulativeSize"]
-                content["engine_info"] = stats
+                content_info["engine_info"] = stats
                 pin_api = await get_ipfs_api(timeout=60)
                 timer = 0
                 is_folder = stats["Type"] == "directory"
@@ -103,7 +93,7 @@ async def handle_new_storage(message: RawStoreMessage, content: Dict):
         try:
             file_content = await get_hash_content(
                 item_hash,
-                engine=engine,
+                engine=item_type,
                 tries=4,
                 timeout=2,
                 use_network=True,
@@ -115,7 +105,7 @@ async def handle_new_storage(message: RawStoreMessage, content: Dict):
 
         size = len(file_content)
 
-    content["size"] = size
-    content["content_type"] = is_folder and "directory" or "file"
+    content_info["size"] = size
+    content_info["content_type"] = is_folder and "directory" or "file"
 
     return True

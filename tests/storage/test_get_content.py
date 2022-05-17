@@ -1,11 +1,11 @@
 import json
 
 import pytest
+from aleph_message.models import AggregateContent, PostContent
 
-from aleph.exceptions import InvalidContent, ContentCurrentlyUnavailable
+from aleph.exceptions import InvalidContent
 from aleph.schemas.raw_messages import parse_message
 from aleph.storage import ContentSource, get_hash_content, get_json, get_message_content
-from aleph_message.models import ItemType
 
 
 @pytest.mark.asyncio
@@ -132,7 +132,7 @@ async def test_get_invalid_json(mocker, mock_config):
 
 
 @pytest.mark.asyncio
-async def test_get_inline_content_full_message():
+async def test_get_inline_message_content():
     """
     Get inline content from a message. Reuses an older test/fixture.
     """
@@ -151,13 +151,9 @@ async def test_get_inline_content_full_message():
 
     message = parse_message(message_dict)
     content = await get_message_content(message)
-    item_content = content.value
+    assert isinstance(content, AggregateContent)
 
-    assert len(content.raw_value) == len(message.item_content)
-    assert item_content["key"] == "metrics"
-    assert item_content["address"] == "TTapAav8g3fFjxQQCjwPd4ERPnai9oya"
-    assert "memory" in item_content["content"]
-    assert "cpu_cores" in item_content["content"]
+    assert content == message.content
 
 
 @pytest.mark.asyncio
@@ -173,12 +169,20 @@ async def test_get_stored_message_content(mocker, mock_config):
         "signature": "unsigned fixture, deal with it",
         "time": 1652805847.190618,
     }
-    json_content = {"I": "Inter", "P": "Planetary", "F": "File", "S": "System"}
+
+    json_content = {
+        "address": "0x696879aE4F6d8DaDD5b8F1cbb1e663B89b08f106",
+        "time": 1652805847.190618,
+        "content": {"I": "Inter", "P": "Planetary", "F": "File", "S": "System"},
+        "type": "test",
+    }
     json_bytes = json.dumps(json_content).encode("utf-8")
     mocker.patch("aleph.storage.get_value", return_value=json_bytes)
 
     message = parse_message(message_dict)
 
     content = await get_message_content(message)
-    assert content.value == json_content
-    assert content.hash == message.item_hash
+    assert isinstance(content, PostContent)
+    assert content.address == json_content["address"]
+    assert content.time == json_content["time"]
+    assert content.content == json_content["content"]

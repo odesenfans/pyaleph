@@ -3,8 +3,9 @@ import json
 import logging
 from dataclasses import asdict
 from enum import IntEnum
-from typing import Dict, Optional, Tuple, List
+from typing import Dict, Optional, Tuple, List, cast
 
+from aleph_message.models import StoreContent, ForgetContent
 from bson import ObjectId
 from pymongo import UpdateOne
 
@@ -229,12 +230,7 @@ async def incoming(
             )
             return IncomingStatus.RETRYING_LATER, []
 
-        json_content = content.value
-        if json_content.get("address", None) is None:
-            json_content["address"] = message.sender
-
-        if json_content.get("time", None) is None:
-            json_content["time"] = message.time
+        message.content = content
 
         # warning: those handlers can modify message and content in place
         # and return a status. None has to be retried, -1 is discarded, True is
@@ -242,13 +238,13 @@ async def incoming(
         # TODO: change this, it's messy.
         try:
             if isinstance(message, RawStoreMessage):
-                handling_result = await handle_new_storage(message, json_content)
+                handling_result = await handle_new_storage(message, cast(StoreContent, content))
             elif isinstance(message, RawForgetMessage):
                 # Handling it here means that there we ensure that the message
                 # has been forgotten before it is saved on the node.
                 # We may want the opposite instead: ensure that the message has
                 # been saved before it is forgotten.
-                handling_result = await handle_forget_message(message, json_content)
+                handling_result = await handle_forget_message(message, cast(ForgetContent, content))
             else:
                 handling_result = True
         except UnknownHashError:

@@ -9,7 +9,7 @@ from enum import Enum
 from hashlib import sha256
 from typing import Any, AnyStr, IO, Optional, Union, cast
 
-from aleph_message.models import ItemType
+from aleph_message.models import ItemType, BaseContent
 
 from aleph.config import get_config
 from aleph.exceptions import InvalidContent, ContentCurrentlyUnavailable
@@ -67,33 +67,31 @@ async def json_async_loads(s: AnyStr):
     return await run_in_executor(None, json.loads, s)
 
 
-async def get_message_content(message: BaseRawMessage) -> MessageContent:
+async def get_message_content(message: BaseRawMessage) -> BaseContent:
+    """
+    Retrieves the content linked to an Aleph message.
+    For storage/ipfs messages, fetches content from the network. For inline content,
+    does nothing and returns the content that was already loaded when building
+    the message object.
+
+    :param message: Aleph message.
+    :return: The content pointed to by the message.
+    """
+
     item_type = message.item_type
     item_hash = message.item_hash
 
+    content_cls = message.content_cls()
+
+    if item_type == ItemType.inline:
+        return message.content
+
     if item_type in (ItemType.ipfs, ItemType.storage):
-        return await get_json(item_hash, engine=ItemType(item_type))
-    elif item_type == ItemType.inline:
-        # This hypothesis is validated at schema level
-        item_content = cast(str, message.item_content)
+        json_content = await get_json(item_hash, engine=ItemType(item_type))
+        return content_cls(**json_content.value)
 
-        try:
-            content = await json_async_loads(item_content)
-        except (json.JSONDecodeError, KeyError) as e:
-            error_msg = f"Can't decode JSON: {e}"
-            LOGGER.warning(error_msg)
-            raise InvalidContent(error_msg)
-
-        return MessageContent(
-            hash=item_hash,
-            source=ContentSource.INLINE,
-            value=content,
-            raw_value=item_content,
-        )
-    else:
-        # unknown, could retry later? shouldn't have arrived this far though.
-        error_msg = f"Unknown item type: '{item_type}'."
-        raise ContentCurrentlyUnavailable(error_msg)
+    # Unknown item type, could retry later? shouldn't have arrived this far though.
+    raise ContentCurrentlyUnavailable(f"Unknown item type: '{item_type}'.")
 
 
 async def fetch_content_from_network(

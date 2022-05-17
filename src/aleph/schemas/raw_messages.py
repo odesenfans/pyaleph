@@ -20,7 +20,7 @@ TODO: this module should reasonably be part of aleph message, if only
 
 import json
 from hashlib import sha256
-from typing import Any, Literal, Optional, Union
+from typing import Any, Literal, Optional, Type
 
 from aleph_message.models import (
     AggregateContent,
@@ -29,7 +29,6 @@ from aleph_message.models import (
     PostContent,
     ProgramContent,
     StoreContent,
-    HashType,
 )
 from aleph_message.models import MessageType, ItemType
 from pydantic import BaseModel, root_validator, validator
@@ -55,6 +54,13 @@ class BaseRawMessage(BaseModel):
     time: float
     channel: Optional[str] = None
     content: Optional[BaseContent] = None
+
+    @classmethod
+    def content_cls(cls) -> Type[BaseContent]:
+        """
+        Returns the expected type for the content field.
+        """
+        return cls.__annotations__["content"].__args__[0]
 
     @root_validator(pre=True)
     def load_content(cls, values):
