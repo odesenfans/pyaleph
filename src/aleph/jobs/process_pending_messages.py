@@ -18,6 +18,7 @@ from aleph.model.db_bulk_operation import DbBulkOperation
 from aleph.model.pending import PendingMessage
 from aleph.services.p2p import singleton
 from .job_utils import prepare_loop, gather_and_perform_db_operations
+from ..schemas.raw_messages import parse_message
 
 LOGGER = getLogger("jobs.pending_messages")
 
@@ -26,8 +27,10 @@ async def handle_pending_message(
     pending: Dict,
     seen_ids: Dict[Tuple, int],
 ) -> List[DbBulkOperation]:
+
+    message = parse_message(pending["message"])
     status, operations = await incoming(
-        pending["message"],
+        message=message,
         chain_name=pending["source"].get("chain_name"),
         tx_hash=pending["source"].get("tx_hash"),
         height=pending["source"].get("height"),

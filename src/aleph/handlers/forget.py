@@ -5,11 +5,12 @@ from typing import Optional, List
 
 from aioipfs.api import RepoAPI
 from aioipfs.exceptions import NotPinnedError
-from aleph_message.models import ForgetMessage, ItemType, MessageType
+from aleph_message.models import ItemType, MessageType, ForgetContent
 
 from aleph.model.filepin import PermanentPin
 from aleph.model.hashes import delete_value
 from aleph.model.messages import Message
+from aleph.schemas.raw_messages import RawForgetMessage
 from aleph.services.ipfs.common import get_ipfs_api
 from aleph.utils import item_type_from_hash
 
@@ -115,7 +116,7 @@ async def garbage_collect(storage_hash: str, storage_type: ItemType):
 
 
 async def is_allowed_to_forget(
-    target_info: TargetMessageInfo, by: ForgetMessage
+    target_info: TargetMessageInfo, by: RawForgetMessage
 ) -> bool:
     """Check if a forget message is allowed to 'forget' the target message given its hash."""
     # Both senders are identical:
@@ -133,7 +134,7 @@ async def is_allowed_to_forget(
 
 
 async def forget_if_allowed(
-    target_info: TargetMessageInfo, forget_message: ForgetMessage
+    target_info: TargetMessageInfo, forget_message: RawForgetMessage
 ) -> None:
     """Forget a message.
 
@@ -204,19 +205,12 @@ async def get_target_message_info(target_hash: str) -> Optional[TargetMessageInf
     if message_dict is None:
         return None
 
-    content = message_dict.get("content")
-    content_item_type = content.get("item_type")
-
-    if content_item_type is not None:
-        content_item_type = ItemType(content_item_type)
-
     return TargetMessageInfo.from_db_object(message_dict)
 
 
-async def handle_forget_message(message: Dict, content: Dict):
+async def handle_forget_message(forget_message: RawForgetMessage, content: Dict):
     # Parsing and validation
-    forget_message = ForgetMessage(**message, content=content)
-    logger.debug(f"Handling forget message {forget_message.item_hash}")
+    forget_message.content = ForgetContent(**content)
 
     for target_hash in forget_message.content.hashes:
         target_info = await get_target_message_info(target_hash)

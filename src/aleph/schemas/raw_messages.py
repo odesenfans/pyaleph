@@ -55,7 +55,6 @@ class BaseRawMessage(BaseModel):
     time: float
     channel: Optional[str] = None
     content: Optional[BaseContent] = None
-    hash_type: Optional[HashType] = None
 
     @root_validator(pre=True)
     def load_content(cls, values):
