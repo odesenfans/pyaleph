@@ -310,7 +310,8 @@ async def incoming(
 
     if should_commit:
         update_op = UpdateOne(filters, updates, upsert=True)
-        bulk_ops = [DbBulkOperation(Message, update_op)]
+        message_op = DbBulkOperation(Message, update_op)
+        bulk_ops = [message_op]
 
         # Capped collections do not accept updates that increase the size, so
         # we must ignore confirmations.

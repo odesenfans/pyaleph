@@ -1,15 +1,17 @@
 import asyncio
+from itertools import groupby
+from typing import Awaitable, Callable, List
 from typing import Dict
 from typing import Iterable, Tuple
 
+import pymongo.errors
+from configmanager import Config
+
 import aleph.config
 from aleph.model import init_db_globals
+from aleph.model.db_bulk_operation import DbBulkOperation
 from aleph.services.ipfs.common import init_ipfs_globals
 from aleph.services.p2p import init_p2p_client
-from configmanager import Config
-from typing import Awaitable, Callable, List
-from aleph.model.db_bulk_operation import DbBulkOperation
-from itertools import groupby
 
 
 def prepare_loop(config_values: Dict) -> Tuple[asyncio.AbstractEventLoop, Config]:
@@ -40,9 +42,31 @@ async def perform_db_operations(db_operations: Iterable[DbBulkOperation]) -> Non
         key=lambda op: op.collection.__name__,
     )
 
-    for collection, operations in groupby(sorted_operations, lambda op: op.collection):
+    capped_collection_operations: List[DbBulkOperation] = []
+
+    for collection, operations in groupby(
+        sorted_operations, lambda op: op.collection
+    ):
+        # Keep capped operations for later
+        if collection.is_capped():
+            capped_collection_operations.extend(operations)
+            continue
+
         mongo_ops = [op.operation for op in operations]
         await collection.collection.bulk_write(mongo_ops)
+
+    # Ugly hack: we process capped collections after the rest, and process changes
+    # one by one. The reason for that is that we only have one capped collection
+    # at the moment (CappedMessage), and we have no way at the moment to avoid writing
+    # the same message several times from different channels. This would fail in
+    # the normal flow because capped collections do not support updates that modify
+    # the size of a document. Instead, we process updates one by one and just ignore
+    # the ones that fail, as it means the message is already inserted.
+    for operation in capped_collection_operations:
+        try:
+            await operation.collection.collection.bulk_write([operation.operation])
+        except pymongo.errors.BulkWriteError:
+            pass
 
 
 async def gather_and_perform_db_operations(

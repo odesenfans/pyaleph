@@ -5,8 +5,9 @@ from typing import Dict, Iterable, List
 
 import pytest
 import pytest_asyncio
+from pymongo import UpdateOne
 
-from aleph.model.messages import Message
+from aleph.model.messages import Message, CappedMessage
 from aleph.web import create_app
 
 MESSAGES_URI = "/api/v0/messages.json"
@@ -38,6 +39,16 @@ async def fixture_messages(test_db):
 
     await Message.collection.insert_many(messages)
     return messages
+
+
+async def test_writes_to_capped(fixture_messages):
+    m = fixture_messages[0]
+    m2 = m.copy()
+    m2["confirmations"] = [{"chain": "BTC", "sender": "Satoshi himself"}]
+
+    f = {"item_hash": m["item_hash"]}
+    await CappedMessage.collection.bulk_write([UpdateOne(f, {"$set": m}, upsert=True)])
+    await CappedMessage.collection.bulk_write([UpdateOne(f, {"$set": m2})])
 
 
 @pytest.mark.asyncio

@@ -120,6 +120,10 @@ class BaseClass(SerializerObject):
         return self.get_collection(self)
 
     @classmethod
+    def is_capped(cls):
+        return False
+
+    @classmethod
     async def find_one(cls, **kwargs):
         value = await cls.collection.find_one(kwargs)
         if value is not None:
