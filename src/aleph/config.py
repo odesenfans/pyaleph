@@ -20,7 +20,7 @@ def get_defaults():
                     "store": 20,
                 },
                 "pending_txs": {
-                    "max_concurrency": 20,
+                    "max_concurrency": 50,
                 }
             }
         },
