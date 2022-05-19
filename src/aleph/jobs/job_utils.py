@@ -75,17 +75,20 @@ async def perform_db_operations(db_operations: Iterable[DbBulkOperation]) -> Non
     # the normal flow because capped collections do not support updates that modify
     # the size of a document. Instead, we process updates one by one and just ignore
     # the ones that fail, as it means the message is already inserted.
-    start_time = time.time()
-    try:
-        await CappedMessage.collection.bulk_write([capped_collection_operations], ordered=False)
-    except pymongo.errors.BulkWriteError:
-        pass
+    if capped_collection_operations:
+        start_time = time.time()
+        mongo_ops = [op.operation for op in capped_collection_operations]
 
-    LOGGER.info(
-        "Wrote %d documents to CappedMessage in %.4f seconds",
-        len(capped_collection_operations),
-        time.time() - start_time,
-    )
+        try:
+            await CappedMessage.collection.bulk_write(mongo_ops, ordered=False)
+        except pymongo.errors.BulkWriteError:
+            pass
+
+        LOGGER.info(
+            "Wrote %d documents to CappedMessage in %.4f seconds",
+            len(capped_collection_operations),
+            time.time() - start_time,
+        )
 
 
 async def process_job_results(
