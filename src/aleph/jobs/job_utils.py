@@ -76,11 +76,10 @@ async def perform_db_operations(db_operations: Iterable[DbBulkOperation]) -> Non
     # the size of a document. Instead, we process updates one by one and just ignore
     # the ones that fail, as it means the message is already inserted.
     start_time = time.time()
-    for operation in capped_collection_operations:
-        try:
-            await operation.collection.collection.bulk_write([capped_collection_operations], ordered=False)
-        except pymongo.errors.BulkWriteError:
-            pass
+    try:
+        await CappedMessage.bulk_write([capped_collection_operations], ordered=False)
+    except pymongo.errors.BulkWriteError:
+        pass
 
     LOGGER.info(
         "Wrote %d documents to CappedMessage in %.4f seconds",
