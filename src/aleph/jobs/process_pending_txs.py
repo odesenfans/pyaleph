@@ -81,9 +81,9 @@ async def handle_pending_tx(
     return db_operations
 
 
-async def process_tx_job_results(tasks: Set[asyncio.Task]):
+async def process_tx_job_results(finished_tasks: Set[asyncio.Task]):
     await process_job_results(
-        tasks,
+        finished_tasks,
         on_error=lambda e: LOGGER.exception(
             "error in incoming txs task",
             exc_info=(type(e), e, e.__traceback__),
@@ -96,7 +96,7 @@ async def process_pending_txs(max_concurrent_tasks: int):
     Process chain transactions in the Pending TX queue.
     """
 
-    tasks = set()
+    pending_tasks = set()
 
     seen_offchain_hashes = set()
     seen_ids = []
@@ -106,18 +106,22 @@ async def process_pending_txs(max_concurrent_tasks: int):
             if pending_tx["content"]["content"] in seen_offchain_hashes:
                 continue
 
-        if len(tasks) == max_concurrent_tasks:
-            done, tasks = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-            await process_tx_job_results(done)
+        if len(pending_tasks) == max_concurrent_tasks:
+            finished_tasks, pending_tasks = await asyncio.wait(
+                pending_tasks, return_when=asyncio.FIRST_COMPLETED
+            )
+            await process_tx_job_results(finished_tasks)
 
         seen_offchain_hashes.add(pending_tx["content"]["content"])
         tx_task = asyncio.create_task(handle_pending_tx(pending_tx, seen_ids=seen_ids))
-        tasks.add(tx_task)
+        pending_tasks.add(tx_task)
 
     # Wait for the last tasks
-    if tasks:
-        done, _ = await asyncio.wait(tasks, return_when=asyncio.ALL_COMPLETED)
-        await process_tx_job_results(done)
+    if pending_tasks:
+        finished_tasks, _ = await asyncio.wait(
+            pending_tasks, return_when=asyncio.ALL_COMPLETED
+        )
+        await process_tx_job_results(finished_tasks)
 
 
 async def handle_txs_task(config: Config):
