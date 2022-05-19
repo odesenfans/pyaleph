@@ -82,6 +82,7 @@ async def perform_db_operations(db_operations: Iterable[DbBulkOperation]) -> Non
         try:
             await CappedMessage.collection.bulk_write(mongo_ops, ordered=False)
         except pymongo.errors.BulkWriteError:
+            LOGGER.warning("Bulk write error on capped message")
             pass
 
         LOGGER.info(
