@@ -60,7 +60,7 @@ async def perform_db_operations(db_operations: Iterable[DbBulkOperation]) -> Non
 
         start_time = time.time()
         mongo_ops = [op.operation for op in operations]
-        await collection.collection.bulk_write(mongo_ops)
+        await collection.collection.bulk_write(mongo_ops, ordered=False)
         LOGGER.info(
             "Wrote %d documents to collection %s in %.4f seconds",
             len(mongo_ops),
@@ -77,9 +77,8 @@ async def perform_db_operations(db_operations: Iterable[DbBulkOperation]) -> Non
     # the ones that fail, as it means the message is already inserted.
     start_time = time.time()
     for operation in capped_collection_operations:
-
         try:
-            await operation.collection.collection.bulk_write([operation.operation])
+            await operation.collection.collection.bulk_write([capped_collection_operations], ordered=False)
         except pymongo.errors.BulkWriteError:
             pass
 
