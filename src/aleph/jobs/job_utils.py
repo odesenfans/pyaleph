@@ -1,4 +1,6 @@
 import asyncio
+import logging
+import time
 from itertools import groupby
 from typing import Callable, cast
 from typing import Dict
@@ -15,6 +17,9 @@ from aleph.model.messages import CappedMessage
 from aleph.services.ipfs.common import init_ipfs_globals
 from aleph.services.p2p import init_p2p_client
 from aleph.toolkit.split import split_iterable
+
+
+LOGGER = logging.getLogger()
 
 
 def prepare_loop(config_values: Dict) -> Tuple[asyncio.AbstractEventLoop, Config]:
@@ -47,16 +52,21 @@ async def perform_db_operations(db_operations: Iterable[DbBulkOperation]) -> Non
 
     capped_collection_operations: List[DbBulkOperation] = []
 
-    for collection, operations in groupby(
-        sorted_operations, lambda op: op.collection
-    ):
+    for collection, operations in groupby(sorted_operations, lambda op: op.collection):
         # Keep capped operations for later
         if collection.is_capped():
             capped_collection_operations.extend(operations)
             continue
 
+        start_time = time.time()
         mongo_ops = [op.operation for op in operations]
         await collection.collection.bulk_write(mongo_ops)
+        LOGGER.info(
+            "Wrote %d documents to collection %s in %.4f seconds",
+            len(mongo_ops),
+            collection.__name__,
+            time.time() - start_time,
+        )
 
     # Ugly hack: we process capped collections after the rest, and process changes
     # one by one. The reason for that is that we only have one capped collection
@@ -65,11 +75,19 @@ async def perform_db_operations(db_operations: Iterable[DbBulkOperation]) -> Non
     # the normal flow because capped collections do not support updates that modify
     # the size of a document. Instead, we process updates one by one and just ignore
     # the ones that fail, as it means the message is already inserted.
+    start_time = time.time()
     for operation in capped_collection_operations:
+
         try:
             await operation.collection.collection.bulk_write([operation.operation])
         except pymongo.errors.BulkWriteError:
             pass
+
+    LOGGER.info(
+        "Wrote %d documents to CappedMessage in %.4f seconds",
+        len(capped_collection_operations),
+        time.time() - start_time,
+    )
 
 
 async def process_job_results(
