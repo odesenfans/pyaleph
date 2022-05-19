@@ -77,7 +77,7 @@ async def perform_db_operations(db_operations: Iterable[DbBulkOperation]) -> Non
     # the ones that fail, as it means the message is already inserted.
     start_time = time.time()
     try:
-        await CappedMessage.bulk_write([capped_collection_operations], ordered=False)
+        await CappedMessage.collection.bulk_write([capped_collection_operations], ordered=False)
     except pymongo.errors.BulkWriteError:
         pass
 
