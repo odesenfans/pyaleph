@@ -170,10 +170,10 @@ async def main(args):
         LOGGER.error(msg)
         raise InvalidConfigException(msg)
 
-    # We only check that the serialized key exists.
-    serialized_key_file_path = os.path.join(args.key_dir, "serialized-node-secret.key")
-    if not os.path.isfile(serialized_key_file_path):
-        msg = f"Serialized node key ({serialized_key_file_path}) not found."
+    # We only check that the private key exists.
+    private_key_file_path = os.path.join(args.key_dir, "node-secret.pkcs8.der")
+    if not os.path.isfile(private_key_file_path):
+        msg = f"Serialized node key ({private_key_file_path}) not found."
         LOGGER.critical(msg)
         raise KeyNotFoundException(msg)
 
