@@ -23,7 +23,7 @@ services:
 
   p2p-service:
     restart: always
-    image: odesenfans/aleph-p2p-service:latest
+    image: alephim/p2p-service:0.1.0
     networks:
       - pyaleph
     volumes:
