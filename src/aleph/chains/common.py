@@ -283,8 +283,8 @@ async def incoming(
 
         # Capped collections do not accept updates that increase the size, so
         # we must ignore confirmations.
-        if existing is None:
-            bulk_ops.append(DbBulkOperation(CappedMessage, update_op))
+        # if existing is None:
+        #     bulk_ops.append(DbBulkOperation(CappedMessage, update_op))
 
         return IncomingStatus.MESSAGE_HANDLED, bulk_ops
 

@@ -54,10 +54,11 @@ async def handle_new_storage(store_message: ValidatedStoreMessage) -> Optional[b
             LOGGER.warning("Invalid IPFS hash: '%s'", item_hash)
             raise UnknownHashError(f"Invalid IPFS hash: '{item_hash}'")
 
-        api = await get_ipfs_api(timeout=5)
+        api = await get_ipfs_api()
         try:
             try:
-                stats = await asyncio.wait_for(api.files.stat(f"/ipfs/{item_hash}"), 5)
+                # stats = await asyncio.wait_for(api.files.stat(f"/ipfs/{item_hash}"), 5)
+                stats = await api.files.stat(f"/ipfs/{item_hash}")
             except InvalidCIDError as e:
                 raise UnknownHashError(
                     f"Invalid IPFS hash from API: '{item_hash}'"
@@ -74,12 +75,13 @@ async def handle_new_storage(store_message: ValidatedStoreMessage) -> Optional[b
             else:
                 output_content.size = stats["CumulativeSize"]
                 output_content.engine_info = EngineInfo(**stats)
-                pin_api = await get_ipfs_api(timeout=60)
+                pin_api = await get_ipfs_api()
                 timer = 0
                 is_folder = stats["Type"] == "directory"
                 async for status in pin_api.pin.add(item_hash):
                     timer += 1
                     if timer > 30 and "Pins" not in status:
+                        LOGGER.warning("Failed to pin: %s - retrying later", item_hash)
                         return None  # Can't retrieve data now.
                 do_standard_lookup = False
 

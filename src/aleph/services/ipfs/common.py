@@ -35,7 +35,7 @@ def init_ipfs_globals(config: Config, timeout: int = 5) -> None:
     )
 
 
-async def get_ipfs_api(timeout: int = 5, reset: bool = False):
+async def get_ipfs_api(timeout: int = 60, reset: bool = False):
     global API
     if API is None or reset:
         init_ipfs_globals(aleph.config.get_config(), timeout)
@@ -44,7 +44,7 @@ async def get_ipfs_api(timeout: int = 5, reset: bool = False):
 
 
 async def connect_ipfs_peer(peer):
-    api = await get_ipfs_api(timeout=5)
+    api = await get_ipfs_api()
     result = await api.swarm.connect(peer)
     return result
 

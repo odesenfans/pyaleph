@@ -94,7 +94,7 @@ async def garbage_collect(storage_hash: str, storage_type: ItemType):
         )
 
     if storage_type == ItemType.ipfs:
-        api = await get_ipfs_api(timeout=5)
+        api = await get_ipfs_api()
         logger.debug(f"Removing from IPFS: {storage_hash}")
         try:
             result = await api.pin.rm(storage_hash)

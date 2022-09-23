@@ -22,7 +22,7 @@ async def get_ipfs_content(hash: str, timeout: int = 1, tries: int = 1) -> Optio
     while (result is None) and (try_count < tries):
         try_count += 1
         try:
-            api = await get_ipfs_api(timeout=5)
+            api = await get_ipfs_api()
             result = await asyncio.wait_for(api.cat(hash, length=MAX_LEN), timeout=timeout)
             if len(result) == MAX_LEN:
                 result = None
@@ -64,7 +64,7 @@ async def get_json(hash, timeout=1, tries=1):
 
 async def add_json(value: bytes) -> str:
     # loop = asyncio.get_event_loop()
-    api = await get_ipfs_api(timeout=5)
+    api = await get_ipfs_api()
     # try:
     result = await api.add_json(value)
     # finally:
@@ -75,7 +75,7 @@ async def add_json(value: bytes) -> str:
 
 async def add_bytes(value: bytes, cid_version: int = 0) -> str:
     # loop = asyncio.get_event_loop()
-    api = await get_ipfs_api(timeout=5)
+    api = await get_ipfs_api()
     # try:
     result = await api.add_bytes(value, cid_version=cid_version)
     # finally:
@@ -90,7 +90,7 @@ async def pin_add(hash: str, timeout: int = 2, tries: int = 1):
     result = None
     while (result is None) and (try_count < tries):
         try_count += 1
-        api = await get_ipfs_api(timeout=timeout)
+        api = await get_ipfs_api()
         try:
             result = None
             async for ret in api.pin.add(hash):
