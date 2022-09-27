@@ -23,7 +23,7 @@ from aleph.schemas.validated_message import (
     ValidatedStoreMessage, EngineInfo,
 )
 from aleph.services.ipfs.common import get_ipfs_api
-from aleph.storage import get_hash_content
+# from aleph.storage import get_hash_content
 from aleph.utils import item_type_from_hash
 
 LOGGER = logging.getLogger("HANDLERS.STORAGE")
