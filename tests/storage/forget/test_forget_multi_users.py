@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from aleph.chains.common import process_one_message
+from aleph.chains.chain_service import ChainService
+from aleph.handlers.message_handler import MessageHandler
 from aleph.model.hashes import (
     get_value as read_gridfs_file,
     set_value as store_gridfs_file,
@@ -69,8 +70,10 @@ async def test_forget_multiusers_storage(mocker, test_db):
         file_content = f.read()
     await store_gridfs_file(key=file_hash, value=file_content)
 
+    message_handler = MessageHandler(chain_service=ChainService())
+
     message_user1 = parse_message(message_user1_dict)
-    await process_one_message(message_user1)
+    await message_handler.process_one_message(message_user1)
 
     message1_db = await Message.collection.find_one(
         {"item_hash": message_user1.item_hash}
@@ -78,14 +81,14 @@ async def test_forget_multiusers_storage(mocker, test_db):
     assert message1_db is not None
 
     message_user2 = parse_message(message_user2_dict)
-    await process_one_message(message_user2)
+    await message_handler.process_one_message(message_user2)
 
     # Sanity check: check that the file exists
     db_file_data = await read_gridfs_file(file_hash)
     assert db_file_data == file_content
 
     forget_message_user1 = parse_message(forget_message_user1_dict)
-    await process_one_message(forget_message_user1)
+    await message_handler.process_one_message(forget_message_user1)
 
     # Check that the message was properly forgotten
     forgotten_message = await Message.collection.find_one(

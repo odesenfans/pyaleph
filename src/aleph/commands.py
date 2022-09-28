@@ -25,7 +25,7 @@ from setproctitle import setproctitle
 
 import aleph.config
 from aleph import model
-from aleph.chains import connector_tasks
+from aleph.chains.chain_service import ChainService
 from aleph.cli.args import parse_args
 from aleph.exceptions import InvalidConfigException, KeyNotFoundException
 from aleph.jobs import start_jobs
@@ -198,6 +198,8 @@ async def main(args):
     model.init_db(config, ensure_indexes=True)
     LOGGER.info("Database initialized.")
 
+    chain_service = ChainService()
+
     set_start_method("spawn")
 
     with Manager() as shared_memory_manager:
@@ -225,7 +227,7 @@ async def main(args):
 
         LOGGER.debug("Initializing listeners")
         tasks += listener_tasks(config, p2p_client)
-        tasks += connector_tasks(config, outgoing=(not args.no_commit))
+        tasks += chain_service.chain_event_loop(config)
         LOGGER.debug("Initialized listeners")
 
         # Need to be passed here otherwise it gets lost in the fork
