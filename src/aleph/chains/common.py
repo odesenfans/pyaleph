@@ -25,8 +25,6 @@ from aleph.model.messages import CappedMessage, Message
 from aleph.model.pending import PendingMessage, PendingTX
 from aleph.network import verify_signature
 from aleph.permissions import check_sender_authorization
-from aleph.storage import get_json, pin_hash, add_json, get_message_content
-from .tx_context import TxContext
 from aleph.schemas.pending_messages import (
     BasePendingMessage,
 )
@@ -35,8 +33,10 @@ from aleph.schemas.validated_message import (
     ValidatedStoreMessage,
     ValidatedForgetMessage,
     make_confirmation_update_query,
-make_message_upsert_query,
+    make_message_upsert_query,
 )
+from aleph.storage import get_json, pin_hash, add_json, get_message_content
+from .tx_context import TxContext
 
 LOGGER = logging.getLogger("chains.common")
 

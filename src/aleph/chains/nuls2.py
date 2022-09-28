@@ -9,7 +9,6 @@ from operator import itemgetter
 from typing import AsyncIterator, Dict, Tuple
 
 import aiohttp
-from aiocache import cached, SimpleMemoryCache
 from coincurve.keys import PrivateKey
 from nuls2.api.server import get_server
 from nuls2.model.data import (
@@ -32,7 +31,6 @@ from aleph.register_chain import (
     register_verifier,
     register_incoming_worker,
     register_outgoing_worker,
-    register_balance_getter,
 )
 from aleph.utils import run_in_executor
 from .tx_context import TxContext
@@ -76,17 +74,6 @@ async def verify_signature(message: BasePendingMessage) -> bool:
 
 register_verifier(CHAIN_NAME, verify_signature)
 
-# def broadcast_content(config, contract, web3, account,
-#                       gas_price, nonce, content):
-#     # content = json.dumps(content)
-#     tx = contract.functions.doEmit(content).buildTransaction({
-#             'chainId': config.ethereum.chain_id.value,
-#             'gasPrice': gas_price,
-#             'nonce': nonce,
-#             })
-#     signed_tx = account.signTransaction(tx)
-#     return web3.eth.sendRawTransaction(signed_tx.rawTransaction)
-
 
 async def get_last_height():
     """Returns the last height for which we already have the nuls data."""
@@ -96,39 +83,6 @@ async def get_last_height():
         last_height = -1
 
     return last_height
-
-
-# async def get_transactions(config, server, chain_id,
-#                            target_addr, start_height,
-#                            end_height=None):
-
-#     if end_height is None:
-#         end_height = -1
-#     result = await server.getAccountTxs(
-#         chain_id, 1, PAGINATION,
-#         target_addr, 2, start_height, end_height)
-
-#     seen_hashes = list()
-
-#     if result['totalCount'] >= PAGINATION:
-#         if end_height is None:
-#             # If we have no end_time, we ensure we have a non-slipping range
-#             # while we iterate.
-#             end_height = result['list'][0]['height']
-
-#         for i in reversed(range(math.ceil(result['total']/PAGINATION))):
-#             nresult = await server.getAccountTxs(
-#                         chain_id, i, PAGINATION,
-#                         target_addr, 2, start_height, end_height)
-#             for tx in sorted(nresult['list'], key=itemgetter('height')):
-#                 if tx['txHash'] not in seen_hashes:
-#                     yield tx
-#                     seen_hashes.append(tx['txHash'])
-#     else:
-#         for tx in sorted(result['list'], key=itemgetter('height')):
-#             if tx['txHash'] not in seen_hashes:
-#                 yield tx
-#                 seen_hashes.append(tx['txHash'])
 
 
 async def get_base_url(config):
@@ -157,7 +111,9 @@ async def get_transactions(
             yield tx
 
 
-async def request_transactions(config, session, start_height) -> AsyncIterator[Tuple[Dict, TxContext]]:
+async def request_transactions(
+    config, session, start_height
+) -> AsyncIterator[Tuple[Dict, TxContext]]:
     """Continuously request data from the NULS blockchain."""
     target_addr = config.nuls2.sync_address.value
     remark = config.nuls2.remark.value
@@ -287,7 +243,6 @@ async def nuls2_packer(config):
     address = get_address(pub_key, config.nuls2.chain_id.value)
 
     LOGGER.info("NULS2 Connector set up with address %s" % address)
-    # utxo = await get_utxo(config, address)
     i = 0
     nonce = await get_nonce(server, address, chain_id)
 
@@ -301,7 +256,6 @@ async def nuls2_packer(config):
         if i >= 100:
             await asyncio.sleep(30)  # wait three (!!) blocks
             nonce = await get_nonce(server, address, chain_id)
-            # utxo = await get_utxo(config, address)
             i = 0
 
         messages = [
@@ -345,25 +299,3 @@ async def nuls2_outgoing_worker(config):
 
 
 register_outgoing_worker(CHAIN_NAME, nuls2_outgoing_worker)
-
-
-@cached(ttl=60 * 10, cache=SimpleMemoryCache, timeout=120)
-async def nuls2_balance_getter(address, config=None):
-    global DECIMALS
-    if config is None:
-        from aleph.config import get_config
-        config = get_config()
-
-    server = get_server(config.nuls2.api_url.value)
-    contract_address = get_server(config.nuls2.contract_address.value)
-    chain_id = config.nuls2.chain_id.value
-
-    if DECIMALS is None:
-        response = await server.invokeView([chain_id, "decimals", "", []])
-        DECIMALS = int(response["result"])
-
-    response = await server.invokeView([chain_id, "balanceOf", "", [address]])
-    return int(response["result"]) / (10 ** DECIMALS)
-
-
-register_balance_getter(CHAIN_NAME, nuls2_balance_getter)
