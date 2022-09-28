@@ -3,7 +3,8 @@ from typing import Dict
 
 import pytest
 
-from aleph.chains.common import process_one_message
+from aleph.chains.chain_service import ChainService
+from aleph.handlers.message_handler import MessageHandler
 from aleph.model.messages import CappedMessage, Message
 from aleph.schemas.pending_messages import parse_message
 
@@ -41,8 +42,10 @@ async def test_confirm_message(test_db):
     item_hash = MESSAGE_DICT["item_hash"]
     content = json.loads(MESSAGE_DICT["item_content"])
 
+    message_handler = MessageHandler(chain_service=ChainService())
+
     message = parse_message(MESSAGE_DICT)
-    await process_one_message(message)
+    await message_handler.process_one_message(message)
     message_in_db = await Message.collection.find_one({"item_hash": item_hash})
 
     assert message_in_db is not None
@@ -57,7 +60,7 @@ async def test_confirm_message(test_db):
 
     # Now, confirm the message
     chain_name, tx_hash, height = "ETH", "123", 8000
-    await process_one_message(
+    await message_handler.process_one_message(
         message, chain_name=chain_name, tx_hash=tx_hash, height=height
     )
 
@@ -88,10 +91,12 @@ async def test_process_confirmed_message(test_db):
 
     item_hash = MESSAGE_DICT["item_hash"]
 
+    message_handler = MessageHandler(chain_service=ChainService())
+
     # Confirm the message
     chain_name, tx_hash, height = "ETH", "123", 8000
     message = parse_message(MESSAGE_DICT)
-    await process_one_message(
+    await message_handler.process_one_message(
         message, chain_name=chain_name, tx_hash=tx_hash, height=height
     )
 
