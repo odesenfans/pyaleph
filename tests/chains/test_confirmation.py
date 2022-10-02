@@ -1,5 +1,5 @@
 import json
-from typing import Dict
+from typing import Dict, Mapping
 
 import pytest
 
@@ -7,8 +7,9 @@ from aleph.chains.chain_service import ChainService
 from aleph.handlers.message_handler import MessageHandler
 from aleph.model.messages import CappedMessage, Message
 from aleph.schemas.pending_messages import parse_message
+from aleph.storage import StorageService
 
-MESSAGE_DICT = {
+MESSAGE_DICT: Mapping = {
     "chain": "ETH",
     "channel": "TEST",
     "sender": "0x696879aE4F6d8DaDD5b8F1cbb1e663B89b08f106",
@@ -26,7 +27,7 @@ def remove_id_key(mongodb_object: Dict) -> Dict:
 
 
 @pytest.mark.asyncio
-async def test_confirm_message(test_db):
+async def test_confirm_message(test_storage_service: StorageService):
     """
     Tests the flow of confirmation for real-time messages.
     1. We process the message unconfirmed, as if it came through the P2P
@@ -42,7 +43,10 @@ async def test_confirm_message(test_db):
     item_hash = MESSAGE_DICT["item_hash"]
     content = json.loads(MESSAGE_DICT["item_content"])
 
-    message_handler = MessageHandler(chain_service=ChainService())
+    message_handler = MessageHandler(
+        chain_service=ChainService(storage_service=test_storage_service),
+        storage_service=test_storage_service,
+    )
 
     message = parse_message(MESSAGE_DICT)
     await message_handler.process_one_message(message)
@@ -82,7 +86,7 @@ async def test_confirm_message(test_db):
 
 
 @pytest.mark.asyncio
-async def test_process_confirmed_message(test_db):
+async def test_process_confirmed_message(test_storage_service: StorageService):
     """
     Tests that a confirmed message coming directly from the on-chain integration flow
     is processed correctly, and that we get one confirmed entry in messages and one
@@ -91,7 +95,10 @@ async def test_process_confirmed_message(test_db):
 
     item_hash = MESSAGE_DICT["item_hash"]
 
-    message_handler = MessageHandler(chain_service=ChainService())
+    message_handler = MessageHandler(
+        chain_service=ChainService(storage_service=test_storage_service),
+        storage_service=test_storage_service,
+    )
 
     # Confirm the message
     chain_name, tx_hash, height = "ETH", "123", 8000

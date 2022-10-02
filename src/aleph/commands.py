@@ -35,6 +35,8 @@ from aleph.network import listener_tasks
 from aleph.services import p2p
 from aleph.services.keys import generate_keypair, save_keys
 from aleph.services.p2p import singleton, init_p2p_client
+from aleph.services.storage.gridfs_engine import GridFsStorageEngine
+from aleph.storage import StorageService
 from aleph.web import app
 
 __author__ = "Moshe Malawach"
@@ -78,6 +80,9 @@ async def run_server(
     app["extra_config"] = extra_web_config
     app["shared_stats"] = shared_stats
     app["p2p_client"] = p2p_client
+    app["storage_service"] = StorageService(
+        storage_engine=GridFsStorageEngine(model.fs)
+    )
 
     print(f"extra_web_config: {extra_web_config}")
 
@@ -198,7 +203,8 @@ async def main(args):
     model.init_db(config, ensure_indexes=True)
     LOGGER.info("Database initialized.")
 
-    chain_service = ChainService()
+    storage_service = StorageService(storage_engine=GridFsStorageEngine(model.fs))
+    chain_service = ChainService(storage_service=storage_service)
 
     set_start_method("spawn")
 

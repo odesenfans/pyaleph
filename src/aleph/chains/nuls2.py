@@ -25,7 +25,7 @@ from aleph.model.chains import Chain
 from aleph.model.messages import Message
 from aleph.model.pending import pending_messages_count, pending_txs_count
 from aleph.utils import run_in_executor
-from .chaindata import get_chaindata, incoming_chaindata
+from .chaindata import ChainDataService
 from .connector import Verifier, ChainWriter
 from .tx_context import TxContext
 from ..schemas.pending_messages import BasePendingMessage
@@ -38,6 +38,9 @@ DECIMALS = None  # will get populated later... bad?
 
 
 class Nuls2Connector(Verifier, ChainWriter):
+    def __init__(self, chain_data_service: ChainDataService):
+        self.chain_data_service = chain_data_service
+
     async def verify_signature(self, message: BasePendingMessage) -> bool:
         """Verifies a signature of a message, return True if verified, false if not"""
         sig_raw = base64.b64decode(message.signature)
@@ -84,9 +87,9 @@ class Nuls2Connector(Verifier, ChainWriter):
             while True:
                 last_stored_height = await self.get_last_height()
                 async for jdata, context in request_transactions(
-                        config, session, last_stored_height + 1
+                    config, session, last_stored_height + 1
                 ):
-                    await incoming_chaindata(jdata, context)
+                    await self.chain_data_service.incoming_chaindata(jdata, context)
                 await asyncio.sleep(10)
 
     async def packer(self, config: Config):
@@ -124,7 +127,7 @@ class Nuls2Connector(Verifier, ChainWriter):
             ]
 
             if len(messages):
-                content = await get_chaindata(messages)
+                content = await self.chain_data_service.get_chaindata(messages)
 
                 tx = await prepare_transfer_tx(
                     address,
