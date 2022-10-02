@@ -20,7 +20,7 @@ from aleph.model.chains import Chain
 from aleph.model.messages import Message
 from aleph.model.pending import pending_messages_count, pending_txs_count
 from aleph.utils import run_in_executor
-from .chaindata import get_chaindata, incoming_chaindata
+from .chaindata import ChainDataService
 from .connector import ChainWriter, Verifier
 from .tx_context import TxContext
 from ..schemas.pending_messages import BasePendingMessage
@@ -64,6 +64,9 @@ async def get_logs_query(web3: Web3, contract, start_height, end_height):
 
 
 class EthereumConnector(Verifier, ChainWriter):
+    def __init__(self, chain_data_service: ChainDataService):
+        self.chain_data_service = chain_data_service
+
     async def verify_signature(self, message: BasePendingMessage) -> bool:
         """Verifies a signature of a message, return True if verified, false if not"""
 
@@ -206,10 +209,12 @@ class EthereumConnector(Verifier, ChainWriter):
             async for jdata, context in self._request_transactions(
                 config, web3, contract, abi, last_stored_height
             ):
-                await incoming_chaindata(jdata, context)
+                await self.chain_data_service.incoming_chaindata(jdata, context)
 
     @staticmethod
-    def _broadcast_content(config, contract, web3: Web3, account, gas_price, nonce, content):
+    def _broadcast_content(
+        config, contract, web3: Web3, account, gas_price, nonce, content
+    ):
         tx = contract.functions.doEmit(content).buildTransaction(
             {
                 "chainId": config.ethereum.chain_id.value,
@@ -259,7 +264,9 @@ class EthereumConnector(Verifier, ChainWriter):
             ]
 
             if len(messages):
-                content = await get_chaindata(messages, bulk_threshold=200)
+                content = await self.chain_data_service.get_chaindata(
+                    messages, bulk_threshold=200
+                )
                 response = await run_in_executor(
                     None,
                     self._broadcast_content,

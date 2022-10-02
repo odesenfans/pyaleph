@@ -5,9 +5,11 @@ from typing import Dict
 from aleph_message.models import Chain
 from configmanager import Config
 
+from aleph.exceptions import InvalidMessageError
 from aleph.schemas.pending_messages import BasePendingMessage
+from aleph.storage import StorageService
+from .chaindata import ChainDataService
 from .connector import ChainConnector, ChainReader, ChainWriter, Verifier
-from ..exceptions import InvalidMessageError
 
 LOGGER = logging.getLogger(__name__)
 
@@ -18,12 +20,14 @@ class ChainService:
     readers: Dict[Chain, ChainReader]
     writers: Dict[Chain, ChainWriter]
 
-    def __init__(self):
+    def __init__(self, storage_service: StorageService):
 
         self.connectors = {}
         self.verifiers = {}
         self.readers = {}
         self.writers = {}
+
+        self._chain_data_service = ChainDataService(storage_service)
 
         self._register_chains()
 
@@ -104,13 +108,13 @@ class ChainService:
         try:
             from .nuls2 import Nuls2Connector
 
-            self._add_chain(Chain.NULS2, Nuls2Connector())
+            self._add_chain(Chain.NULS2, Nuls2Connector(self._chain_data_service))
         except ModuleNotFoundError as error:
             LOGGER.warning("Can't load NULS2: %s", error.msg)
         try:
             from .ethereum import EthereumConnector
 
-            self._add_chain(Chain.ETH, EthereumConnector())
+            self._add_chain(Chain.ETH, EthereumConnector(self._chain_data_service))
         except ModuleNotFoundError as error:
             LOGGER.warning("Can't load ETH: %s", error.msg)
         try:

@@ -13,8 +13,6 @@ from aleph.exceptions import (
     ContentCurrentlyUnavailable,
     UnknownHashError,
 )
-from aleph.handlers.forget import handle_forget_message
-from aleph.handlers.storage import handle_new_storage
 from aleph.model.db_bulk_operation import DbBulkOperation
 from aleph.model.messages import Message, CappedMessage
 from aleph.model.pending import PendingMessage
@@ -27,7 +25,9 @@ from aleph.schemas.validated_message import (
     ValidatedForgetMessage,
     make_message_upsert_query,
 )
-from aleph.storage import get_message_content
+from aleph.storage import StorageService
+from .forget import ForgetMessageHandler
+from .storage import StoreMessageHandler
 
 
 class IncomingStatus(IntEnum):
@@ -37,8 +37,12 @@ class IncomingStatus(IntEnum):
 
 
 class MessageHandler:
-    def __init__(self, chain_service: ChainService):
+    def __init__(self, chain_service: ChainService, storage_service: StorageService):
         self.chain_service = chain_service
+        self.storage_service = storage_service
+
+        self.store_message_handler = StoreMessageHandler(storage_service=storage_service)
+        self.forget_message_handler = ForgetMessageHandler(storage_service=storage_service)
 
     @staticmethod
     async def _mark_message_for_retry(
@@ -167,7 +171,9 @@ class MessageHandler:
 
         else:
             try:
-                content = await get_message_content(pending_message)
+                content = await self.storage_service.get_message_content(
+                    pending_message
+                )
 
             except InvalidContent:
                 LOGGER.warning(
@@ -201,13 +207,21 @@ class MessageHandler:
             # TODO: change this, it's messy.
             try:
                 if isinstance(validated_message, ValidatedStoreMessage):
-                    handling_result = await handle_new_storage(validated_message)
+                    handling_result = (
+                        await self.store_message_handler.handle_new_storage(
+                            validated_message
+                        )
+                    )
                 elif isinstance(validated_message, ValidatedForgetMessage):
                     # Handling it here means that there we ensure that the message
                     # has been forgotten before it is saved on the node.
                     # We may want the opposite instead: ensure that the message has
                     # been saved before it is forgotten.
-                    handling_result = await handle_forget_message(validated_message)
+                    handling_result = (
+                        await self.forget_message_handler.handle_forget_message(
+                            validated_message
+                        )
+                    )
                 else:
                     handling_result = True
             except UnknownHashError:

@@ -128,6 +128,3 @@ class TezosConnector(Verifier):
             return False
 
         return True
-
-
-# register_verifier(CHAIN_NAME, verify_signature)

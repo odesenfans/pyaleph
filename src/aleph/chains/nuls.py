@@ -41,5 +41,5 @@ class NulsConnector(Verifier):
         except Exception:
             LOGGER.exception("NULS Signature verification error")
             result = False
-        # result = sig.verify(verification)
+
         return result
