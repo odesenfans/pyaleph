@@ -31,12 +31,11 @@ from aleph.exceptions import InvalidConfigException, KeyNotFoundException
 from aleph.jobs import start_jobs
 from aleph.jobs.job_utils import prepare_loop
 from aleph.logging import setup_logging
-from aleph.model import make_gridfs_client
 from aleph.network import listener_tasks
 from aleph.services import p2p
 from aleph.services.keys import generate_keypair, save_keys
 from aleph.services.p2p import singleton, init_p2p_client
-from aleph.services.storage.gridfs_engine import GridFsStorageEngine
+from aleph.services.storage.fileystem_engine import FileSystemStorageEngine
 from aleph.storage import StorageService
 from aleph.web import app
 
@@ -82,7 +81,7 @@ async def run_server(
     app["shared_stats"] = shared_stats
     app["p2p_client"] = p2p_client
     app["storage_service"] = StorageService(
-        storage_engine=GridFsStorageEngine(gridfs_client=make_gridfs_client())
+        storage_engine=FileSystemStorageEngine(folder=config.storage.folder.value)
     )
 
     print(f"extra_web_config: {extra_web_config}")
@@ -204,7 +203,9 @@ async def main(args):
     model.init_db(config, ensure_indexes=True)
     LOGGER.info("Database initialized.")
 
-    storage_service = StorageService(storage_engine=GridFsStorageEngine(make_gridfs_client()))
+    storage_service = StorageService(
+        storage_engine=FileSystemStorageEngine(folder=config.storage.folder.value)
+    )
     chain_service = ChainService(storage_service=storage_service)
 
     set_start_method("spawn")
@@ -234,7 +235,7 @@ async def main(args):
 
         LOGGER.debug("Initializing listeners")
         tasks += listener_tasks(config, p2p_client)
-        tasks += chain_service.chain_event_loop(config)
+        tasks.append(chain_service.chain_event_loop(config))
         LOGGER.debug("Initialized listeners")
 
         # Need to be passed here otherwise it gets lost in the fork

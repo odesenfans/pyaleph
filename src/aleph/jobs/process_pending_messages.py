@@ -17,12 +17,11 @@ from aleph.chains.chain_service import ChainService
 from aleph.exceptions import InvalidMessageError
 from aleph.handlers.message_handler import MessageHandler, IncomingStatus
 from aleph.logging import setup_logging
-from aleph.model import make_gridfs_client
 from aleph.model.db_bulk_operation import DbBulkOperation
 from aleph.model.pending import PendingMessage
 from aleph.schemas.pending_messages import parse_message
 from aleph.services.p2p import singleton
-from aleph.services.storage.gridfs_engine import GridFsStorageEngine
+from aleph.services.storage.fileystem_engine import FileSystemStorageEngine
 from aleph.storage import StorageService
 from .job_utils import prepare_loop, process_job_results
 
@@ -232,7 +231,9 @@ async def retry_messages_task(config: Config, shared_stats: Dict):
     """Handle message that were added to the pending queue"""
     await asyncio.sleep(4)
 
-    storage_service = StorageService(storage_engine=GridFsStorageEngine(make_gridfs_client()))
+    storage_service = StorageService(
+        storage_engine=FileSystemStorageEngine(folder=config.storage.folder.value)
+    )
     chain_service = ChainService(storage_service=storage_service)
     message_handler = MessageHandler(
         chain_service=chain_service, storage_service=storage_service

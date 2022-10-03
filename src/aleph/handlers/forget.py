@@ -132,9 +132,9 @@ class ForgetMessageHandler:
                 logger.debug("File not pinned")
             logger.debug(f"Removed from IPFS: {storage_hash}")
         elif storage_type == ItemType.storage:
-            logger.debug(f"Removing from Gridfs: {storage_hash}")
+            logger.debug(f"Removing from local storage: {storage_hash}")
             await self.storage_service.storage_engine.delete(storage_hash)
-            logger.debug(f"Removed from Gridfs: {storage_hash}")
+            logger.debug(f"Removed from local storage: {storage_hash}")
         else:
             raise ValueError(f"Invalid storage type {storage_type}")
         logger.debug(f"Removed from {storage_type}: {storage_hash}")

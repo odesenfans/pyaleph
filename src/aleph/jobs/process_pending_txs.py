@@ -20,10 +20,9 @@ from aleph.model.db_bulk_operation import DbBulkOperation
 from aleph.model.pending import PendingMessage, PendingTX
 from aleph.schemas.pending_messages import parse_message
 from aleph.services.p2p import singleton
-from aleph.services.storage.gridfs_engine import GridFsStorageEngine
 from aleph.storage import StorageService
 from .job_utils import prepare_loop, process_job_results
-from ..model import make_gridfs_client
+from ..services.storage.fileystem_engine import FileSystemStorageEngine
 
 LOGGER = logging.getLogger("jobs.pending_txs")
 
@@ -138,7 +137,9 @@ async def handle_txs_task(config: Config):
     max_concurrent_tasks = config.aleph.jobs.pending_txs.max_concurrency.value
     await asyncio.sleep(4)
 
-    storage_service = StorageService(storage_engine=GridFsStorageEngine(make_gridfs_client()))
+    storage_service = StorageService(
+        storage_engine=FileSystemStorageEngine(folder=config.storage.folder.value)
+    )
     pending_tx_processor = PendingTxProcessor(storage_service=storage_service)
 
     while True:
