@@ -9,7 +9,7 @@ from configmanager import Config
 
 import aleph.config
 from aleph.config import get_defaults
-from aleph.model import init_db
+from aleph.model import init_db, make_gridfs_client
 from aleph.services.storage.gridfs_engine import GridFsStorageEngine
 from aleph.storage import StorageService
 from aleph.web import create_app
@@ -62,7 +62,7 @@ def mock_config(mocker):
 async def test_storage_service(test_db) -> StorageService:
     from aleph import model
 
-    storage_engine = GridFsStorageEngine(model.fs)
+    storage_engine = GridFsStorageEngine(make_gridfs_client())
     storage_service = StorageService(storage_engine=storage_engine)
     return storage_service
 
