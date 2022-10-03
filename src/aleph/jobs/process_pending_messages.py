@@ -13,10 +13,11 @@ from configmanager import Config, NotFound
 from pymongo import DeleteOne, DeleteMany, ASCENDING
 from setproctitle import setproctitle
 
-from aleph import model
+from aleph.chains.chain_service import ChainService
 from aleph.exceptions import InvalidMessageError
 from aleph.handlers.message_handler import MessageHandler, IncomingStatus
 from aleph.logging import setup_logging
+from aleph.model import make_gridfs_client
 from aleph.model.db_bulk_operation import DbBulkOperation
 from aleph.model.pending import PendingMessage
 from aleph.schemas.pending_messages import parse_message
@@ -24,7 +25,6 @@ from aleph.services.p2p import singleton
 from aleph.services.storage.gridfs_engine import GridFsStorageEngine
 from aleph.storage import StorageService
 from .job_utils import prepare_loop, process_job_results
-from ..chains.chain_service import ChainService
 
 LOGGER = getLogger("jobs.pending_messages")
 
@@ -232,7 +232,7 @@ async def retry_messages_task(config: Config, shared_stats: Dict):
     """Handle message that were added to the pending queue"""
     await asyncio.sleep(4)
 
-    storage_service = StorageService(storage_engine=GridFsStorageEngine(model.fs))
+    storage_service = StorageService(storage_engine=GridFsStorageEngine(make_gridfs_client()))
     chain_service = ChainService(storage_service=storage_service)
     message_handler = MessageHandler(
         chain_service=chain_service, storage_service=storage_service

@@ -8,11 +8,11 @@ from aleph_p2p_client import AlephP2PServiceClient
 from aleph.chains.chain_service import ChainService
 from aleph.handlers.message_handler import MessageHandler
 from aleph.exceptions import InvalidMessageError
+from aleph.model import make_gridfs_client
 from aleph.schemas.pending_messages import BasePendingMessage, parse_message
 from aleph.services.ipfs.pubsub import incoming_channel as incoming_ipfs_channel
 from aleph.services.storage.gridfs_engine import GridFsStorageEngine
 from aleph.storage import StorageService
-from aleph import model
 
 LOGGER = logging.getLogger("NETWORK")
 
@@ -38,14 +38,22 @@ async def decode_pubsub_message(message_data: bytes) -> BasePendingMessage:
 def listener_tasks(config, p2p_client: AlephP2PServiceClient) -> List[Coroutine]:
     from aleph.services.p2p.protocol import incoming_channel as incoming_p2p_channel
 
-    storage_service = StorageService(storage_engine=GridFsStorageEngine(model.fs))
+    storage_service = StorageService(
+        storage_engine=GridFsStorageEngine(gridfs_client=make_gridfs_client())
+    )
     chain_service = ChainService(storage_service=storage_service)
-    message_processor = MessageHandler(chain_service=chain_service, storage_service=storage_service)
+    message_processor = MessageHandler(
+        chain_service=chain_service, storage_service=storage_service
+    )
 
     # for now (1st milestone), we only listen on a single global topic...
     tasks: List[Coroutine] = [
-        incoming_p2p_channel(p2p_client, config.aleph.queue_topic.value, message_processor)
+        incoming_p2p_channel(
+            p2p_client, config.aleph.queue_topic.value, message_processor
+        )
     ]
     if config.ipfs.enabled.value:
-        tasks.append(incoming_ipfs_channel(config.aleph.queue_topic.value, message_processor))
+        tasks.append(
+            incoming_ipfs_channel(config.aleph.queue_topic.value, message_processor)
+        )
     return tasks
