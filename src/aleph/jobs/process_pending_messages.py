@@ -20,6 +20,8 @@ from aleph.logging import setup_logging
 from aleph.model.db_bulk_operation import DbBulkOperation
 from aleph.model.pending import PendingMessage
 from aleph.schemas.pending_messages import parse_message
+from aleph.services.ipfs import IpfsService
+from aleph.services.ipfs.common import make_ipfs_client
 from aleph.services.p2p import singleton
 from aleph.services.storage.fileystem_engine import FileSystemStorageEngine
 from aleph.storage import StorageService
@@ -231,8 +233,11 @@ async def retry_messages_task(config: Config, shared_stats: Dict):
     """Handle message that were added to the pending queue"""
     await asyncio.sleep(4)
 
+    ipfs_client = make_ipfs_client(config)
+    ipfs_service = IpfsService(ipfs_client=ipfs_client)
     storage_service = StorageService(
-        storage_engine=FileSystemStorageEngine(folder=config.storage.folder.value)
+        storage_engine=FileSystemStorageEngine(folder=config.storage.folder.value),
+        ipfs_service=ipfs_service,
     )
     chain_service = ChainService(storage_service=storage_service)
     message_handler = MessageHandler(
