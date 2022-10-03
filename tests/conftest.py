@@ -1,6 +1,8 @@
 import asyncio
 import os
+import shutil
 import sys
+from pathlib import Path
 
 import pymongo
 import pytest
@@ -9,8 +11,8 @@ from configmanager import Config
 
 import aleph.config
 from aleph.config import get_defaults
-from aleph.model import init_db, make_gridfs_client
-from aleph.services.storage.gridfs_engine import GridFsStorageEngine
+from aleph.model import init_db
+from aleph.services.storage.fileystem_engine import FileSystemStorageEngine
 from aleph.storage import StorageService
 from aleph.web import create_app
 
@@ -20,7 +22,7 @@ TEST_DB = "ccn_automated_tests"
 # Add the helpers to the PYTHONPATH.
 # Note: mark the "helpers" directory as a source directory to tell PyCharm
 # about this trick and avoid IDE errors.
-sys.path.append(os.path.join(os.path.dirname(__file__), 'helpers'))
+sys.path.append(os.path.join(os.path.dirname(__file__), "helpers"))
 
 
 def drop_db(db_name: str, config: Config):
@@ -59,10 +61,15 @@ def mock_config(mocker):
 
 
 @pytest_asyncio.fixture
-async def test_storage_service(test_db) -> StorageService:
-    from aleph import model
+async def test_storage_service() -> StorageService:
+    data_folder = Path("./data")
 
-    storage_engine = GridFsStorageEngine(make_gridfs_client())
+    # Delete files from previous runs
+    if data_folder.is_dir():
+        shutil.rmtree(data_folder)
+    data_folder.mkdir(parents=True)
+
+    storage_engine = FileSystemStorageEngine(folder=data_folder)
     storage_service = StorageService(storage_engine=storage_engine)
     return storage_service
 

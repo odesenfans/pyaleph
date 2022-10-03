@@ -6,12 +6,11 @@ from urllib.parse import unquote
 from aleph_p2p_client import AlephP2PServiceClient
 
 from aleph.chains.chain_service import ChainService
-from aleph.handlers.message_handler import MessageHandler
 from aleph.exceptions import InvalidMessageError
-from aleph.model import make_gridfs_client
+from aleph.handlers.message_handler import MessageHandler
 from aleph.schemas.pending_messages import BasePendingMessage, parse_message
 from aleph.services.ipfs.pubsub import incoming_channel as incoming_ipfs_channel
-from aleph.services.storage.gridfs_engine import GridFsStorageEngine
+from aleph.services.storage.fileystem_engine import FileSystemStorageEngine
 from aleph.storage import StorageService
 
 LOGGER = logging.getLogger("NETWORK")
@@ -39,7 +38,7 @@ def listener_tasks(config, p2p_client: AlephP2PServiceClient) -> List[Coroutine]
     from aleph.services.p2p.protocol import incoming_channel as incoming_p2p_channel
 
     storage_service = StorageService(
-        storage_engine=GridFsStorageEngine(gridfs_client=make_gridfs_client())
+        storage_engine=FileSystemStorageEngine(folder=config.storage.folder.value)
     )
     chain_service = ChainService(storage_service=storage_service)
     message_processor = MessageHandler(
