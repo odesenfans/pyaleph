@@ -9,7 +9,7 @@ from configmanager import Config
 
 from aleph.exceptions import InvalidMessageError
 from aleph.schemas.pending_messages import parse_message
-from aleph.services.ipfs.pubsub import pub as pub_ipfs
+from aleph.services.ipfs import IpfsService
 from aleph.services.p2p.pubsub import publish as pub_p2p
 from aleph.types import Protocol
 
@@ -45,15 +45,20 @@ async def pub_json(request: web.Request):
     failed_publications = []
 
     try:
+        ipfs_service: IpfsService = request.app["storage_service"].ipfs_service
         if request.app["config"].ipfs.enabled.value:
-            await asyncio.wait_for(pub_ipfs(request_data.get("topic"), request_data.get("data")), 1)
+            await asyncio.wait_for(
+                ipfs_service.pub(request_data.get("topic"), request_data.get("data")), 1
+            )
     except Exception:
         LOGGER.exception("Can't publish on ipfs")
         failed_publications.append(Protocol.IPFS)
 
     try:
         p2p_client: AlephP2PServiceClient = request.app["p2p_client"]
-        await asyncio.wait_for(pub_p2p(p2p_client, request_data.get("topic"), request_data.get("data")), 10)
+        await asyncio.wait_for(
+            pub_p2p(p2p_client, request_data.get("topic"), request_data.get("data")), 10
+        )
     except Exception:
         LOGGER.exception("Can't publish on p2p")
         failed_publications.append(Protocol.P2P)

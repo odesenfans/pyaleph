@@ -11,7 +11,6 @@ from aleph_message.models import ItemType, MessageType
 from aleph.model.filepin import PermanentPin
 from aleph.model.messages import Message
 from aleph.schemas.validated_message import ValidatedForgetMessage
-from aleph.services.ipfs.common import get_ipfs_api
 from aleph.storage import StorageService
 from aleph.utils import item_type_from_hash
 
@@ -118,14 +117,14 @@ class ForgetMessageHandler:
             )
 
         if storage_type == ItemType.ipfs:
-            api = await get_ipfs_api(timeout=5)
             logger.debug(f"Removing from IPFS: {storage_hash}")
+            ipfs_client = self.storage_service.ipfs_service.ipfs_client
             try:
-                result = await api.pin.rm(storage_hash)
+                result = await ipfs_client.pin.rm(storage_hash)
                 print(result)
 
                 # Launch the IPFS garbage collector (`ipfs repo gc`)
-                async for _ in RepoAPI(driver=api).gc():
+                async for _ in RepoAPI(driver=ipfs_client).gc():
                     pass
 
             except NotPinnedError:

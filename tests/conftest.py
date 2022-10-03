@@ -12,6 +12,8 @@ from configmanager import Config
 import aleph.config
 from aleph.config import get_defaults
 from aleph.model import init_db
+from aleph.services.ipfs import IpfsService
+from aleph.services.ipfs.common import make_ipfs_client
 from aleph.services.storage.fileystem_engine import FileSystemStorageEngine
 from aleph.storage import StorageService
 from aleph.web import create_app
@@ -61,7 +63,7 @@ def mock_config(mocker):
 
 
 @pytest_asyncio.fixture
-async def test_storage_service() -> StorageService:
+async def test_storage_service(mock_config) -> StorageService:
     data_folder = Path("./data")
 
     # Delete files from previous runs
@@ -70,18 +72,22 @@ async def test_storage_service() -> StorageService:
     data_folder.mkdir(parents=True)
 
     storage_engine = FileSystemStorageEngine(folder=data_folder)
-    storage_service = StorageService(storage_engine=storage_engine)
+    ipfs_client = make_ipfs_client(mock_config)
+    ipfs_service = IpfsService(ipfs_client=ipfs_client)
+    storage_service = StorageService(storage_engine=storage_engine, ipfs_service=ipfs_service)
     return storage_service
 
 
 @pytest_asyncio.fixture
-async def ccn_api_client(aiohttp_client, mock_config):
+async def ccn_api_client(mocker, aiohttp_client, mock_config):
     # Make aiohttp return the stack trace on 500 errors
     event_loop = asyncio.get_event_loop()
     event_loop.set_debug(True)
 
     app = create_app()
     app["config"] = mock_config
+    app["p2p_client"] = mocker.AsyncMock()
+    app["storage_service"] = mocker.AsyncMock()
     client = await aiohttp_client(app)
 
     return client
