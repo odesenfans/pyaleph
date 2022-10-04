@@ -89,8 +89,8 @@ async def test_confirm_message(test_db, test_storage_service: StorageService):
 async def test_process_confirmed_message(test_db, test_storage_service: StorageService):
     """
     Tests that a confirmed message coming directly from the on-chain integration flow
-    is processed correctly, and that we get one confirmed entry in messages and one
-    in capped messages.
+    is processed correctly, and that we get one confirmed entry in messages and none
+    in capped messages (historical data/confirmations are not added to capped messages).
     """
 
     item_hash = MESSAGE_DICT["item_hash"]
@@ -119,6 +119,5 @@ async def test_process_confirmed_message(test_db, test_storage_service: StorageS
         {"item_hash": item_hash}
     )
 
-    assert remove_id_key(message_in_db) == remove_id_key(capped_message_in_db)
-    assert capped_message_in_db["confirmed"]
-    assert capped_message_in_db["confirmations"] == expected_confirmations
+    # Historical messages are not supposed to be added to capped messages
+    assert capped_message_in_db is None

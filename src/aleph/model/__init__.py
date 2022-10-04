@@ -48,9 +48,6 @@ def init_db(config: Config, ensure_indexes: bool = True):
         from aleph.model.chains import Chain
 
         Chain.ensure_indexes(sync_db)
-        from aleph.model.p2p import Peer
-
-        Peer.ensure_indexes(sync_db)
 
         PermanentPin.ensure_indexes(sync_db)
 

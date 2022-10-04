@@ -22,11 +22,14 @@ import sentry_sdk
 from aleph_message.models import MessageType
 from configmanager import Config
 from setproctitle import setproctitle
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 import aleph.config
 from aleph import model
 from aleph.chains.chain_service import ChainService
 from aleph.cli.args import parse_args
+from aleph.db.models.base import Base
+from aleph.db.connection import make_engine, make_session_factory
 from aleph.exceptions import InvalidConfigException, KeyNotFoundException
 from aleph.jobs import start_jobs
 from aleph.jobs.job_utils import prepare_loop
@@ -46,6 +49,12 @@ __copyright__ = "Moshe Malawach"
 __license__ = "mit"
 
 LOGGER = logging.getLogger(__name__)
+
+
+async def create_tables(engine: AsyncEngine):
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
 
 
 def init_shared_stats(shared_memory_manager: SyncManager) -> Dict[str, Any]:
@@ -205,6 +214,9 @@ async def main(args):
     config_values = config.dump_values()
 
     LOGGER.debug("Initializing database")
+    engine = make_engine(config, echo=args.loglevel == logging.DEBUG)
+    session_factory = make_session_factory(engine)
+    await create_tables(engine)
     model.init_db(config, ensure_indexes=True)
     LOGGER.info("Database initialized.")
 
@@ -228,6 +240,7 @@ async def main(args):
             LOGGER.debug("Creating jobs")
             tasks += start_jobs(
                 config=config,
+                session_factory=session_factory,
                 shared_stats=shared_stats,
                 ipfs_service=ipfs_service,
                 api_servers=api_servers,
@@ -237,6 +250,7 @@ async def main(args):
         LOGGER.debug("Initializing p2p")
         p2p_client, p2p_tasks = await p2p.init_p2p(
             config=config,
+            session_factory=session_factory,
             service_name="network-monitor",
             ipfs_service=ipfs_service,
             api_servers=api_servers,

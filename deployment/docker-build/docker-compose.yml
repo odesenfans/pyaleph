@@ -6,6 +6,7 @@ version: '2.2'
 volumes:
   pyaleph-ipfs:
   pyaleph-mongodb:
+  pyaleph-postgres:
 
 services:
 
@@ -50,7 +51,6 @@ services:
       - "4001:4001/udp"
       - "127.0.0.1:5001:5001"
       - "127.0.0.1:8080:8080"
-      - "8080:8080"
     volumes:
       - "pyaleph-ipfs:/data/ipfs"
     environment:
@@ -58,6 +58,20 @@ services:
     networks:
       - pyaleph
     command: ["daemon", "--enable-pubsub-experiment", "--migrate"]
+
+  postgres:
+    restart: always
+    image: postgres:14.5
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pyaleph-postgres:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: aleph
+      POSTGRES_PASSWORD: decentralize-everything
+      POSTGRES_DB: aleph
+    networks:
+      - pyaleph
 
   mongodb:
     restart: always

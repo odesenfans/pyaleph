@@ -3,13 +3,14 @@ from typing import Coroutine, List
 
 from aleph_p2p_client import AlephP2PServiceClient
 from configmanager import Config
+from sqlalchemy.orm import sessionmaker
 
 from aleph.services.ipfs import IpfsService
 from aleph.services.peers.monitor import monitor_hosts_ipfs, monitor_hosts_p2p
 from aleph.services.peers.publish import publish_host
 from aleph.services.utils import get_IP
 
-LOGGER = logging.getLogger("P2P.host")
+LOGGER = logging.getLogger(__name__)
 
 
 # Save published adress to present them in the web process later
@@ -18,6 +19,7 @@ public_adresses = []
 
 async def initialize_host(
     config: Config,
+    session_factory: sessionmaker,
     p2p_client: AlephP2PServiceClient,
     ipfs_service: IpfsService,
     api_servers: List[str],
@@ -33,8 +35,12 @@ async def initialize_host(
     transport_opt = f"/ip4/{host}/tcp/{port}"
 
     tasks = [
-        reconnect_p2p_job(config=config, p2p_client=p2p_client),
-        tidy_http_peers_job(config=config, api_servers=api_servers),
+        reconnect_p2p_job(
+            config=config, session_factory=session_factory, p2p_client=p2p_client
+        ),
+        tidy_http_peers_job(
+            config=config, session_factory=session_factory, api_servers=api_servers
+        ),
     ]
     if listen:
         peer_id = (await p2p_client.identify()).peer_id
@@ -67,13 +73,19 @@ async def initialize_host(
                 peer_type="HTTP",
                 use_ipfs=config.ipfs.enabled.value,
             ),
-            monitor_hosts_p2p(p2p_client, alive_topic=config.p2p.alive_topic.value),
+            monitor_hosts_p2p(
+                p2p_client,
+                session_factory=session_factory,
+                alive_topic=config.p2p.alive_topic.value,
+            ),
         ]
 
         if config.ipfs.enabled.value:
             tasks.append(
                 monitor_hosts_ipfs(
-                    ipfs_service=ipfs_service, alive_topic=config.ipfs.alive_topic.value
+                    ipfs_service=ipfs_service,
+                    session_factory=session_factory,
+                    alive_topic=config.ipfs.alive_topic.value,
                 )
             )
             try:
