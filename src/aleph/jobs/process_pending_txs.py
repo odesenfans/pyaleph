@@ -19,12 +19,12 @@ from aleph.logging import setup_logging
 from aleph.model.db_bulk_operation import DbBulkOperation
 from aleph.model.pending import PendingMessage, PendingTX
 from aleph.schemas.pending_messages import parse_message
+from aleph.services.ipfs.common import make_ipfs_client
+from aleph.services.ipfs.service import IpfsService
 from aleph.services.p2p import singleton
+from aleph.services.storage.fileystem_engine import FileSystemStorageEngine
 from aleph.storage import StorageService
 from .job_utils import prepare_loop, process_job_results
-from ..services.ipfs.common import make_ipfs_client
-from ..services.ipfs.service import IpfsService
-from ..services.storage.fileystem_engine import FileSystemStorageEngine
 
 LOGGER = logging.getLogger("jobs.pending_txs")
 
@@ -44,9 +44,12 @@ class PendingTxProcessor:
             "%s Handling TX in block %s", tx_context.chain_name, tx_context.height
         )
 
+        # If the chain data file is unavailable, we leave it to the pending tx
+        # processor to log the content unavailable exception and retry later.
         messages = await self.chain_data_service.get_chaindata_messages(
             pending_tx["content"], tx_context, seen_ids=seen_ids
         )
+
         if messages:
             for i, message_dict in enumerate(messages):
 
