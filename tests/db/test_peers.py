@@ -1,30 +1,16 @@
 import datetime as dt
 
 import pytest
-import pytest_asyncio
 import pytz
 from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker
 
 from aleph.db.accessors.peers import upsert_peer, get_all_addresses_by_peer_type
-from aleph.db.connection import make_engine, make_session_factory
-from aleph.db.models.base import Base
 from aleph.db.models.peers import PeerDb, PeerType
 
 
-@pytest_asyncio.fixture
-async def session_factory(mock_config):
-    engine = make_engine(mock_config, echo=True)
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)
-
-    return make_session_factory(engine)
-
-
 @pytest.mark.asyncio
-async def test_get_all_addresses_by_peer_type(session_factory):
+async def test_get_all_addresses_by_peer_type(session_factory: sessionmaker):
     peer_id = "some-peer-id"
     last_seen = pytz.utc.localize(dt.datetime(2022, 10, 1))
     source = PeerType.P2P
@@ -76,7 +62,7 @@ async def test_get_all_addresses_by_peer_type(session_factory):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("peer_type", (PeerType.HTTP, PeerType.P2P, PeerType.IPFS))
 async def test_get_all_addresses_by_peer_type_no_match(
-    session_factory, peer_type: PeerType
+    session_factory: sessionmaker, peer_type: PeerType
 ):
     async with session_factory() as session:
         entries = await get_all_addresses_by_peer_type(

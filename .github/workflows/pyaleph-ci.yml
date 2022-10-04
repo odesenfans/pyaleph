@@ -22,6 +22,15 @@ jobs:
         image: mongo:4.4
         ports:
           - 27017:27017
+      postgres:
+        image: postgres:14.5
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: aleph
+          POSTGRES_PASSWORD: decentralize-everything
+          POSTGRES_DATABASE: aleph
+
 
     steps:
     - uses: actions/checkout@v2
