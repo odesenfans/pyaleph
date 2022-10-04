@@ -7,11 +7,11 @@ from aiohttp import web
 from aleph_p2p_client import AlephP2PServiceClient
 from configmanager import Config
 
-from aleph.exceptions import InvalidMessageError
 from aleph.schemas.pending_messages import parse_message
 from aleph.services.ipfs import IpfsService
 from aleph.services.p2p.pubsub import publish as pub_p2p
-from aleph.types import Protocol
+from aleph.types.message_status import InvalidMessageException
+from aleph.types.protocol import Protocol
 
 LOGGER = logging.getLogger("web.controllers.p2p")
 
@@ -33,7 +33,7 @@ def validate_request_data(config: Config, request_data: Dict) -> None:
         message = json.loads(cast(str, request_data.get("data")))
         try:
             _ = parse_message(message)
-        except InvalidMessageError as e:
+        except InvalidMessageException as e:
             raise web.HTTPUnprocessableEntity(body=str(e))
 
 
@@ -48,7 +48,7 @@ async def pub_json(request: web.Request):
         ipfs_service: IpfsService = request.app["storage_service"].ipfs_service
         if request.app["config"].ipfs.enabled.value:
             await asyncio.wait_for(
-                ipfs_service.pub(request_data.get("topic"), request_data.get("data")), 1
+                ipfs_service.pub(request_data.get("topic"), request_data.get("data")), 10
             )
     except Exception:
         LOGGER.exception("Can't publish on ipfs")
@@ -57,7 +57,13 @@ async def pub_json(request: web.Request):
     try:
         p2p_client: AlephP2PServiceClient = request.app["p2p_client"]
         await asyncio.wait_for(
-            pub_p2p(p2p_client, request_data.get("topic"), request_data.get("data")), 10
+            pub_p2p(
+                p2p_client,
+                request_data.get("topic"),
+                request_data.get("data"),
+                loopback=True,
+            ),
+            10,
         )
     except Exception:
         LOGGER.exception("Can't publish on p2p")
