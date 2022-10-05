@@ -8,17 +8,17 @@ from typing import List, Dict, Optional, Set
 
 import sentry_sdk
 from configmanager import Config
-from pymongo import DeleteOne, InsertOne
 from pymongo.errors import CursorNotFound
 from setproctitle import setproctitle
+from sqlalchemy import insert, delete
 from sqlalchemy.orm import sessionmaker
 
 from aleph.chains.chaindata import ChainDataService
 from aleph.chains.tx_context import TxContext
 from aleph.exceptions import InvalidMessageError
 from aleph.logging import setup_logging
-from aleph.model.db_bulk_operation import DbBulkOperation
-from aleph.model.pending import PendingMessage, PendingTX
+from aleph.db.bulk_operations import DbBulkOperation
+from aleph.model.pending import PendingTX
 from aleph.schemas.pending_messages import parse_message
 from aleph.services.ipfs.common import make_ipfs_client
 from aleph.services.ipfs.service import IpfsService
@@ -27,6 +27,8 @@ from aleph.services.storage.fileystem_engine import FileSystemStorageEngine
 from aleph.storage import StorageService
 from .job_utils import prepare_loop, process_job_results
 from ..db.connection import make_engine, make_session_factory
+from ..db.models import PendingMessageDb
+from ..db.models.pending_txs import PendingTxDb
 
 LOGGER = logging.getLogger("jobs.pending_txs")
 
@@ -39,19 +41,33 @@ class PendingTxProcessor:
         )
 
     async def handle_pending_tx(
-        self, pending_tx, seen_ids: Optional[List[str]] = None
+        self, pending_tx: PendingTxDb, seen_ids: Optional[List[str]] = None
     ) -> List[DbBulkOperation]:
 
         db_operations: List[DbBulkOperation] = []
-        tx_context = TxContext(**pending_tx["context"])
         LOGGER.info(
-            "%s Handling TX in block %s", tx_context.chain_name, tx_context.height
+            "%s Handling TX in block %s", pending_tx.tx.chain, pending_tx.tx.height
+        )
+
+        # TODO: get rid of this compatibility layer. 'get_chaindata_messages' is recursive and this proves
+        #       to be tricky to refactor at this time of the night.
+        tx_content = {
+            "content": pending_tx.content,
+            "protocol": pending_tx.protocol,
+            "version": pending_tx.protocol_version,
+        }
+        tx_context = TxContext(
+            chain_name=str(pending_tx.tx.chain),
+            tx_hash=pending_tx.tx.hash,
+            height=pending_tx.tx.height,
+            time=pending_tx.tx.datetime.timestamp(),
+            publisher=pending_tx.tx.publisher,
         )
 
         # If the chain data file is unavailable, we leave it to the pending tx
         # processor to log the content unavailable exception and retry later.
         messages = await self.chain_data_service.get_chaindata_messages(
-            pending_tx["content"], tx_context, seen_ids=seen_ids
+            tx_content, tx_context, seen_ids=seen_ids
         )
 
         if messages:
@@ -69,17 +85,12 @@ class PendingTxProcessor:
                 # we add it to the message queue... bad idea? should we process it asap?
                 db_operations.append(
                     DbBulkOperation(
-                        collection=PendingMessage,
-                        operation=InsertOne(
-                            {
-                                "message": message.dict(exclude={"content"}),
-                                "source": dict(
-                                    chain_name=tx_context.chain_name,
-                                    tx_hash=tx_context.tx_hash,
-                                    height=tx_context.height,
-                                    check_message=True,  # should we store this?
-                                ),
-                            }
+                        model=PendingMessageDb,
+                        operation=insert(PendingMessageDb).values(
+                            # TODO: optimize this ex: by adding a to_db_dict() method on BasePendingMessage
+                            **PendingMessageDb.from_obj(
+                                message, pending_tx.tx_hash, check_message=True
+                            ).to_dict()
                         ),
                     )
                 )
@@ -92,8 +103,10 @@ class PendingTxProcessor:
             # bogus or handled, we remove it.
             db_operations.append(
                 DbBulkOperation(
-                    collection=PendingTX,
-                    operation=DeleteOne({"_id": pending_tx["_id"]}),
+                    model=PendingTxDb,
+                    operation=delete(PendingTxDb).where(
+                        PendingTxDb.tx_hash == pending_tx.tx_hash
+                    ),
                 )
             )
 

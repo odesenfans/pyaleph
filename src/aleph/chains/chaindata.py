@@ -1,20 +1,21 @@
 import asyncio
+import datetime as dt
 import json
-from dataclasses import asdict
 from typing import Dict, Optional, List
 
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import sessionmaker
 
 from aleph.chains.common import LOGGER
 from aleph.chains.tx_context import TxContext
 from aleph.config import get_config
 from aleph.db.models.file_pins import FilePinDb
+from aleph.db.models.pending_txs import ChainSyncProtocol, PendingTxDb
 from aleph.exceptions import (
     InvalidContent,
     AlephStorageException,
     ContentCurrentlyUnavailable,
 )
-from aleph.model.pending import PendingTX
 from aleph.storage import StorageService
 
 
@@ -30,7 +31,7 @@ class ChainDataService:
         in IPFS and store the object hash instead of raw list.
         """
         chaindata = {
-            "protocol": "aleph",
+            "protocol": ChainSyncProtocol.OnChain,
             "version": 1,
             "content": {"messages": messages},
         }
@@ -38,7 +39,11 @@ class ChainDataService:
         if len(content) > bulk_threshold:
             ipfs_id = await self.storage_service.add_json(chaindata)
             return json.dumps(
-                {"protocol": "aleph-offchain", "version": 1, "content": ipfs_id}
+                {
+                    "protocol": ChainSyncProtocol.OffChain,
+                    "version": 1,
+                    "content": ipfs_id,
+                }
             )
         else:
             return content
@@ -92,7 +97,11 @@ class ChainDataService:
                 try:
                     LOGGER.info(f"chaindata {chaindata}")
                     async with self.session_factory() as session:
-                        session.add(FilePinDb(file_hash=chaindata["content"], tx_hash=context.tx_hash))
+                        session.add(
+                            FilePinDb(
+                                file_hash=chaindata["content"], tx_hash=context.tx_hash
+                            )
+                        )
                         await session.commit()
 
                     # Some IPFS fetches can take a while, hence the large timeout.
@@ -108,11 +117,22 @@ class ChainDataService:
             raise InvalidContent(error_msg)
 
     @staticmethod
-    async def incoming_chaindata(content: Dict, context: TxContext):
+    async def incoming_chaindata(
+        session: AsyncSession, content: Dict, context: TxContext
+    ):
         """Incoming data from a chain.
         Content can be inline of "offchain" through an ipfs hash.
         For now we only add it to the database, it will be processed later.
         """
-        await PendingTX.collection.insert_one(
-            {"content": content, "context": asdict(context)}
+        session.add(
+            PendingTxDb(
+                tx_hash=context.tx_hash,
+                chain=context.chain_name,
+                tx_height=context.height,
+                tx_datetime=dt.datetime.utcfromtimestamp(context.time),
+                tx_publisher=context.publisher,
+                protocol=content["protocol"],
+                protocol_version=content["version"],
+                content=content["content"],
+            )
         )

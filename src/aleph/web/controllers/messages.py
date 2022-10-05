@@ -1,7 +1,8 @@
 import asyncio
 import logging
 from enum import IntEnum
-from typing import Any, List, Optional, Mapping
+from typing import Any, List, Optional
+from typing import Mapping
 
 from aiohttp import web
 from aleph_message.models import MessageType, ItemHash, Chain

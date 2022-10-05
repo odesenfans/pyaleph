@@ -137,7 +137,12 @@ class Nuls2Connector(Verifier, ChainWriter):
                 async for jdata, context in self._request_transactions(
                     config, session, last_stored_height + 1
                 ):
-                    await self.chain_data_service.incoming_chaindata(jdata, context)
+                    async with self.session_factory() as session:
+                        await self.chain_data_service.incoming_chaindata(
+                            session=session, content=jdata, context=context
+                        )
+                        await session.commit()
+
                 await asyncio.sleep(10)
 
     async def packer(self, config: Config):

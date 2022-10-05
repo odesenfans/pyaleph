@@ -17,7 +17,7 @@ from aleph.chains.chain_service import ChainService
 from aleph.exceptions import InvalidMessageError
 from aleph.handlers.message_handler import MessageHandler, IncomingStatus
 from aleph.logging import setup_logging
-from aleph.model.db_bulk_operation import DbBulkOperation
+from aleph.db.bulk_operations import DbBulkOperation
 from aleph.model.pending import PendingMessage
 from aleph.schemas.pending_messages import parse_message
 from aleph.services.ipfs import IpfsService

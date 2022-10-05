@@ -3,28 +3,31 @@ from typing import Optional, Dict, Tuple, List
 
 from aleph_message.models import MessageConfirmation
 from bson import ObjectId
-from pymongo import UpdateOne
+from sqlalchemy import update
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import sessionmaker
 
 from aleph.chains.chain_service import ChainService
 from aleph.chains.common import LOGGER
+from aleph.db.accessors.messages import (
+    make_message_upsert_query,
+    make_confirmation_upsert_query,
+    get_message_by_item_hash,
+)
+from aleph.db.bulk_operations import DbBulkOperation
+from aleph.db.models import PendingMessageDb, MessageDb, MessageConfirmationDb
 from aleph.exceptions import (
     InvalidMessageError,
     InvalidContent,
     ContentCurrentlyUnavailable,
     UnknownHashError,
 )
-from aleph.model.db_bulk_operation import DbBulkOperation
-from aleph.model.messages import Message, CappedMessage
-from aleph.model.pending import PendingMessage
 from aleph.permissions import check_sender_authorization
 from aleph.schemas.pending_messages import BasePendingMessage
 from aleph.schemas.validated_message import (
-    make_confirmation_update_query,
     validate_pending_message,
     ValidatedStoreMessage,
     ValidatedForgetMessage,
-    make_message_upsert_query,
 )
 from aleph.storage import StorageService
 from .forget import ForgetMessageHandler
@@ -57,55 +60,41 @@ class MessageHandler:
 
     @staticmethod
     async def _mark_message_for_retry(
+        session: AsyncSession,
         message: BasePendingMessage,
-        chain_name: Optional[str],
         tx_hash: Optional[str],
-        height: Optional[int],
         check_message: bool,
         retrying: bool,
         existing_id,
     ):
-        message_dict = message.dict(exclude={"content"})
-
         if not retrying:
-            await PendingMessage.collection.insert_one(
-                {
-                    "message": message_dict,
-                    "source": dict(
-                        chain_name=chain_name,
-                        tx_hash=tx_hash,
-                        height=height,
-                        check_message=check_message,  # should we store this?
-                    ),
-                }
+            session.add(
+                PendingMessageDb.from_obj(
+                    obj=message,
+                    tx_hash=tx_hash,
+                    check_message=check_message,  # should we store this?
+                )
             )
         else:
             LOGGER.debug(f"Incrementing for {existing_id}")
-            result = await PendingMessage.collection.update_one(
-                filter={"_id": ObjectId(existing_id)}, update={"$inc": {"retries": 1}}
+            update_stmt = (
+                update(PendingMessageDb)
+                .where(PendingMessageDb.item_hash == message.item_hash)
+                .values(retries=PendingMessageDb.retries + 1)
             )
-            LOGGER.debug(f"Update result {result}")
+            await session.execute(update_stmt)
 
-    @staticmethod
     async def delayed_incoming(
+        self,
         message: BasePendingMessage,
-        chain_name: Optional[str] = None,
         tx_hash: Optional[str] = None,
-        height: Optional[int] = None,
     ):
-        if message is None:
-            return
-        await PendingMessage.collection.insert_one(
-            {
-                "message": message.dict(exclude={"content"}),
-                "source": dict(
-                    chain_name=chain_name,
-                    tx_hash=tx_hash,
-                    height=height,
-                    check_message=True,  # should we store this?
-                ),
-            }
-        )
+
+        async with self.session_factory() as session:
+            session.add(
+                PendingMessageDb.from_obj(message, tx_hash=tx_hash, check_message=True)
+            )
+            await session.commit()
 
     async def incoming(
         self,
@@ -126,6 +115,8 @@ class MessageHandler:
 
         item_hash = pending_message.item_hash
         sender = pending_message.sender
+        # TODO: refactor this mechanism, no need for a list here and we can probably simplify
+        #       the logic a lot
         confirmations = []
         ids_key = (item_hash, sender, chain_name)
 
@@ -139,19 +130,11 @@ class MessageHandler:
                 MessageConfirmation(chain=chain_name, hash=tx_hash, height=height)
             )
 
-        filters = {
-            "item_hash": item_hash,
-            "chain": pending_message.chain,
-            "sender": pending_message.sender,
-            "type": pending_message.type,
-        }
-        existing = await Message.collection.find_one(
-            filters,
-            projection={"confirmed": 1, "confirmations": 1, "time": 1, "signature": 1},
-        )
+        async with self.session_factory() as session:
+            existing = await get_message_by_item_hash(session=session, item_hash=item_hash)
 
         if check_message:
-            if existing is None or (existing["signature"] != pending_message.signature):
+            if existing is None or (existing.signature != pending_message.signature):
                 # check/sanitize the message if needed
                 try:
                     await self.chain_service.verify_signature(pending_message)
@@ -163,7 +146,7 @@ class MessageHandler:
         else:
             LOGGER.info("Incoming %s." % item_hash)
 
-        updates: Dict[str, Dict] = {}
+        updates = []
 
         if existing:
             if seen_ids is not None and height is not None:
@@ -178,7 +161,15 @@ class MessageHandler:
             LOGGER.debug("Updating %s." % item_hash)
 
             if confirmations:
-                updates = make_confirmation_update_query(confirmations)
+                updates = [
+                    DbBulkOperation(
+                        model=MessageConfirmationDb,
+                        operation=make_confirmation_upsert_query(
+                            item_hash=item_hash, tx_hash=confirmation.hash
+                        ),
+                    )
+                    for confirmation in confirmations
+                ]
 
         else:
             try:
@@ -195,15 +186,15 @@ class MessageHandler:
             except (ContentCurrentlyUnavailable, Exception) as e:
                 if not isinstance(e, ContentCurrentlyUnavailable):
                     LOGGER.exception("Can't get content of object %r" % item_hash)
-                await self._mark_message_for_retry(
-                    message=pending_message,
-                    chain_name=chain_name,
-                    tx_hash=tx_hash,
-                    height=height,
-                    check_message=check_message,
-                    retrying=retrying,
-                    existing_id=existing_id,
-                )
+                async with self.session_factory() as session:
+                    await self._mark_message_for_retry(
+                        session=session,
+                        message=pending_message,
+                        tx_hash=tx_hash,
+                        check_message=check_message,
+                        retrying=retrying,
+                        existing_id=existing_id,
+                    )
                 return IncomingStatus.RETRYING_LATER, []
 
             validated_message = validate_pending_message(
@@ -246,15 +237,15 @@ class MessageHandler:
 
             if handling_result is None:
                 LOGGER.debug("Message type handler has failed, retrying later.")
-                await self._mark_message_for_retry(
-                    message=pending_message,
-                    chain_name=chain_name,
-                    tx_hash=tx_hash,
-                    height=height,
-                    check_message=check_message,
-                    retrying=retrying,
-                    existing_id=existing_id,
-                )
+                async with self.session_factory() as session:
+                    await self._mark_message_for_retry(
+                        session=session,
+                        message=pending_message,
+                        tx_hash=tx_hash,
+                        check_message=check_message,
+                        retrying=retrying,
+                        existing_id=existing_id,
+                    )
                 return IncomingStatus.RETRYING_LATER, []
 
             if not handling_result:
@@ -279,18 +270,33 @@ class MessageHandler:
 
             LOGGER.debug("New message to store for %s." % item_hash)
 
-            updates = make_message_upsert_query(validated_message)
+            updates = [
+                DbBulkOperation(
+                    model=MessageDb,
+                    operation=make_message_upsert_query(validated_message),
+                )
+            ]
+            for confirmation in validated_message.confirmations:
+                updates.append(
+                    DbBulkOperation(
+                        model=MessageConfirmationDb,
+                        operation=make_confirmation_upsert_query(
+                            item_hash=validated_message.item_hash,
+                            tx_hash=confirmation.hash,
+                        ),
+                    )
+                )
 
         if updates:
-            update_op = UpdateOne(filters, updates, upsert=True)
-            bulk_ops = [DbBulkOperation(Message, update_op)]
+            bulk_ops = updates
 
             # Capped collections do not accept updates that increase the size, so
             # we must ignore confirmations. We also ignore on-chain messages for
             # performance reasons (bulk inserts on capped collections are slow).
-            if existing is None:
-                if tx_hash is None:
-                    bulk_ops.append(DbBulkOperation(CappedMessage, update_op))
+            # TODO: determine what to do for the websocket (ex: use the message table directly?)
+            # if existing is None:
+            # if tx_hash is None:
+            # bulk_ops.append(DbBulkOperation(CappedMessage, update_op))
 
             return IncomingStatus.MESSAGE_HANDLED, bulk_ops
 
@@ -300,6 +306,12 @@ class MessageHandler:
         """
         Helper function to process a message on the spot.
         """
+
         status, ops = await self.incoming(message, *args, **kwargs)
-        for op in ops:
-            await op.collection.collection.bulk_write([op.operation])
+
+        async with self.session_factory() as session:
+            async with session.begin():
+                for op in ops:
+                    await session.execute(op.operation)
+
+            await session.commit()

@@ -1,32 +1,48 @@
 import json
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, Sequence
 
 import pytest_asyncio
-from aleph.model.messages import Message
+from sqlalchemy.orm import sessionmaker
+
+from aleph.db.models import MessageDb
 
 
-async def _load_fixtures(filename: str):
+async def _load_fixtures(
+    session_factory: sessionmaker, filename: str
+) -> Sequence[Dict[str, Any]]:
     fixtures_dir = Path(__file__).parent / "fixtures"
     fixtures_file = fixtures_dir / filename
 
     with fixtures_file.open() as f:
-        messages = json.load(f)
+        messages_json = json.load(f)
 
-    await Message.collection.insert_many(messages)
-    return messages
+    messages = [
+        MessageDb.from_message_dict(message_dict=message_dict)
+        for message_dict in messages_json
+    ]
 
+    async with session_factory() as session:
+        session.add_all(messages)
+        await session.commit()
 
-@pytest_asyncio.fixture
-async def fixture_messages(test_db) -> List[Dict]:
-    return await _load_fixtures("fixture_messages.json")
-
-
-@pytest_asyncio.fixture
-async def fixture_aggregate_messages(test_db) -> List[Dict]:
-    return await _load_fixtures("fixture_aggregates.json")
+    return messages_json
 
 
 @pytest_asyncio.fixture
-async def fixture_post_messages(test_db) -> List[Dict]:
-    return await _load_fixtures("fixture_posts.json")
+async def fixture_messages(session_factory: sessionmaker) -> Sequence[Dict[str, Any]]:
+    return await _load_fixtures(session_factory, "fixture_messages.json")
+
+
+@pytest_asyncio.fixture
+async def fixture_aggregate_messages(
+    session_factory: sessionmaker,
+) -> Sequence[Dict[str, Any]]:
+    return await _load_fixtures(session_factory, "fixture_aggregates.json")
+
+
+@pytest_asyncio.fixture
+async def fixture_post_messages(
+    session_factory: sessionmaker,
+) -> Sequence[Dict[str, Any]]:
+    return await _load_fixtures(session_factory, "fixture_posts.json")

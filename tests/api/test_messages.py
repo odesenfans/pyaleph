@@ -1,5 +1,6 @@
 import itertools
-from typing import Dict, Iterable, List, Optional, Callable, Union
+from typing import Dict, Iterable, List, Sequence, Any
+from typing import Optional, Callable, Union
 
 import aiohttp
 import pytest
@@ -40,7 +41,7 @@ def assert_messages_equal(messages: Iterable[Dict], expected_messages: Iterable[
 
 
 @pytest.mark.asyncio
-async def test_get_messages(fixture_messages, ccn_api_client):
+async def test_get_messages(fixture_messages: Sequence[Dict[str, Any]], ccn_api_client):
     response = await ccn_api_client.get(MESSAGES_URI)
     assert response.status == 200, await response.text()
 
@@ -306,7 +307,9 @@ async def test_pagination(fixture_messages, ccn_api_client):
     assert messages == []
 
     # With the /page/{page} endpoint
-    response = await ccn_api_client.get(MESSAGES_PAGE_URI.format(page=2), params={"pagination": 4})
+    response = await ccn_api_client.get(
+        MESSAGES_PAGE_URI.format(page=2), params={"pagination": 4}
+    )
     assert response.status == 200, await response.text()
     messages = (await response.json())["messages"]
     assert_messages_equal(messages, sorted_messages_by_time[-8:-4])

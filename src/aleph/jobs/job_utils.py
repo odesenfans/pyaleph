@@ -6,13 +6,12 @@ from typing import Dict
 from typing import Iterable, Tuple
 from typing import cast
 
-import pymongo.errors
 from configmanager import Config
+from sqlalchemy.ext.asyncio import AsyncSession
 
 import aleph.config
 from aleph.model import init_db_globals
-from aleph.model.db_bulk_operation import DbBulkOperation
-from aleph.toolkit.exceptions import ignore_exceptions
+from aleph.db.bulk_operations import DbBulkOperation
 from aleph.toolkit.split import split_iterable
 from aleph.toolkit.timer import Timer
 
@@ -38,11 +37,11 @@ def prepare_loop(config_values: Dict) -> Tuple[asyncio.AbstractEventLoop, Config
     return loop, config
 
 
-async def perform_db_operations(db_operations: Iterable[DbBulkOperation]) -> None:
+async def perform_db_operations(session: AsyncSession, db_operations: Iterable[DbBulkOperation]) -> None:
     # Sort the operations by collection name before grouping and executing them.
     sorted_operations = sorted(
         db_operations,
-        key=lambda op: op.collection.__name__,
+        key=lambda op: op.model.__tablename__,
     )
 
     # Process updates collection by collection. Note that we use an ugly hack for capped
@@ -53,26 +52,17 @@ async def perform_db_operations(db_operations: Iterable[DbBulkOperation]) -> Non
     # We can safely ignore these errors as long as our only capped collection is
     # CappedMessage. Using unordered bulk writes guarantees that all operations will be
     # attempted, meaning that all the messages that can be inserted will be.
-    for collection, operations in groupby(sorted_operations, lambda op: op.collection):
-        exceptions_to_ignore = []
-        if collection.is_capped():
-            exceptions_to_ignore.append(pymongo.errors.BulkWriteError)
-
+    for model, operations in groupby(sorted_operations, lambda op: op.model):
         with Timer() as timer:
-            mongo_ops = [op.operation for op in operations]
+            sql_ops = [op.operation for op in operations]
 
-            with ignore_exceptions(
-                *exceptions_to_ignore,
-                on_error=lambda e: LOGGER.warning(
-                    "Bulk write error while writing to %s", collection.__name__
-                )
-            ):
-                await collection.collection.bulk_write(mongo_ops, ordered=False)
+            for sql_op in sql_ops:
+                await session.execute(sql_op)
 
-        LOGGER.info(
+        LOGGER.warning(
             "Performed %d operations on %s in %.4f seconds",
-            len(mongo_ops),
-            collection.__name__,
+            len(sql_ops),
+            model.__tablename__,
             timer.elapsed(),
         )
 

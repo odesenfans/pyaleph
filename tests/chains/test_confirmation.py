@@ -1,11 +1,16 @@
+import datetime as dt
 import json
 from typing import Dict, Mapping
 
 import pytest
+import pytz
+from aleph_message.models import Chain
+from sqlalchemy.orm import sessionmaker
 
 from aleph.chains.chain_service import ChainService
+from aleph.db.accessors.messages import get_message_by_item_hash
+from aleph.db.models import ChainTxDb
 from aleph.handlers.message_handler import MessageHandler
-from aleph.model.messages import CappedMessage, Message
 from aleph.schemas.pending_messages import parse_message
 from aleph.storage import StorageService
 
@@ -26,9 +31,30 @@ def remove_id_key(mongodb_object: Dict) -> Dict:
     return {k: v for k, v in mongodb_object.items() if k != "_id"}
 
 
+@pytest.fixture
+def chain_tx() -> ChainTxDb:
+    return ChainTxDb(
+        hash="123",
+        chain=Chain.ETH,
+        height=8000,
+        datetime=pytz.utc.localize(dt.datetime(2022, 10, 1)),
+        publisher="0xabadbabe",
+    )
+
+
+def compare_chain_txs(expected: ChainTxDb, actual: ChainTxDb):
+    assert actual.tx.chain == expected.chain
+    assert actual.tx.hash == expected.hash
+    assert actual.tx.height == expected.height
+    assert actual.tx.datetime == expected.datetime
+    assert actual.tx.publisher == expected.publisher
+
+
 @pytest.mark.asyncio
 async def test_confirm_message(
-    test_db, session_factory, test_storage_service: StorageService
+    session_factory: sessionmaker,
+    test_storage_service: StorageService,
+    chain_tx: ChainTxDb,
 ):
     """
     Tests the flow of confirmation for real-time messages.
@@ -55,44 +81,59 @@ async def test_confirm_message(
 
     message = parse_message(MESSAGE_DICT)
     await message_handler.process_one_message(message)
-    message_in_db = await Message.collection.find_one({"item_hash": item_hash})
+
+    async with session_factory() as session:
+        message_in_db = await get_message_by_item_hash(session=session, item_hash=item_hash)
 
     assert message_in_db is not None
-    assert message_in_db["content"] == content
-    assert not message_in_db["confirmed"]
+    assert message_in_db.content == content
+    assert not message_in_db.confirmed
 
-    capped_message_in_db = await CappedMessage.collection.find_one(
-        {"item_hash": item_hash}
-    )
-    assert capped_message_in_db is not None
-    assert remove_id_key(message_in_db) == remove_id_key(capped_message_in_db)
+    # TODO: determine what to do with the capped collection
+    # capped_message_in_db = await CappedMessage.collection.find_one(
+    #     {"item_hash": item_hash}
+    # )
+    # assert capped_message_in_db is not None
+    # assert remove_id_key(message_in_db) == remove_id_key(capped_message_in_db)
 
     # Now, confirm the message
-    chain_name, tx_hash, height = "ETH", "123", 8000
+
+    # Insert a transaction in the DB to validate the foreign key constraint
+    async with session_factory() as session:
+        session.add(chain_tx)
+        await session.commit()
+
     await message_handler.process_one_message(
-        message, chain_name=chain_name, tx_hash=tx_hash, height=height
+        message=message,
+        chain_name=chain_tx.chain.value,
+        tx_hash=chain_tx.hash,
+        height=chain_tx.height,
     )
 
-    message_in_db = await Message.collection.find_one({"item_hash": item_hash})
+    async with session_factory() as session:
+        message_in_db = await get_message_by_item_hash(session=session, item_hash=item_hash)
 
     assert message_in_db is not None
-    assert message_in_db["confirmed"]
-    assert {"chain": chain_name, "hash": tx_hash, "height": height} in message_in_db[
-        "confirmations"
-    ]
+    assert message_in_db.confirmed
+    assert len(message_in_db.confirmations) == 1
+    confirmation = message_in_db.confirmations[0]
+    compare_chain_txs(expected=chain_tx, actual=confirmation)
 
-    capped_message_after_confirmation = await CappedMessage.collection.find_one(
-        {"item_hash": item_hash}
-    )
-
-    assert capped_message_after_confirmation == capped_message_in_db
-    assert not capped_message_after_confirmation["confirmed"]
-    assert "confirmations" not in capped_message_after_confirmation
+    # TODO: capped collections, same as above
+    # capped_message_after_confirmation = await CappedMessage.collection.find_one(
+    #     {"item_hash": item_hash}
+    # )
+    #
+    # assert capped_message_after_confirmation == capped_message_in_db
+    # assert not capped_message_after_confirmation["confirmed"]
+    # assert "confirmations" not in capped_message_after_confirmation
 
 
 @pytest.mark.asyncio
 async def test_process_confirmed_message(
-    test_db, session_factory, test_storage_service: StorageService
+    session_factory: sessionmaker,
+    test_storage_service: StorageService,
+    chain_tx: ChainTxDb,
 ):
     """
     Tests that a confirmed message coming directly from the on-chain integration flow
@@ -110,24 +151,32 @@ async def test_process_confirmed_message(
         storage_service=test_storage_service,
     )
 
-    # Confirm the message
-    chain_name, tx_hash, height = "ETH", "123", 8000
+    # Insert a transaction in the DB to validate the foreign key constraint
+    async with session_factory() as session:
+        session.add(chain_tx)
+        await session.commit()
+
     message = parse_message(MESSAGE_DICT)
     await message_handler.process_one_message(
-        message, chain_name=chain_name, tx_hash=tx_hash, height=height
+        message=message,
+        chain_name=chain_tx.chain.value,
+        tx_hash=chain_tx.hash,
+        height=chain_tx.height,
     )
 
-    message_in_db = await Message.collection.find_one({"item_hash": item_hash})
+    async with session_factory() as session:
+        message_in_db = await get_message_by_item_hash(session=session, item_hash=item_hash)
 
     assert message_in_db is not None
-    assert message_in_db["confirmed"]
+    assert message_in_db.confirmed
+    assert len(message_in_db.confirmations) == 1
+    confirmation = message_in_db.confirmations[0]
+    compare_chain_txs(expected=chain_tx, actual=confirmation)
 
-    expected_confirmations = [{"chain": chain_name, "hash": tx_hash, "height": height}]
-    assert message_in_db["confirmations"] == expected_confirmations
-
-    capped_message_in_db = await CappedMessage.collection.find_one(
-        {"item_hash": item_hash}
-    )
-
-    # Historical messages are not supposed to be added to capped messages
-    assert capped_message_in_db is None
+    # TODO: capped collection
+    # capped_message_in_db = await CappedMessage.collection.find_one(
+    #     {"item_hash": item_hash}
+    # )
+    #
+    # # Historical messages are not supposed to be added to capped messages
+    # assert capped_message_in_db is None

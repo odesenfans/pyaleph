@@ -222,7 +222,11 @@ class EthereumConnector(Verifier, ChainWriter):
             async for jdata, context in self._request_transactions(
                 config, web3, contract, abi, last_stored_height
             ):
-                await self.chain_data_service.incoming_chaindata(jdata, context)
+                async with self.session_factory() as session:
+                    await self.chain_data_service.incoming_chaindata(
+                        session=session, content=jdata, context=context
+                    )
+                    await session.commit()
 
     @staticmethod
     def _broadcast_content(
