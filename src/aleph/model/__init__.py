@@ -43,9 +43,6 @@ def init_db(config: Config, ensure_indexes: bool = True):
 
         PendingMessage.ensure_indexes(sync_db)
         PendingTX.ensure_indexes(sync_db)
-        from aleph.model.chains import Chain
-
-        Chain.ensure_indexes(sync_db)
 
     from aleph.model.messages import Message
 

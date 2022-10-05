@@ -23,6 +23,8 @@ class ChainService:
 
     def __init__(self, session_factory: sessionmaker, storage_service: StorageService):
 
+        self._session_factory = session_factory
+
         self.connectors = {}
         self.verifiers = {}
         self.readers = {}
@@ -111,13 +113,25 @@ class ChainService:
         try:
             from .nuls2 import Nuls2Connector
 
-            self._add_chain(Chain.NULS2, Nuls2Connector(self._chain_data_service))
+            self._add_chain(
+                Chain.NULS2,
+                Nuls2Connector(
+                    session_factory=self._session_factory,
+                    chain_data_service=self._chain_data_service,
+                ),
+            )
         except ModuleNotFoundError as error:
             LOGGER.warning("Can't load NULS2: %s", error.msg)
         try:
             from .ethereum import EthereumConnector
 
-            self._add_chain(Chain.ETH, EthereumConnector(self._chain_data_service))
+            self._add_chain(
+                Chain.ETH,
+                EthereumConnector(
+                    session_factory=self._session_factory,
+                    chain_data_service=self._chain_data_service,
+                ),
+            )
         except ModuleNotFoundError as error:
             LOGGER.warning("Can't load ETH: %s", error.msg)
         try:

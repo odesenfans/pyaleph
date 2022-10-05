@@ -1,14 +1,17 @@
 import asyncio
+import datetime as dt
 import functools
 import json
 import logging
 from typing import AsyncIterator, Dict, Tuple
 
 import pkg_resources
+from aleph_message.models import Chain
 from configmanager import Config
 from eth_account import Account
 from eth_account.messages import encode_defunct
 from hexbytes import HexBytes
+from sqlalchemy.orm import sessionmaker
 from web3 import Web3
 from web3._utils.events import get_event_data
 from web3.gas_strategies.rpc import rpc_gas_price_strategy
@@ -16,14 +19,14 @@ from web3.middleware.filter import local_filter_middleware
 from web3.middleware.geth_poa import geth_poa_middleware
 
 from aleph.chains.common import get_verification_buffer
-from aleph.model.chains import Chain
+from aleph.db.accessors.chains import get_last_height, upsert_chain_sync_status
 from aleph.model.messages import Message
 from aleph.model.pending import pending_messages_count, pending_txs_count
+from aleph.schemas.pending_messages import BasePendingMessage
 from aleph.utils import run_in_executor
 from .chaindata import ChainDataService
 from .connector import ChainWriter, Verifier
 from .tx_context import TxContext
-from ..schemas.pending_messages import BasePendingMessage
 
 LOGGER = logging.getLogger("chains.ethereum")
 CHAIN_NAME = "ETH"
@@ -64,7 +67,10 @@ async def get_logs_query(web3: Web3, contract, start_height, end_height):
 
 
 class EthereumConnector(Verifier, ChainWriter):
-    def __init__(self, chain_data_service: ChainDataService):
+    def __init__(
+        self, session_factory: sessionmaker, chain_data_service: ChainDataService
+    ):
+        self.session_factory = session_factory
         self.chain_data_service = chain_data_service
 
     async def verify_signature(self, message: BasePendingMessage) -> bool:
@@ -100,7 +106,8 @@ class EthereumConnector(Verifier, ChainWriter):
 
     async def get_last_height(self) -> int:
         """Returns the last height for which we already have the ethereum data."""
-        last_height = await Chain.get_last_height(CHAIN_NAME)
+        async with self.session_factory() as session:
+            last_height = await get_last_height(session=session, chain=Chain.ETH)
 
         if last_height is None:
             last_height = -1
@@ -193,7 +200,13 @@ class EthereumConnector(Verifier, ChainWriter):
             # Since we got no critical exception, save last received object
             # block height to do next requests from there.
             if last_height:
-                await Chain.set_last_height(CHAIN_NAME, last_height)
+                async with self.session_factory() as session:
+                    await upsert_chain_sync_status(
+                        session=session,
+                        chain=Chain.ETH,
+                        height=last_height,
+                        update_datetime=dt.datetime.utcnow(),
+                    )
 
     async def fetcher(self, config: Config):
         last_stored_height = await self.get_last_height()
