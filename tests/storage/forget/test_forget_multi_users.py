@@ -5,6 +5,7 @@ the same file.
 from pathlib import Path
 
 import pytest
+from sqlalchemy.orm import sessionmaker
 
 from aleph.chains.chain_service import ChainService
 from aleph.handlers.message_handler import MessageHandler
@@ -16,7 +17,9 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
 @pytest.mark.asyncio
-async def test_forget_multiusers_storage(test_db, test_storage_service: StorageService):
+async def test_forget_multiusers_storage(
+    test_db, session_factory: sessionmaker, test_storage_service: StorageService
+):
     """
     Tests that a file stored by two different users is not deleted if one of the users
     deletes the content with a forget message.
@@ -70,7 +73,10 @@ async def test_forget_multiusers_storage(test_db, test_storage_service: StorageS
     await storage_engine.write(filename=file_hash, content=file_content)
 
     message_handler = MessageHandler(
-        chain_service=ChainService(storage_service=test_storage_service),
+        session_factory=session_factory,
+        chain_service=ChainService(
+            session_factory=session_factory, storage_service=test_storage_service
+        ),
         storage_service=test_storage_service,
     )
 

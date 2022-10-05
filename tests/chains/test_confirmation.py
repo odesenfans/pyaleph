@@ -27,7 +27,9 @@ def remove_id_key(mongodb_object: Dict) -> Dict:
 
 
 @pytest.mark.asyncio
-async def test_confirm_message(test_db, test_storage_service: StorageService):
+async def test_confirm_message(
+    test_db, session_factory, test_storage_service: StorageService
+):
     """
     Tests the flow of confirmation for real-time messages.
     1. We process the message unconfirmed, as if it came through the P2P
@@ -44,7 +46,10 @@ async def test_confirm_message(test_db, test_storage_service: StorageService):
     content = json.loads(MESSAGE_DICT["item_content"])
 
     message_handler = MessageHandler(
-        chain_service=ChainService(storage_service=test_storage_service),
+        session_factory=session_factory,
+        chain_service=ChainService(
+            session_factory=session_factory, storage_service=test_storage_service
+        ),
         storage_service=test_storage_service,
     )
 
@@ -86,7 +91,9 @@ async def test_confirm_message(test_db, test_storage_service: StorageService):
 
 
 @pytest.mark.asyncio
-async def test_process_confirmed_message(test_db, test_storage_service: StorageService):
+async def test_process_confirmed_message(
+    test_db, session_factory, test_storage_service: StorageService
+):
     """
     Tests that a confirmed message coming directly from the on-chain integration flow
     is processed correctly, and that we get one confirmed entry in messages and none
@@ -96,7 +103,10 @@ async def test_process_confirmed_message(test_db, test_storage_service: StorageS
     item_hash = MESSAGE_DICT["item_hash"]
 
     message_handler = MessageHandler(
-        chain_service=ChainService(storage_service=test_storage_service),
+        session_factory=session_factory,
+        chain_service=ChainService(
+            session_factory=session_factory, storage_service=test_storage_service
+        ),
         storage_service=test_storage_service,
     )
 

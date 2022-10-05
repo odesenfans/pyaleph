@@ -26,6 +26,7 @@ from aleph.services.p2p import singleton
 from aleph.services.storage.fileystem_engine import FileSystemStorageEngine
 from aleph.storage import StorageService
 from .job_utils import prepare_loop, process_job_results
+from ..db.connection import make_engine, make_session_factory
 
 LOGGER = getLogger("jobs.pending_messages")
 
@@ -233,15 +234,20 @@ async def retry_messages_task(config: Config, shared_stats: Dict):
     """Handle message that were added to the pending queue"""
     await asyncio.sleep(4)
 
+    engine = make_engine(config)
+    session_factory = make_session_factory(engine)
+
     ipfs_client = make_ipfs_client(config)
     ipfs_service = IpfsService(ipfs_client=ipfs_client)
     storage_service = StorageService(
         storage_engine=FileSystemStorageEngine(folder=config.storage.folder.value),
         ipfs_service=ipfs_service,
     )
-    chain_service = ChainService(storage_service=storage_service)
+    chain_service = ChainService(session_factory=session_factory, storage_service=storage_service)
     message_handler = MessageHandler(
-        chain_service=chain_service, storage_service=storage_service
+        session_factory=session_factory,
+        chain_service=chain_service,
+        storage_service=storage_service,
     )
     pending_message_handler = PendingMessageProcessor(message_handler=message_handler)
 

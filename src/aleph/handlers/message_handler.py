@@ -4,6 +4,7 @@ from typing import Optional, Dict, Tuple, List
 from aleph_message.models import MessageConfirmation
 from bson import ObjectId
 from pymongo import UpdateOne
+from sqlalchemy.orm import sessionmaker
 
 from aleph.chains.chain_service import ChainService
 from aleph.chains.common import LOGGER
@@ -37,12 +38,22 @@ class IncomingStatus(IntEnum):
 
 
 class MessageHandler:
-    def __init__(self, chain_service: ChainService, storage_service: StorageService):
+    def __init__(
+        self,
+        session_factory: sessionmaker,
+        chain_service: ChainService,
+        storage_service: StorageService,
+    ):
+        self.session_factory = session_factory
         self.chain_service = chain_service
         self.storage_service = storage_service
 
-        self.store_message_handler = StoreMessageHandler(storage_service=storage_service)
-        self.forget_message_handler = ForgetMessageHandler(storage_service=storage_service)
+        self.store_message_handler = StoreMessageHandler(
+            storage_service=storage_service
+        )
+        self.forget_message_handler = ForgetMessageHandler(
+            session_factory=session_factory, storage_service=storage_service
+        )
 
     @staticmethod
     async def _mark_message_for_retry(

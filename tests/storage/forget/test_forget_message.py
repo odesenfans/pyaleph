@@ -8,7 +8,7 @@ from aleph.handlers.forget import ForgetMessageHandler, TargetMessageInfo
 
 @pytest.fixture
 def forget_handler(mocker) -> ForgetMessageHandler:
-    return ForgetMessageHandler(storage_service=mocker.AsyncMock())
+    return ForgetMessageHandler(session_factory=mocker.AsyncMock(), storage_service=mocker.AsyncMock())
 
 
 @pytest.mark.asyncio

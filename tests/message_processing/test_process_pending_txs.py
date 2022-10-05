@@ -20,10 +20,14 @@ async def get_fixture_chaindata_messages(
 
 
 @pytest.mark.asyncio
-async def test_process_pending_tx(mocker, test_storage_service: StorageService):
+async def test_process_pending_tx(
+    mocker, session_factory, test_storage_service: StorageService
+):
     chain_data_service = mocker.AsyncMock()
     chain_data_service.get_chaindata_messages = get_fixture_chaindata_messages
-    pending_tx_processor = PendingTxProcessor(storage_service=test_storage_service)
+    pending_tx_processor = PendingTxProcessor(
+        session_factory=session_factory, storage_service=test_storage_service
+    )
     pending_tx_processor.chain_data_service = chain_data_service
 
     pending_tx = {

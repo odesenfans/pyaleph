@@ -2,8 +2,6 @@ from logging import getLogger
 
 from configmanager import Config
 
-from aleph.model.filepin import PermanentPin
-
 try:
     from pymongo import MongoClient
 except ImportError:  # pragma: no cover
@@ -48,8 +46,6 @@ def init_db(config: Config, ensure_indexes: bool = True):
         from aleph.model.chains import Chain
 
         Chain.ensure_indexes(sync_db)
-
-        PermanentPin.ensure_indexes(sync_db)
 
     from aleph.model.messages import Message
 

@@ -21,7 +21,9 @@ async def test_valid_message(mocker):
         "signature": "2103041b0b357446927d2c8c62fdddd27910d82f665f16a4907a2be927b5901f5e6c004730450221009a54ecaff6869664e94ad68554520c79c21d4f63822864bd910f9916c32c1b5602201576053180d225ec173fb0b6e4af5efb2dc474ce6aa77a3bdd67fd14e1d806b4",
     }
 
-    chain_service = ChainService(storage_service=mocker.MagicMock())
+    chain_service = ChainService(
+        session_factory=mocker.AsyncMock(), storage_service=mocker.MagicMock()
+    )
     sample_message = parse_message(sample_message_dict)
     await chain_service.verify_signature(sample_message)
 
@@ -56,7 +58,9 @@ async def test_invalid_signature_message(mocker):
         "signature": "BAR",
     }
 
-    chain_service = ChainService(storage_service=mocker.MagicMock())
+    chain_service = ChainService(
+        session_factory=mocker.AsyncMock(), storage_service=mocker.MagicMock()
+    )
 
     sample_message = parse_message(sample_message_dict)
     with pytest.raises(InvalidMessageError):
@@ -75,7 +79,9 @@ async def test_invalid_signature_message_2(mocker):
         "time": 1563279102.3155158,
         "signature": "2153041b0b357446927d2c8c62fdddd27910d82f665f16a4907a2be927b5901f5e6c004730450221009a54ecaff6869664e94ad68554525c79c21d4f63822864bd910f9916c32c1b5602201576053180d225ec173fb0b6e4af5efb2dc474ce6aa77a3bdd67fd14e1d806b4",
     }
-    chain_service = ChainService(storage_service=mocker.MagicMock())
+    chain_service = ChainService(
+        session_factory=mocker.AsyncMock(), storage_service=mocker.MagicMock()
+    )
 
     sample_message = parse_message(sample_message_dict)
     with pytest.raises(InvalidMessageError):
@@ -83,7 +89,9 @@ async def test_invalid_signature_message_2(mocker):
 
 
 @pytest.mark.asyncio
-async def test_incoming_inline_content(test_db, test_storage_service: StorageService):
+async def test_incoming_inline_content(
+    test_db, session_factory, test_storage_service: StorageService
+):
     message_dict = {
         "chain": "NULS",
         "channel": "SYSINFO",
@@ -97,7 +105,10 @@ async def test_incoming_inline_content(test_db, test_storage_service: StorageSer
     }
 
     message_handler = MessageHandler(
-        chain_service=ChainService(storage_service=test_storage_service),
+        session_factory=session_factory,
+        chain_service=ChainService(
+            session_factory=session_factory, storage_service=test_storage_service
+        ),
         storage_service=test_storage_service,
     )
 

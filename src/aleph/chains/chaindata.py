@@ -3,22 +3,24 @@ import json
 from dataclasses import asdict
 from typing import Dict, Optional, List
 
+from sqlalchemy.orm import sessionmaker
+
 from aleph.chains.common import LOGGER
 from aleph.chains.tx_context import TxContext
 from aleph.config import get_config
+from aleph.db.models.file_pins import FilePinDb
 from aleph.exceptions import (
     InvalidContent,
     AlephStorageException,
     ContentCurrentlyUnavailable,
 )
-from aleph.model.filepin import PermanentPin
 from aleph.model.pending import PendingTX
-
 from aleph.storage import StorageService
 
 
 class ChainDataService:
-    def __init__(self, storage_service: StorageService):
+    def __init__(self, session_factory: sessionmaker, storage_service: StorageService):
+        self.session_factory = session_factory
         self.storage_service = storage_service
 
     async def get_chaindata(self, messages, bulk_threshold: int = 2000):
@@ -89,14 +91,10 @@ class ChainDataService:
             if config.ipfs.enabled.value:
                 try:
                     LOGGER.info(f"chaindata {chaindata}")
-                    await PermanentPin.register(
-                        multihash=chaindata["content"],
-                        reason={
-                            "source": "chaindata",
-                            "protocol": chaindata["protocol"],
-                            "version": chaindata["version"],
-                        },
-                    )
+                    async with self.session_factory() as session:
+                        session.add(FilePinDb(file_hash=chaindata["content"], tx_hash=context.tx_hash))
+                        await session.commit()
+
                     # Some IPFS fetches can take a while, hence the large timeout.
                     await asyncio.wait_for(
                         self.storage_service.pin_hash(chaindata["content"]), timeout=120

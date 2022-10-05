@@ -4,6 +4,7 @@ from typing import Coroutine, List
 from urllib.parse import unquote
 
 from aleph_p2p_client import AlephP2PServiceClient
+from sqlalchemy.orm import sessionmaker
 
 from aleph.chains.chain_service import ChainService
 from aleph.exceptions import InvalidMessageError
@@ -36,7 +37,9 @@ async def decode_pubsub_message(message_data: bytes) -> BasePendingMessage:
     return message
 
 
-def listener_tasks(config, p2p_client: AlephP2PServiceClient) -> List[Coroutine]:
+def listener_tasks(
+    config, session_factory: sessionmaker, p2p_client: AlephP2PServiceClient
+) -> List[Coroutine]:
     from aleph.services.p2p.protocol import incoming_channel as incoming_p2p_channel
 
     # TODO: these should be passed as parameters. This module could probably be a class instead?
@@ -46,9 +49,13 @@ def listener_tasks(config, p2p_client: AlephP2PServiceClient) -> List[Coroutine]
         storage_engine=FileSystemStorageEngine(folder=config.storage.folder.value),
         ipfs_service=ipfs_service,
     )
-    chain_service = ChainService(storage_service=storage_service)
+    chain_service = ChainService(
+        session_factory=session_factory, storage_service=storage_service
+    )
     message_processor = MessageHandler(
-        chain_service=chain_service, storage_service=storage_service
+        session_factory=session_factory,
+        chain_service=chain_service,
+        storage_service=storage_service,
     )
 
     # for now (1st milestone), we only listen on a single global topic...

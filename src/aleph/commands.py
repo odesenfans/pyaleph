@@ -259,7 +259,9 @@ async def main(args):
         LOGGER.debug("Initialized p2p")
 
         LOGGER.debug("Initializing listeners")
-        tasks += listener_tasks(config, p2p_client)
+        tasks += listener_tasks(
+            config=config, session_factory=session_factory, p2p_client=p2p_client
+        )
         tasks.append(chain_service.chain_event_loop(config))
         LOGGER.debug("Initialized listeners")
 

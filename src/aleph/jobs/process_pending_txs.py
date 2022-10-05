@@ -11,6 +11,7 @@ from configmanager import Config
 from pymongo import DeleteOne, InsertOne
 from pymongo.errors import CursorNotFound
 from setproctitle import setproctitle
+from sqlalchemy.orm import sessionmaker
 
 from aleph.chains.chaindata import ChainDataService
 from aleph.chains.tx_context import TxContext
@@ -25,14 +26,17 @@ from aleph.services.p2p import singleton
 from aleph.services.storage.fileystem_engine import FileSystemStorageEngine
 from aleph.storage import StorageService
 from .job_utils import prepare_loop, process_job_results
+from ..db.connection import make_engine, make_session_factory
 
 LOGGER = logging.getLogger("jobs.pending_txs")
 
 
 class PendingTxProcessor:
-    def __init__(self, storage_service: StorageService):
+    def __init__(self, session_factory: sessionmaker, storage_service: StorageService):
         self.storage_service = storage_service
-        self.chain_data_service = ChainDataService(storage_service=storage_service)
+        self.chain_data_service = ChainDataService(
+            session_factory=session_factory, storage_service=storage_service
+        )
 
     async def handle_pending_tx(
         self, pending_tx, seen_ids: Optional[List[str]] = None
@@ -142,13 +146,18 @@ async def handle_txs_task(config: Config):
     max_concurrent_tasks = config.aleph.jobs.pending_txs.max_concurrency.value
     await asyncio.sleep(4)
 
+    engine = make_engine(config)
+    session_factory = make_session_factory(engine)
+
     ipfs_client = make_ipfs_client(config)
     ipfs_service = IpfsService(ipfs_client=ipfs_client)
     storage_service = StorageService(
         storage_engine=FileSystemStorageEngine(folder=config.storage.folder.value),
         ipfs_service=ipfs_service,
     )
-    pending_tx_processor = PendingTxProcessor(storage_service=storage_service)
+    pending_tx_processor = PendingTxProcessor(
+        session_factory=session_factory, storage_service=storage_service
+    )
 
     while True:
         try:

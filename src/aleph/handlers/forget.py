@@ -7,8 +7,9 @@ from typing import Optional, List, Mapping
 from aioipfs.api import RepoAPI
 from aioipfs.exceptions import NotPinnedError
 from aleph_message.models import ItemType, MessageType
+from sqlalchemy.orm import sessionmaker
 
-from aleph.model.filepin import PermanentPin
+from aleph.db.accessors.file_pins import is_pinned_file
 from aleph.model.messages import Message
 from aleph.schemas.validated_message import ValidatedForgetMessage
 from aleph.storage import StorageService
@@ -84,7 +85,8 @@ async def file_references_exist(storage_hash: str) -> bool:
 
 
 class ForgetMessageHandler:
-    def __init__(self, storage_service: StorageService):
+    def __init__(self, session_factory: sessionmaker, storage_service: StorageService):
+        self.session_factory = session_factory
         self.storage_service = storage_service
 
     async def garbage_collect(self, storage_hash: str, storage_type: ItemType):
@@ -94,14 +96,10 @@ class ForgetMessageHandler:
         """
         logger.debug(f"Garbage collecting {storage_hash}")
 
-        if (
-            await PermanentPin.collection.count_documents(
-                filter={"multihash": storage_hash}, limit=1
-            )
-            > 0
-        ):
-            logger.debug(f"Permanent pin will not be collected {storage_hash}")
-            return
+        async with self.session_factory() as session:
+            if await is_pinned_file(session=session, file_hash=storage_hash):
+                logger.debug(f"Permanent pin will not be collected {storage_hash}")
+                return
 
         if await file_references_exist(storage_hash):
             logger.debug(f"File {storage_hash} has at least one reference left")
