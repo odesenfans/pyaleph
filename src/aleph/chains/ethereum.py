@@ -11,7 +11,6 @@ from configmanager import Config
 from eth_account import Account
 from eth_account.messages import encode_defunct
 from hexbytes import HexBytes
-from sqlalchemy.orm import sessionmaker
 from web3 import Web3
 from web3._utils.events import get_event_data
 from web3.gas_strategies.rpc import rpc_gas_price_strategy
@@ -20,13 +19,15 @@ from web3.middleware.geth_poa import geth_poa_middleware
 
 from aleph.chains.common import get_verification_buffer
 from aleph.db.accessors.chains import get_last_height, upsert_chain_sync_status
-from aleph.model.messages import Message
-from aleph.model.pending import pending_messages_count, pending_txs_count
 from aleph.schemas.pending_messages import BasePendingMessage
+from aleph.types.db_session import DbSessionFactory
 from aleph.utils import run_in_executor
 from .chaindata import ChainDataService
 from .connector import ChainWriter, Verifier
 from .tx_context import TxContext
+from aleph.db.accessors.messages import get_unconfirmed_messages
+from aleph.db.accessors.pending_messages import count_pending_messages
+from aleph.db.accessors.pending_txs import count_pending_txs
 
 LOGGER = logging.getLogger("chains.ethereum")
 CHAIN_NAME = "ETH"
@@ -68,7 +69,7 @@ async def get_logs_query(web3: Web3, contract, start_height, end_height):
 
 class EthereumConnector(Verifier, ChainWriter):
     def __init__(
-        self, session_factory: sessionmaker, chain_data_service: ChainDataService
+        self, session_factory: DbSessionFactory, chain_data_service: ChainDataService
     ):
         self.session_factory = session_factory
         self.chain_data_service = chain_data_service
@@ -106,7 +107,7 @@ class EthereumConnector(Verifier, ChainWriter):
 
     async def get_last_height(self) -> int:
         """Returns the last height for which we already have the ethereum data."""
-        async with self.session_factory() as session:
+        with self.session_factory() as session:
             last_height = await get_last_height(session=session, chain=Chain.ETH)
 
         if last_height is None:
@@ -200,13 +201,14 @@ class EthereumConnector(Verifier, ChainWriter):
             # Since we got no critical exception, save last received object
             # block height to do next requests from there.
             if last_height:
-                async with self.session_factory() as session:
+                with self.session_factory() as session:
                     await upsert_chain_sync_status(
                         session=session,
                         chain=Chain.ETH,
                         height=last_height,
                         update_datetime=dt.datetime.utcnow(),
                     )
+                    session.commit()
 
     async def fetcher(self, config: Config):
         last_stored_height = await self.get_last_height()
@@ -222,7 +224,11 @@ class EthereumConnector(Verifier, ChainWriter):
             async for jdata, context in self._request_transactions(
                 config, web3, contract, abi, last_stored_height
             ):
-                await self.chain_data_service.incoming_chaindata(jdata, context)
+                with self.session_factory() as session:
+                    await self.chain_data_service.incoming_chaindata(
+                        session=session, content=jdata, context=context
+                    )
+                    session.commit()
 
     @staticmethod
     def _broadcast_content(
@@ -250,31 +256,33 @@ class EthereumConnector(Verifier, ChainWriter):
         i = 0
         gas_price = web3.eth.generateGasPrice()
         while True:
-            if (await pending_txs_count(chain=CHAIN_NAME)) or (
-                await pending_messages_count(source_chain=CHAIN_NAME)
-            ) > 1000:
-                await asyncio.sleep(30)
-                continue
-            gas_price = web3.eth.generateGasPrice()
+            with self.session_factory() as session:
 
-            if i >= 100:
-                await asyncio.sleep(30)  # wait three (!!) blocks
+                # Wait for sync operations to complete
+                if (await count_pending_txs(session=session, chain=Chain.ETH)) or (
+                    await count_pending_messages(session=session, chain=Chain.ETH)
+                ) > 1000:
+                    await asyncio.sleep(30)
+                    continue
                 gas_price = web3.eth.generateGasPrice()
-                i = 0
 
-            if gas_price > config.ethereum.max_gas_price.value:
-                # gas price too high, wait a bit and retry.
-                await asyncio.sleep(60)
-                continue
+                if i >= 100:
+                    await asyncio.sleep(30)  # wait three (!!) blocks
+                    gas_price = web3.eth.generateGasPrice()
+                    i = 0
 
-            nonce = web3.eth.getTransactionCount(account.address)
+                if gas_price > config.ethereum.max_gas_price.value:
+                    # gas price too high, wait a bit and retry.
+                    await asyncio.sleep(60)
+                    continue
 
-            messages = [
-                message
-                async for message in (
-                    await Message.get_unconfirmed_raw(limit=10000, for_chain=CHAIN_NAME)
+                nonce = web3.eth.getTransactionCount(account.address)
+
+                messages = list(
+                    await get_unconfirmed_messages(
+                        session=session, limit=10000, chain=Chain.ETH
+                    )
                 )
-            ]
 
             if len(messages):
                 content = await self.chain_data_service.get_chaindata(

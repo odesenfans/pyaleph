@@ -2,11 +2,11 @@ from typing import Coroutine, List, Tuple
 
 from aleph_p2p_client import AlephP2PServiceClient, make_p2p_service_client
 from configmanager import Config
-from sqlalchemy.orm import sessionmaker
 
 from aleph.services.ipfs import IpfsService
 from . import singleton
 from .manager import initialize_host
+from aleph.types.db_session import DbSessionFactory
 
 
 async def init_p2p_client(config: Config, service_name: str) -> AlephP2PServiceClient:
@@ -27,7 +27,7 @@ async def init_p2p_client(config: Config, service_name: str) -> AlephP2PServiceC
 
 async def init_p2p(
     config: Config,
-    session_factory: sessionmaker,
+    session_factory: DbSessionFactory,
     service_name: str,
     ipfs_service: IpfsService,
     api_servers: List[str],

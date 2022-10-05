@@ -57,7 +57,9 @@
       {
         "chain": "ETH",
         "height": 14474458,
-        "hash": "0xbb123b07933ce8d1d49c2ba287fb7942f272359a7f220b7fc2b662c65c960ccc"
+        "hash": "0xbb123b07933ce8d1d49c2ba287fb7942f272359a7f220b7fc2b662c65c960ccc",
+        "time": 1648216000,
+        "publisher": "0xabadbabe"
       }
     ]
   },
@@ -82,7 +84,9 @@
       {
         "chain": "ETH",
         "height": 14474458,
-        "hash": "0xbb123b07933ce8d1d49c2ba287fb7942f272359a7f220b7fc2b662c65c960ccc"
+        "hash": "0xbb123b07933ce8d1d49c2ba287fb7942f272359a7f220b7fc2b662c65c960ccc",
+        "time": 1648216000,
+        "publisher": "0xabadbabe"
       }
     ]
   },
@@ -110,7 +114,9 @@
       {
         "chain": "ETH",
         "height": 14474458,
-        "hash": "0xbb123b07933ce8d1d49c2ba287fb7942f272359a7f220b7fc2b662c65c960ccc"
+        "hash": "0xbb123b07933ce8d1d49c2ba287fb7942f272359a7f220b7fc2b662c65c960ccc",
+        "time": 1648216000,
+        "publisher": "0xabadbabe"
       }
     ]
   },
@@ -138,7 +144,9 @@
       {
         "chain": "ETH",
         "height": 14474458,
-        "hash": "0xbb123b07933ce8d1d49c2ba287fb7942f272359a7f220b7fc2b662c65c960ccc"
+        "hash": "0xbb123b07933ce8d1d49c2ba287fb7942f272359a7f220b7fc2b662c65c960ccc",
+        "time": 1648216000,
+        "publisher": "0xabadbabe"
       }
     ]
   },
@@ -159,7 +167,9 @@
       {
         "chain": "ETH",
         "height": 14474458,
-        "hash": "0xbb123b07933ce8d1d49c2ba287fb7942f272359a7f220b7fc2b662c65c960ccc"
+        "hash": "0xbb123b07933ce8d1d49c2ba287fb7942f272359a7f220b7fc2b662c65c960ccc",
+        "time": 1648216000,
+        "publisher": "0xabadbabe"
       }
     ],
     "forgotten_by": [
@@ -191,7 +201,9 @@
       {
         "chain": "ETH",
         "height": 14500712,
-        "hash": "0x39e581f14409008fb7d3663c0a24bb5035aff1edbc30d024168ce9426b631e7c"
+        "hash": "0x39e581f14409008fb7d3663c0a24bb5035aff1edbc30d024168ce9426b631e7c",
+        "time": 1648216000,
+        "publisher": "0xabadbabe"
       }
     ]
   },
@@ -220,7 +232,9 @@
       {
         "chain": "ETH",
         "height": 14500712,
-        "hash": "0x39e581f14409008fb7d3663c0a24bb5035aff1edbc30d024168ce9426b631e7c"
+        "hash": "0x39e581f14409008fb7d3663c0a24bb5035aff1edbc30d024168ce9426b631e7c",
+        "time": 1648216000,
+        "publisher": "0xabadbabe"
       }
     ]
   }

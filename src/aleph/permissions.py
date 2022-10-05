@@ -1,31 +1,35 @@
-from aleph.model.messages import get_computed_address_aggregates
+from aleph.db.accessors.aggregates import get_aggregate_by_key
+from aleph.db.models import MessageDb
 from aleph.schemas.validated_message import (
-    BaseValidatedMessage,
     ValidatedPostMessage,
     ValidatedAggregateMessage,
 )
+from aleph.types.db_session import DbSession
 
 
-async def check_sender_authorization(message: BaseValidatedMessage) -> bool:
+async def check_sender_authorization(session: DbSession, message: MessageDb) -> bool:
     """Checks a content against a message to verify if sender is authorized.
 
     TODO: implement "security" aggregate key check.
     """
 
+    content = message.parsed_content
+
     sender = message.sender
-    address = message.content.address
+    address = content.address
 
     # if sender is the content address, all good.
     if sender == address:
         return True
 
-    aggregates = await get_computed_address_aggregates(
-        address_list=[address], key_list=["security"]
+    aggregate = await get_aggregate_by_key(
+        session=session, key="security", owner=address
     )  # do we need anything else here?
 
-    aggregate = aggregates.get(address, {})
-    security_key = aggregate.get("security", {})
-    authorizations = security_key.get("authorizations", [])
+    if not aggregate:
+        return False
+
+    authorizations = aggregate.content.get("authorizations", [])
 
     for auth in authorizations:
         if auth.get("address", "") != sender:

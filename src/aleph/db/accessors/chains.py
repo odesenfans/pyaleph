@@ -4,14 +4,14 @@ from typing import Optional
 from aleph_message.models import Chain
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.ext.asyncio import AsyncSession
 
+from aleph.types.db_session import DbSession
 from ..models.chains import ChainSyncStatusDb
 
 
-async def get_last_height(session: AsyncSession, chain: Chain) -> Optional[int]:
+async def get_last_height(session: DbSession, chain: Chain) -> Optional[int]:
     height = (
-        await session.execute(
+        session.execute(
             select(ChainSyncStatusDb.height).where(ChainSyncStatusDb.chain == chain)
         )
     ).scalar()
@@ -19,7 +19,7 @@ async def get_last_height(session: AsyncSession, chain: Chain) -> Optional[int]:
 
 
 async def upsert_chain_sync_status(
-    session: AsyncSession,
+    session: DbSession,
     chain: Chain,
     height: int,
     update_datetime: dt.datetime,
@@ -32,4 +32,4 @@ async def upsert_chain_sync_status(
             set_={"height": height, "last_update": update_datetime},
         )
     )
-    await session.execute(upsert_stmt)
+    session.execute(upsert_stmt)

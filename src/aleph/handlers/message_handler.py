@@ -1,46 +1,51 @@
-from enum import IntEnum
-from typing import Optional, Dict, Tuple, List
+import logging
+import time
+from collections import defaultdict
+from typing import Optional, Dict, Iterable, Sequence, Tuple
 
-from aleph_message.models import MessageConfirmation
-from bson import ObjectId
-from pymongo import UpdateOne
-from sqlalchemy.orm import sessionmaker
+from aleph_message.models import MessageType
+from pydantic import ValidationError
 
 from aleph.chains.chain_service import ChainService
-from aleph.chains.common import LOGGER
+from aleph.db.accessors.messages import (
+    make_message_upsert_query,
+    make_confirmation_upsert_query,
+    get_message_by_item_hash,
+)
+from aleph.db.models import (
+    PendingMessageDb,
+    MessageDb,
+)
 from aleph.exceptions import (
     InvalidMessageError,
     InvalidContent,
     ContentCurrentlyUnavailable,
     UnknownHashError,
 )
-from aleph.model.db_bulk_operation import DbBulkOperation
-from aleph.model.messages import Message, CappedMessage
-from aleph.model.pending import PendingMessage
-from aleph.permissions import check_sender_authorization
+from aleph.handlers.content.aggregate import AggregateMessageHandler
+from aleph.handlers.content.content_handler import ContentHandler
+from aleph.handlers.content.forget import ForgetMessageHandler
+from aleph.handlers.content.post import PostMessageHandler
+from aleph.handlers.content.program import ProgramMessageHandler
+from aleph.handlers.content.store import StoreMessageHandler
 from aleph.schemas.pending_messages import BasePendingMessage
-from aleph.schemas.validated_message import (
-    make_confirmation_update_query,
-    validate_pending_message,
-    ValidatedStoreMessage,
-    ValidatedForgetMessage,
-    make_message_upsert_query,
-)
 from aleph.storage import StorageService
-from .forget import ForgetMessageHandler
-from .storage import StoreMessageHandler
+from aleph.types.db_session import DbSessionFactory, DbSession
+from aleph.types.message_status import (
+    InvalidMessageException,
+    InvalidSignature,
+    MessageUnavailable,
+)
 
-
-class IncomingStatus(IntEnum):
-    FAILED_PERMANENTLY = -1
-    RETRYING_LATER = 0
-    MESSAGE_HANDLED = 1
+LOGGER = logging.getLogger(__name__)
 
 
 class MessageHandler:
+    content_handlers: Dict[MessageType, ContentHandler]
+
     def __init__(
         self,
-        session_factory: sessionmaker,
+        session_factory: DbSessionFactory,
         chain_service: ChainService,
         storage_service: StorageService,
     ):
@@ -48,258 +53,197 @@ class MessageHandler:
         self.chain_service = chain_service
         self.storage_service = storage_service
 
-        self.store_message_handler = StoreMessageHandler(
-            storage_service=storage_service
-        )
-        self.forget_message_handler = ForgetMessageHandler(
-            session_factory=session_factory, storage_service=storage_service
-        )
-
-    @staticmethod
-    async def _mark_message_for_retry(
-        message: BasePendingMessage,
-        chain_name: Optional[str],
-        tx_hash: Optional[str],
-        height: Optional[int],
-        check_message: bool,
-        retrying: bool,
-        existing_id,
-    ):
-        message_dict = message.dict(exclude={"content"})
-
-        if not retrying:
-            await PendingMessage.collection.insert_one(
-                {
-                    "message": message_dict,
-                    "source": dict(
-                        chain_name=chain_name,
-                        tx_hash=tx_hash,
-                        height=height,
-                        check_message=check_message,  # should we store this?
-                    ),
-                }
-            )
-        else:
-            LOGGER.debug(f"Incrementing for {existing_id}")
-            result = await PendingMessage.collection.update_one(
-                filter={"_id": ObjectId(existing_id)}, update={"$inc": {"retries": 1}}
-            )
-            LOGGER.debug(f"Update result {result}")
-
-    @staticmethod
-    async def delayed_incoming(
-        message: BasePendingMessage,
-        chain_name: Optional[str] = None,
-        tx_hash: Optional[str] = None,
-        height: Optional[int] = None,
-    ):
-        if message is None:
-            return
-        await PendingMessage.collection.insert_one(
-            {
-                "message": message.dict(exclude={"content"}),
-                "source": dict(
-                    chain_name=chain_name,
-                    tx_hash=tx_hash,
-                    height=height,
-                    check_message=True,  # should we store this?
-                ),
-            }
-        )
-
-    async def incoming(
-        self,
-        pending_message: BasePendingMessage,
-        chain_name: Optional[str] = None,
-        tx_hash: Optional[str] = None,
-        height: Optional[int] = None,
-        seen_ids: Optional[Dict[Tuple, int]] = None,
-        check_message: bool = False,
-        retrying: bool = False,
-        existing_id: Optional[ObjectId] = None,
-    ) -> Tuple[IncomingStatus, List[DbBulkOperation]]:
-        """New incoming message from underlying chain.
-
-        For regular messages it will be marked as confirmed
-        if existing in database, created if not.
-        """
-
-        item_hash = pending_message.item_hash
-        sender = pending_message.sender
-        confirmations = []
-        ids_key = (item_hash, sender, chain_name)
-
-        if chain_name and tx_hash and height:
-            if seen_ids is not None:
-                if ids_key in seen_ids.keys():
-                    if height > seen_ids[ids_key]:
-                        return IncomingStatus.MESSAGE_HANDLED, []
-
-            confirmations.append(
-                MessageConfirmation(chain=chain_name, hash=tx_hash, height=height)
-            )
-
-        filters = {
-            "item_hash": item_hash,
-            "chain": pending_message.chain,
-            "sender": pending_message.sender,
-            "type": pending_message.type,
+        self.content_handlers = {
+            MessageType.aggregate: AggregateMessageHandler(
+                session_factory=session_factory
+            ),
+            MessageType.forget: ForgetMessageHandler(
+                session_factory=session_factory, storage_service=storage_service
+            ),
+            MessageType.post: PostMessageHandler(),
+            MessageType.program: ProgramMessageHandler(),
+            MessageType.store: StoreMessageHandler(
+                session_factory=session_factory, storage_service=storage_service
+            ),
         }
-        existing = await Message.collection.find_one(
-            filters,
-            projection={"confirmed": 1, "confirmations": 1, "time": 1, "signature": 1},
+
+    # TODO typing: make this function generic on message type
+    def get_content_handler(self, message_type: MessageType) -> ContentHandler:
+        return self.content_handlers[message_type]
+
+    async def delayed_incoming(
+        self,
+        message: BasePendingMessage,
+        tx_hash: Optional[str] = None,
+    ):
+
+        with self.session_factory() as session:
+            session.add(
+                PendingMessageDb.from_obj(message, tx_hash=tx_hash, check_message=True)
+            )
+            session.commit()
+
+    async def verify_signature(self, pending_message: PendingMessageDb):
+        if pending_message.check_message:
+            try:
+                # TODO: remove type: ignore by deciding the pending message type
+                await self.chain_service.verify_signature(pending_message)  # type: ignore
+            except InvalidMessageError:
+                raise InvalidSignature(
+                    f"Invalid signature for '{pending_message.item_hash}'"
+                )
+
+    async def fetch_pending_message(
+        self, pending_message: PendingMessageDb
+    ) -> MessageDb:
+        item_hash = pending_message.item_hash
+
+        try:
+            content = await self.storage_service.get_message_content(pending_message)
+        except InvalidContent:
+            LOGGER.warning("Can't get content of message %r, won't retry." % item_hash)
+            raise InvalidMessageException("Can't get content of message %s", item_hash)
+
+        except (ContentCurrentlyUnavailable, Exception) as e:
+            if not isinstance(e, ContentCurrentlyUnavailable):
+                LOGGER.exception("Can't get content of object %r" % item_hash)
+            raise MessageUnavailable(f"Could not fetch content for {item_hash}")
+
+        try:
+            validated_message = MessageDb.from_pending_message(
+                pending_message=pending_message,
+                content_dict=content.value,
+                content_size=len(content.raw_value),
+            )
+        except ValidationError as e:
+            raise InvalidMessageException(f"Invalid message content: {e}") from e
+
+        return validated_message
+
+    async def fetch_related_content(self, session: DbSession, message: MessageDb):
+        content_handler = self.get_content_handler(message.type)
+
+        try:
+            await content_handler.fetch_related_content(
+                session=session, message=message
+            )
+        except UnknownHashError:
+            raise InvalidMessageException(
+                f"Invalid IPFS hash for message {message.item_hash}"
+            )
+        except (InvalidMessageException, MessageUnavailable):
+            raise
+        except Exception as e:
+            LOGGER.exception("Error using the message type handler")
+            raise MessageUnavailable(
+                f"Unexpected error while fetching related content of {message.item_hash}"
+            ) from e
+
+    @staticmethod
+    async def confirm_existing_message(
+        session: DbSession,
+        existing_message: MessageDb,
+        pending_message: PendingMessageDb,
+    ):
+        if pending_message.signature != existing_message.signature:
+            raise InvalidSignature(f"Invalid signature for {pending_message.item_hash}")
+
+        if pending_message.tx_hash:
+            confirmation_upsert_query = make_confirmation_upsert_query(
+                item_hash=pending_message.item_hash, tx_hash=pending_message.tx_hash
+            )
+            session.execute(confirmation_upsert_query)
+
+    async def verify_and_fetch(
+        self, session: DbSession, pending_message: PendingMessageDb
+    ) -> Optional[MessageDb]:
+        item_hash = pending_message.item_hash
+
+        existing_message = await get_message_by_item_hash(
+            session=session, item_hash=item_hash
         )
 
-        if check_message:
-            if existing is None or (existing["signature"] != pending_message.signature):
-                # check/sanitize the message if needed
-                try:
-                    await self.chain_service.verify_signature(pending_message)
-                except InvalidMessageError:
-                    return IncomingStatus.FAILED_PERMANENTLY, []
-
-        if retrying:
-            LOGGER.debug("(Re)trying %s." % item_hash)
-        else:
-            LOGGER.info("Incoming %s." % item_hash)
-
-        updates: Dict[str, Dict] = {}
-
-        if existing:
-            if seen_ids is not None and height is not None:
-                if ids_key in seen_ids.keys():
-                    if height > seen_ids[ids_key]:
-                        return IncomingStatus.MESSAGE_HANDLED, []
-                    else:
-                        seen_ids[ids_key] = height
-                else:
-                    seen_ids[ids_key] = height
-
-            LOGGER.debug("Updating %s." % item_hash)
-
-            if confirmations:
-                updates = make_confirmation_update_query(confirmations)
-
-        else:
-            try:
-                content = await self.storage_service.get_message_content(
-                    pending_message
-                )
-
-            except InvalidContent:
-                LOGGER.warning(
-                    "Can't get content of object %r, won't retry." % item_hash
-                )
-                return IncomingStatus.FAILED_PERMANENTLY, []
-
-            except (ContentCurrentlyUnavailable, Exception) as e:
-                if not isinstance(e, ContentCurrentlyUnavailable):
-                    LOGGER.exception("Can't get content of object %r" % item_hash)
-                await self._mark_message_for_retry(
-                    message=pending_message,
-                    chain_name=chain_name,
-                    tx_hash=tx_hash,
-                    height=height,
-                    check_message=check_message,
-                    retrying=retrying,
-                    existing_id=existing_id,
-                )
-                return IncomingStatus.RETRYING_LATER, []
-
-            validated_message = validate_pending_message(
+        if existing_message:
+            # The message already exists and is validated. The current message is a confirmation.
+            await self.confirm_existing_message(
+                session=session,
                 pending_message=pending_message,
-                content=content,
-                confirmations=confirmations,
+                existing_message=existing_message,
             )
+            return None
 
-            # warning: those handlers can modify message and content in place
-            # and return a status. None has to be retried, -1 is discarded, True is
-            # handled and kept.
-            # TODO: change this, it's messy.
-            try:
-                if isinstance(validated_message, ValidatedStoreMessage):
-                    handling_result = (
-                        await self.store_message_handler.handle_new_storage(
-                            validated_message
-                        )
-                    )
-                elif isinstance(validated_message, ValidatedForgetMessage):
-                    # Handling it here means that there we ensure that the message
-                    # has been forgotten before it is saved on the node.
-                    # We may want the opposite instead: ensure that the message has
-                    # been saved before it is forgotten.
-                    handling_result = (
-                        await self.forget_message_handler.handle_forget_message(
-                            validated_message
-                        )
-                    )
-                else:
-                    handling_result = True
-            except UnknownHashError:
-                LOGGER.warning(
-                    f"Invalid IPFS hash for message {item_hash}, won't retry."
-                )
-                return IncomingStatus.FAILED_PERMANENTLY, []
-            except Exception:
-                LOGGER.exception("Error using the message type handler")
-                handling_result = None
+        await self.verify_signature(pending_message=pending_message)
+        validated_message = await self.fetch_pending_message(
+            pending_message=pending_message
+        )
+        await self.fetch_related_content(session=session, message=validated_message)
 
-            if handling_result is None:
-                LOGGER.debug("Message type handler has failed, retrying later.")
-                await self._mark_message_for_retry(
-                    message=pending_message,
-                    chain_name=chain_name,
-                    tx_hash=tx_hash,
-                    height=height,
-                    check_message=check_message,
-                    retrying=retrying,
-                    existing_id=existing_id,
-                )
-                return IncomingStatus.RETRYING_LATER, []
+        # All the content was fetched successfully, we can mark the message as fetched
+        message_upsert_query = make_message_upsert_query(message=validated_message)
+        session.execute(message_upsert_query)
+        if pending_message.tx_hash:
+            confirmation_upsert_query = make_confirmation_upsert_query(
+                item_hash=item_hash, tx_hash=pending_message.tx_hash
+            )
+            session.execute(confirmation_upsert_query)
 
-            if not handling_result:
-                LOGGER.warning(
-                    "Message type handler has failed permanently for "
-                    "%r, won't retry." % item_hash
-                )
-                return IncomingStatus.FAILED_PERMANENTLY, []
+        return validated_message
 
-            if not await check_sender_authorization(validated_message):
-                LOGGER.warning("Invalid sender for %s" % item_hash)
-                return IncomingStatus.MESSAGE_HANDLED, []
+    async def check_permissions(self, session: DbSession, message: MessageDb):
+        content_handler = self.get_content_handler(message.type)
+        await content_handler.check_permissions(session=session, message=message)
 
-            if seen_ids is not None and height is not None:
-                if ids_key in seen_ids.keys():
-                    if height > seen_ids[ids_key]:
-                        return IncomingStatus.MESSAGE_HANDLED, []
-                    else:
-                        seen_ids[ids_key] = height
-                else:
-                    seen_ids[ids_key] = height
+    async def process(
+        self, session: DbSession, messages: Iterable[MessageDb]
+    ) -> Tuple[Sequence[MessageDb], Sequence[MessageDb]]:
 
-            LOGGER.debug("New message to store for %s." % item_hash)
+        successes = []
+        errors = []
+        messages_by_type = defaultdict(list)
 
-            updates = make_message_upsert_query(validated_message)
+        for message in messages:
+            # TODO: check permissions and balance
+            messages_by_type[message.type].append(message)
 
-        if updates:
-            update_op = UpdateOne(filters, updates, upsert=True)
-            bulk_ops = [DbBulkOperation(Message, update_op)]
+        # FORGETs should be last to avoid race conditions. Other message types
+        # can be rearranged if deemed necessary, i.e. to treat faster operations at
+        # the start.
+        for message_type in (
+            MessageType.aggregate,
+            MessageType.post,
+            MessageType.program,
+            MessageType.store,
+            MessageType.forget,
+        ):
+            content_handler = self.get_content_handler(message_type)
+            start_time = time.perf_counter()
+            mtype_successes, mtype_errors = await content_handler.process(
+                session=session, messages=messages_by_type[message_type]
+            )
+            end_time = time.perf_counter()
+            LOGGER.info(
+                "Processed %d %s messages in %.4f seconds",
+                len(messages_by_type[message_type]),
+                message_type,
+                end_time - start_time,
+            )
+            successes += mtype_successes
+            errors += mtype_errors
 
-            # Capped collections do not accept updates that increase the size, so
-            # we must ignore confirmations. We also ignore on-chain messages for
-            # performance reasons (bulk inserts on capped collections are slow).
-            if existing is None:
-                if tx_hash is None:
-                    bulk_ops.append(DbBulkOperation(CappedMessage, update_op))
+        return successes, errors
 
-            return IncomingStatus.MESSAGE_HANDLED, bulk_ops
+    async def fetch_and_process_one_message_db(self, pending_message: PendingMessageDb):
+        # Fetch
+        with self.session_factory() as session:
+            validated_message = await self.verify_and_fetch(
+                session=session, pending_message=pending_message
+            )
+            session.commit()
 
-        return IncomingStatus.MESSAGE_HANDLED, []
+            if validated_message is None:
+                # The pending message was a confirmation, we are done.
+                return
 
-    async def process_one_message(self, message: BasePendingMessage, *args, **kwargs):
-        """
-        Helper function to process a message on the spot.
-        """
-        status, ops = await self.incoming(message, *args, **kwargs)
-        for op in ops:
-            await op.collection.collection.bulk_write([op.operation])
+            await self.check_permissions(session=session, message=validated_message)
+            await self.process(session=session, messages=[validated_message])
+            session.commit()

@@ -18,18 +18,17 @@ from multiprocessing import Manager, Process, set_start_method
 from multiprocessing.managers import SyncManager
 from typing import Any, Coroutine, Dict, List, Optional
 
+import alembic.config
+import alembic.command
 import sentry_sdk
 from aleph_message.models import MessageType
 from configmanager import Config
 from setproctitle import setproctitle
-from sqlalchemy.ext.asyncio import AsyncEngine
 
 import aleph.config
-from aleph import model
 from aleph.chains.chain_service import ChainService
 from aleph.cli.args import parse_args
-from aleph.db.models.base import Base
-from aleph.db.connection import make_engine, make_session_factory
+from aleph.db.connection import make_engine, make_session_factory, make_db_url
 from aleph.exceptions import InvalidConfigException, KeyNotFoundException
 from aleph.jobs import start_jobs
 from aleph.jobs.job_utils import prepare_loop
@@ -51,10 +50,12 @@ __license__ = "mit"
 LOGGER = logging.getLogger(__name__)
 
 
-async def create_tables(engine: AsyncEngine):
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)
+def run_db_migrations(config: Config):
+    db_url = make_db_url(driver="psycopg2", config=config)
+    alembic_cfg = alembic.config.Config("alembic.ini")
+    alembic_cfg.attributes['configure_logger'] = False
+    logging.getLogger('alembic').setLevel(logging.CRITICAL)
+    alembic.command.upgrade(alembic_cfg, "head", tag=db_url)
 
 
 def init_shared_stats(shared_memory_manager: SyncManager) -> Dict[str, Any]:
@@ -82,10 +83,12 @@ async def run_server(
 ):
     # These imports will run in different processes
     from aiohttp import web
-    from aleph.web.controllers.listener import broadcast
 
     LOGGER.debug("Setup of runner")
     p2p_client = await init_p2p_client(config, service_name=f"api-server-{port}")
+
+    engine = make_engine(config, echo=config.logging.level.value == logging.DEBUG)
+    session_factory = make_session_factory(engine)
 
     ipfs_client = make_ipfs_client(config)
     ipfs_service = IpfsService(ipfs_client=ipfs_client)
@@ -99,17 +102,18 @@ async def run_server(
     app["shared_stats"] = shared_stats
     app["p2p_client"] = p2p_client
     app["storage_service"] = storage_service
+    app["session_factory"] = session_factory
 
     runner = web.AppRunner(app)
     await runner.setup()
 
-    LOGGER.debug("Starting site")
+    LOGGER.info("Starting API server on port %d...", port)
     site = web.TCPSite(runner, host, port)
     await site.start()
 
-    LOGGER.debug("Running broadcast server")
-    await broadcast()
-    LOGGER.debug("Finished broadcast server")
+    # Wait forever
+    while True:
+        await asyncio.sleep(3600)
 
 
 def run_server_coroutine(
@@ -213,19 +217,24 @@ async def main(args):
 
     config_values = config.dump_values()
 
-    LOGGER.debug("Initializing database")
+    LOGGER.info("Initializing database...")
+    run_db_migrations(config)
+    LOGGER.info("Database initialized.")
+
     engine = make_engine(config, echo=args.loglevel == logging.DEBUG)
     session_factory = make_session_factory(engine)
-    await create_tables(engine)
-    model.init_db(config, ensure_indexes=True)
-    LOGGER.info("Database initialized.")
+
+    # TODO: find a way to prevent alembic from messing up the logging config
+    setup_logging(args.loglevel)
 
     ipfs_service = IpfsService(ipfs_client=make_ipfs_client(config))
     storage_service = StorageService(
         storage_engine=FileSystemStorageEngine(folder=config.storage.folder.value),
         ipfs_service=ipfs_service,
     )
-    chain_service = ChainService(storage_service=storage_service)
+    chain_service = ChainService(
+        session_factory=session_factory, storage_service=storage_service
+    )
 
     set_start_method("spawn")
 

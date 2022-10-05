@@ -17,7 +17,8 @@ async def incoming_channel(ipfs_service: IpfsService, topic: str, message_proces
                 try:
                     message = await decode_pubsub_message(mvalue["data"])
                     LOGGER.debug("New message %r" % message)
-                    asyncio.create_task(message_processor.process_one_message(message))
+                    # TODO: reactivate!
+                    # asyncio.create_task(message_processor.process_one_message(message))
                 except InvalidMessageError:
                     LOGGER.warning(f"Invalid message {mvalue}")
         except Exception:

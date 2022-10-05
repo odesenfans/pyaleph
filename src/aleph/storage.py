@@ -10,6 +10,7 @@ from typing import Any, AnyStr, IO, Optional, cast
 from aleph_message.models import ItemType
 
 from aleph.config import get_config
+from aleph.db.models import PendingMessageDb
 from aleph.exceptions import InvalidContent, ContentCurrentlyUnavailable
 from aleph.schemas.message_content import ContentSource, RawContent, MessageContent
 from aleph.schemas.pending_messages import BasePendingMessage
@@ -33,7 +34,7 @@ class StorageService:
         self.storage_engine = storage_engine
         self.ipfs_service = ipfs_service
 
-    async def get_message_content(self, message: BasePendingMessage) -> MessageContent:
+    async def get_message_content(self, message: PendingMessageDb) -> MessageContent:
         item_type = message.item_type
         item_hash = message.item_hash
 

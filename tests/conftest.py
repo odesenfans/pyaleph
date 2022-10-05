@@ -10,14 +10,13 @@ import pytest_asyncio
 from configmanager import Config
 
 import aleph.config
-from aleph.config import get_defaults
 from aleph.db.connection import make_engine, make_session_factory
 from aleph.db.models.base import Base
-from aleph.model import init_db
 from aleph.services.ipfs import IpfsService
 from aleph.services.ipfs.common import make_ipfs_client
 from aleph.services.storage.fileystem_engine import FileSystemStorageEngine
 from aleph.storage import StorageService
+from aleph.types.db_session import DbSessionFactory
 from aleph.web import create_app
 
 TEST_DB = "ccn_automated_tests"
@@ -34,33 +33,15 @@ def drop_db(db_name: str, config: Config):
     client.drop_database(db_name)
 
 
-@pytest_asyncio.fixture
-async def test_db():
-    """
-    Initializes and cleans a MongoDB database dedicated to automated tests.
-    """
+@pytest.fixture
+def session_factory(mock_config):
+    engine = make_engine(mock_config, echo=False)
 
-    config = Config(schema=get_defaults())
-    config.mongodb.database.value = TEST_DB
-
-    drop_db(TEST_DB, config)
-    init_db(config, ensure_indexes=True)
-
-    from aleph.model import db
-
-    yield db
-
-
-@pytest_asyncio.fixture
-async def session_factory(mock_config):
-    engine = make_engine(mock_config, echo=True)
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)
+    with engine.begin() as conn:
+        Base.metadata.drop_all(conn)
+        Base.metadata.create_all(conn)
 
     return make_session_factory(engine)
-
 
 
 @pytest.fixture
@@ -88,12 +69,16 @@ async def test_storage_service(mock_config) -> StorageService:
     storage_engine = FileSystemStorageEngine(folder=data_folder)
     ipfs_client = make_ipfs_client(mock_config)
     ipfs_service = IpfsService(ipfs_client=ipfs_client)
-    storage_service = StorageService(storage_engine=storage_engine, ipfs_service=ipfs_service)
+    storage_service = StorageService(
+        storage_engine=storage_engine, ipfs_service=ipfs_service
+    )
     return storage_service
 
 
 @pytest_asyncio.fixture
-async def ccn_api_client(mocker, aiohttp_client, mock_config):
+async def ccn_api_client(
+    mocker, aiohttp_client, mock_config, session_factory: DbSessionFactory
+):
     # Make aiohttp return the stack trace on 500 errors
     event_loop = asyncio.get_event_loop()
     event_loop.set_debug(True)
@@ -102,6 +87,7 @@ async def ccn_api_client(mocker, aiohttp_client, mock_config):
     app["config"] = mock_config
     app["p2p_client"] = mocker.AsyncMock()
     app["storage_service"] = mocker.AsyncMock()
+    app["session_factory"] = session_factory
     client = await aiohttp_client(app)
 
     return client

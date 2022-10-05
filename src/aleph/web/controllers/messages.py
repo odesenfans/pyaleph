@@ -1,15 +1,15 @@
-import asyncio
 import logging
-from enum import IntEnum
-from typing import Any, List, Optional, Mapping
+from typing import Any, List, Optional
+from typing import Mapping
 
 from aiohttp import web
 from aleph_message.models import MessageType, ItemHash, Chain
-from bson.objectid import ObjectId
 from pydantic import BaseModel, Field, validator, ValidationError, root_validator
-from pymongo.cursor import CursorType
 
-from aleph.model.messages import CappedMessage, Message
+from aleph.db.accessors.messages import get_matching_messages, count_matching_messages
+from aleph.db.models import MessageDb
+from aleph.types.db_session import DbSessionFactory
+from aleph.types.sort_order import SortOrder
 from aleph.web.controllers.utils import (
     LIST_FIELD_SEPARATOR,
     Pagination,
@@ -22,11 +22,6 @@ LOGGER = logging.getLogger(__name__)
 DEFAULT_MESSAGES_PER_PAGE = 20
 DEFAULT_PAGE = 1
 DEFAULT_WS_HISTORY = 10
-
-
-class SortOrder(IntEnum):
-    ASCENDING = 1
-    DESCENDING = -1
 
 
 class BaseMessageQueryParams(BaseModel):
@@ -198,106 +193,101 @@ async def view_messages_list(request):
     if url_page_param := request.match_info.get("page"):
         query_params.page = int(url_page_param)
 
-    find_filters = query_params.to_mongodb_filters()
+    find_filters = query_params.dict()
 
     pagination_page = query_params.page
     pagination_per_page = query_params.pagination
     pagination_skip = (query_params.page - 1) * query_params.pagination
 
-    messages = [
-        msg
-        async for msg in Message.collection.find(
-            filter=find_filters,
-            projection={"_id": 0},
-            limit=pagination_per_page,
-            skip=pagination_skip,
-            sort=[("time", query_params.sort_order.value)],
-        )
-    ]
+    session_factory: DbSessionFactory = request.app["session_factory"]
+    with session_factory() as session:
+        results = await get_matching_messages(session, **find_filters)
+        messages = [
+            message.to_dict()
+            for message in results
+        ]
 
-    context = {"messages": messages}
+        context = {"messages": messages}
 
-    if pagination_per_page is not None:
-        if find_filters:
-            total_msgs = await Message.collection.count_documents(find_filters)
-        else:
-            total_msgs = await Message.collection.estimated_document_count()
+        if pagination_per_page is not None:
+            total_msgs = await count_matching_messages(session, **find_filters)
 
-        query_string = request.query_string
-        pagination = Pagination(
-            pagination_page,
-            pagination_per_page,
-            total_msgs,
-            url_base="/messages/posts/page/",
-            query_string=query_string,
-        )
+            query_string = request.query_string
+            pagination = Pagination(
+                pagination_page,
+                pagination_per_page,
+                total_msgs,
+                url_base="/messages/posts/page/",
+                query_string=query_string,
+            )
 
-        context.update(
-            {
-                "pagination": pagination,
-                "pagination_page": pagination_page,
-                "pagination_total": total_msgs,
-                "pagination_per_page": pagination_per_page,
-                "pagination_item": "messages",
-            }
-        )
+            context.update(
+                {
+                    "pagination": pagination,
+                    "pagination_page": pagination_page,
+                    "pagination_total": total_msgs,
+                    "pagination_per_page": pagination_per_page,
+                    "pagination_item": "messages",
+                }
+            )
 
     return cond_output(request, context, "TODO.html")
 
 
-async def messages_ws(request: web.Request):
-    ws = web.WebSocketResponse()
-    await ws.prepare(request)
-
-    collection = CappedMessage.collection
-    last_id = None
-
-    query_params = WsMessageQueryParams.parse_obj(request.query)
-    find_filters = query_params.to_mongodb_filters()
-
-    initial_count = query_params.history
-
-    items = [
-        item
-        async for item in collection.find(find_filters)
-        .sort([("$natural", -1)])
-        .limit(initial_count)
-    ]
-    for item in reversed(items):
-        item["_id"] = str(item["_id"])
-
-        last_id = item["_id"]
-        await ws.send_json(item)
-
-    closing = False
-
-    while not closing:
-        try:
-            cursor = collection.find(
-                {"_id": {"$gt": ObjectId(last_id)}},
-                cursor_type=CursorType.TAILABLE_AWAIT,
-            )
-            while cursor.alive:
-                async for item in cursor:
-                    if ws.closed:
-                        closing = True
-                        break
-                    item["_id"] = str(item["_id"])
-
-                    last_id = item["_id"]
-                    await ws.send_json(item)
-
-                await asyncio.sleep(1)
-
-                if closing:
-                    break
-
-        except ConnectionResetError:
-            break
-
-        except Exception:
-            if ws.closed:
-                break
-
-            LOGGER.exception("Error processing")
-            await asyncio.sleep(1)
+# TODO: reactivate/reimplement messages WS
+# async def messages_ws(request: web.Request):
+#     ws = web.WebSocketResponse()
+#     await ws.prepare(request)
+#
+#     collection = CappedMessage.collection
+#     last_id = None
+#
+#     query_params = WsMessageQueryParams.parse_obj(request.query)
+#     find_filters = query_params.to_mongodb_filters()
+#
+#     initial_count = query_params.history
+#
+#     items = [
+#         item
+#         async for item in collection.find(find_filters)
+#         .sort([("$natural", -1)])
+#         .limit(initial_count)
+#     ]
+#     for item in reversed(items):
+#         item["_id"] = str(item["_id"])
+#
+#         last_id = item["_id"]
+#         await ws.send_json(item)
+#
+#     closing = False
+#
+#     while not closing:
+#         try:
+#             cursor = collection.find(
+#                 {"_id": {"$gt": ObjectId(last_id)}},
+#                 cursor_type=CursorType.TAILABLE_AWAIT,
+#             )
+#             while cursor.alive:
+#                 async for item in cursor:
+#                     if ws.closed:
+#                         closing = True
+#                         break
+#                     item["_id"] = str(item["_id"])
+#
+#                     last_id = item["_id"]
+#                     await ws.send_json(item)
+#
+#                 await asyncio.sleep(1)
+#
+#                 if closing:
+#                     break
+#
+#         except ConnectionResetError:
+#             break
+#
+#         except Exception:
+#             if ws.closed:
+#                 break
+#
+#             LOGGER.exception("Error processing")
+#             await asyncio.sleep(1)

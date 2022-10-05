@@ -4,13 +4,13 @@ from typing import Dict
 
 from aleph_message.models import Chain
 from configmanager import Config
-from sqlalchemy.orm import sessionmaker
 
 from aleph.exceptions import InvalidMessageError
 from aleph.schemas.pending_messages import BasePendingMessage
 from aleph.storage import StorageService
 from .chaindata import ChainDataService
 from .connector import ChainConnector, ChainReader, ChainWriter, Verifier
+from aleph.types.db_session import DbSessionFactory
 
 LOGGER = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ class ChainService:
     readers: Dict[Chain, ChainReader]
     writers: Dict[Chain, ChainWriter]
 
-    def __init__(self, session_factory: sessionmaker, storage_service: StorageService):
+    def __init__(self, session_factory: DbSessionFactory, storage_service: StorageService):
 
         self._session_factory = session_factory
 
