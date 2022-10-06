@@ -1,0 +1,54 @@
+[
+  {
+    "chain": "ETH",
+    "sender": "0x6e0DB94d80885B7D6ec6a8D6D82e04ef084Bc3aE",
+    "type": "POST",
+    "channel": "the-sound-of-crypto",
+    "signature": "0x0f91d0618e95c2f886371771b53d55bcfe79b4cd89c9dd0c651ebdca1bbec6420777dfe32efad0a3dc0171ed3293fe5926a77b378ffafc7539819f02cfc40ae11b",
+    "size": null,
+    "time": 1665087905.903381,
+    "item_type": "inline",
+    "item_content": "{\"address\":\"0x6e0DB94d80885B7D6ec6a8D6D82e04ef084Bc3aE\",\"time\":1665087905.9033072,\"content\":{\"title\":\"Cool bands I like\",\"content\":[\"Beartooth\",\"Motorhead\",\"Queens of the Stone Age\",\"Radiohead\"]},\"type\":\"test\"}",
+    "item_hash": "b2da050ed40c9c0e9f2af861aa64649f93617c055b92c53d97e16b2781f9f847",
+    "content": {
+      "address": "0x6e0DB94d80885B7D6ec6a8D6D82e04ef084Bc3aE",
+      "time": 1665087905.9033072,
+      "content": {
+        "title": "Cool bands I like",
+        "content": [
+          "Beartooth",
+          "Motorhead",
+          "Queens of the Stone Age",
+          "Radiohead"
+        ]
+      },
+      "type": "test"
+    }
+  },
+  {
+    "chain": "ETH",
+    "sender": "0x6e0DB94d80885B7D6ec6a8D6D82e04ef084Bc3aE",
+    "type": "POST",
+    "channel": "the-sound-of-crypto",
+    "signature": "0x632fa2563489ad3a6684e42110b01e7ea336a53437be2a989374680b10a349404a9f8d642a11dda92046ebb25ed41708baf283b7973d5ea98f0e6dc23bf2329d1c",
+    "size": null,
+    "time": 1665088086.1621876,
+    "item_type": "inline",
+    "item_content": "{\"address\":\"0x6e0DB94d80885B7D6ec6a8D6D82e04ef084Bc3aE\",\"time\":1665087905.9033072,\"content\":{\"title\":\"Cool bands I like\",\"content\":[\"Beartooth\",\"Motorhead\",\"Queens of the Stone Age\"]},\"ref\":\"b2da050ed40c9c0e9f2af861aa64649f93617c055b92c53d97e16b2781f9f847\",\"type\":\"test\"}",
+    "item_hash": "ca5136ae27d434acb3fc6dfa0bebefd9bcfb1bb32d070a364963367463fd2e4c",
+    "content": {
+      "address": "0x6e0DB94d80885B7D6ec6a8D6D82e04ef084Bc3aE",
+      "time": 1665087905.9033072,
+      "content": {
+        "title": "Cool bands I like",
+        "content": [
+          "Beartooth",
+          "Motorhead",
+          "Queens of the Stone Age"
+        ]
+      },
+      "ref": "b2da050ed40c9c0e9f2af861aa64649f93617c055b92c53d97e16b2781f9f847",
+      "type": "amend"
+    }
+  }
+]
