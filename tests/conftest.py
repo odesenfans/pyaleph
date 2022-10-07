@@ -8,6 +8,7 @@ import pymongo
 import pytest
 import pytest_asyncio
 from configmanager import Config
+from sqlalchemy.orm import sessionmaker
 
 import aleph.config
 from aleph.config import get_defaults
@@ -62,7 +63,6 @@ async def session_factory(mock_config):
     return make_session_factory(engine)
 
 
-
 @pytest.fixture
 def mock_config(mocker):
     config = Config(aleph.config.get_defaults())
@@ -88,12 +88,16 @@ async def test_storage_service(mock_config) -> StorageService:
     storage_engine = FileSystemStorageEngine(folder=data_folder)
     ipfs_client = make_ipfs_client(mock_config)
     ipfs_service = IpfsService(ipfs_client=ipfs_client)
-    storage_service = StorageService(storage_engine=storage_engine, ipfs_service=ipfs_service)
+    storage_service = StorageService(
+        storage_engine=storage_engine, ipfs_service=ipfs_service
+    )
     return storage_service
 
 
 @pytest_asyncio.fixture
-async def ccn_api_client(mocker, aiohttp_client, mock_config):
+async def ccn_api_client(
+    mocker, aiohttp_client, mock_config, session_factory: sessionmaker
+):
     # Make aiohttp return the stack trace on 500 errors
     event_loop = asyncio.get_event_loop()
     event_loop.set_debug(True)
@@ -102,6 +106,7 @@ async def ccn_api_client(mocker, aiohttp_client, mock_config):
     app["config"] = mock_config
     app["p2p_client"] = mocker.AsyncMock()
     app["storage_service"] = mocker.AsyncMock()
+    app["session_factory"] = session_factory
     client = await aiohttp_client(app)
 
     return client

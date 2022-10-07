@@ -1,3 +1,4 @@
+import json
 from typing import Any, Dict
 
 from aleph_message.models import Chain, MessageType, ItemType
@@ -24,6 +25,7 @@ class MessageDb(Base):
     sender = Column(String, nullable=False, index=True)
     signature = Column(String, nullable=False)
     item_type = Column(ChoiceType(ItemType), nullable=False)
+    item_content = Column(String, nullable=True)
     content = Column(JSONB, nullable=False)
     time = Column(TIMESTAMP(timezone=True), nullable=False, index=True)
     # reception_time = Column(
@@ -53,18 +55,24 @@ class MessageDb(Base):
             chain=Chain(message_dict["chain"]),
             sender=message_dict["sender"],
             signature=message_dict["signature"],
-            item_type=ItemType(message_dict["item_type"]),
+            item_type=ItemType(message_dict.get("item_type", ItemType.inline)),
+            item_content=message_dict.get("item_content"),
             content=message_dict["content"],
             time=timestamp_to_datetime(message_dict["time"]),
             channel=message_dict.get("channel"),
-            size=message_dict["size"],
-            confirmations=[
-                MessageConfirmationDb(
-                    item_hash=item_hash, tx=ChainTxDb.from_dict(confirmation_dict)
-                )
-                for confirmation_dict in message_dict.get("confirmations", [])
-            ],
+            size=message_dict.get("size", 0),
+            # confirmations=[
+            #     MessageConfirmationDb(
+            #         item_hash=item_hash, tx=ChainTxDb.from_dict(confirmation_dict)
+            #     )
+            #     for confirmation_dict in message_dict.get("confirmations", [])
+            # ],
         )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            column.name: getattr(self, column.name) for column in self.__table__.columns
+        }
 
 
 class MessageConfirmationDb(Base):

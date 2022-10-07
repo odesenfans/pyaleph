@@ -43,6 +43,7 @@ def assert_messages_equal(messages: Iterable[Dict], expected_messages: Iterable[
 @pytest.mark.asyncio
 async def test_get_messages(fixture_messages: Sequence[Dict[str, Any]], ccn_api_client):
     response = await ccn_api_client.get(MESSAGES_URI)
+    print(await response.text())
     assert response.status == 200, await response.text()
 
     data = await response.json()
@@ -170,6 +171,7 @@ async def fetch_messages_filter_time_expect_success(
     sort_order: int = -1,
 ) -> List[Dict]:
     response = await fetch_messages_filter_time(api_client, start, end, sort_order)
+    print(await response.text())
     assert response.status == 200, await response.text()
     data = await response.json()
     return data["messages"]

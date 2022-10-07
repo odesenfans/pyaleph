@@ -17,10 +17,19 @@ async def _load_fixtures(
     with fixtures_file.open() as f:
         messages_json = json.load(f)
 
-    messages = [
-        MessageDb.from_message_dict(message_dict=message_dict)
-        for message_dict in messages_json
-    ]
+    messages = []
+    confirmations = []
+    for message_dict in messages_json:
+        messages.append(MessageDb.from_message_dict(message_dict))
+        if message_confirmations := message_dict.get("confirmations", []):
+            confirmations += message_confirmations
+    # messages = [
+    #     MessageDb.from_message_dict(message_dict=message_dict)
+    #     for message_dict in messages_json
+    # ]
+
+    # Add m
+    # txs =
 
     async with session_factory() as session:
         session.add_all(messages)
