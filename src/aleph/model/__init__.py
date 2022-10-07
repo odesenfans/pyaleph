@@ -35,8 +35,5 @@ def init_db(config: Config, ensure_indexes: bool = True):
         from aleph.model.messages import Message
 
         Message.ensure_indexes(sync_db)
-        from aleph.model.pending import PendingMessage
-
-        PendingMessage.ensure_indexes(sync_db)
 
     from aleph.model.messages import Message

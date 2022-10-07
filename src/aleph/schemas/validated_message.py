@@ -4,7 +4,7 @@ Validated messages are fully loaded, i.e. their content field is
 always present, unlike pending messages.
 """
 
-from typing import List, Literal, Optional, Generic, Dict, Type, Any
+from typing import List, Literal, Optional, Generic, Dict, Type, Any, Union
 
 from aleph_message.models import (
     MessageConfirmation,
@@ -27,6 +27,7 @@ from aleph.schemas.pending_messages import (
     PendingStoreMessage,
 )
 from .message_content import MessageContent
+from ..db.models import PendingMessageDb
 
 
 class EngineInfo(BaseModel):
@@ -94,17 +95,29 @@ class ValidatedStoreMessage(
 
 
 def validate_pending_message(
-    pending_message: BasePendingMessage[MType, ContentType],
+    pending_message: Union[BasePendingMessage[MType, ContentType], PendingMessageDb],
     content: MessageContent,
     confirmations: List[MessageConfirmation],
 ) -> BaseValidatedMessage[MType, ContentType]:
 
-    type_map: Dict[Type[BasePendingMessage], Type[BaseValidatedMessage]] = {
-        PendingAggregateMessage: ValidatedAggregateMessage,
-        PendingForgetMessage: ValidatedForgetMessage,
-        PendingPostMessage: ValidatedPostMessage,
-        PendingProgramMessage: ValidatedProgramMessage,
-        PendingStoreMessage: ValidatedStoreMessage,
+    # TODO: try avoid the union between pydantic and sqla model
+    #       and get rid of this patchwork here.
+    def pending_message_db_to_dict(_pending_message: PendingMessageDb) -> Dict[str, Any]:
+        _m_dict = _pending_message.to_dict()
+        del _m_dict["id"]
+        del _m_dict["retries"]
+        del _m_dict["check_message"]
+        del _m_dict["tx_hash"]
+        _m_dict["type"] = _m_dict.pop("message_type")
+        _m_dict["time"] = _m_dict["time"].timestamp()
+        return _m_dict
+
+    type_map: Dict[MessageType, Type[BaseValidatedMessage]] = {
+        MessageType.aggregate: ValidatedAggregateMessage,
+        MessageType.forget: ValidatedForgetMessage,
+        MessageType.post: ValidatedPostMessage,
+        MessageType.program: ValidatedProgramMessage,
+        MessageType.store: ValidatedStoreMessage,
     }
 
     # Some values may be missing in the content, adjust them
@@ -115,11 +128,17 @@ def validate_pending_message(
     if json_content.get("time", None) is None:
         json_content["time"] = pending_message.time
 
+    pending_message_dict = (
+        pending_message_db_to_dict(pending_message)
+        if isinstance(pending_message, PendingMessageDb)
+        else pending_message.dict(exclude={"content"})
+    )
+
     # Note: we could use the construct method of Pydantic to bypass validation
     # and speed up the conversion process. However, this means giving up on validation.
     # At the time of writing, correctness seems more important than performance.
-    return type_map[type(pending_message)](
-        **pending_message.dict(exclude={"content"}),
+    return type_map[pending_message.type](
+        **pending_message_dict,
         content=content.value,
         confirmed=bool(confirmations),
         confirmations=confirmations,

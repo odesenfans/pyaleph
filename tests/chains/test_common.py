@@ -1,14 +1,12 @@
+from unittest.mock import MagicMock
+
 import pytest
 from aleph_message.models import MessageType, ItemType
 
 from aleph.chains.chain_service import ChainService
-from aleph.chains.common import (
-    get_verification_buffer,
-    mark_confirmed_data,
-)
+from aleph.chains.common import get_verification_buffer
+from aleph.db.models import PendingMessageDb
 from aleph.handlers.message_handler import MessageHandler, IncomingStatus
-from unittest.mock import MagicMock
-
 from aleph.schemas.pending_messages import BasePendingMessage, parse_message
 
 
@@ -30,16 +28,6 @@ async def test_get_verification_buffer():
     buffer = get_verification_buffer(message)
     expected_buffer = f"ETH\nSENDER\nSTORE\n{item_hash}".encode("utf-8")
     assert buffer == expected_buffer
-
-
-@pytest.mark.asyncio
-async def test_mark_confirmed_data():
-    value = await mark_confirmed_data("CHAIN", "TXHASH", 99999999)
-    assert value["confirmed"] is True
-    assert len(value["confirmations"]) == 1
-    assert value["confirmations"][0]["chain"] == "CHAIN"
-    assert value["confirmations"][0]["height"] == 99999999
-    assert value["confirmations"][0]["hash"] == "TXHASH"
 
 
 @pytest.mark.skip("Signature verification of the fixture fails")
@@ -70,5 +58,6 @@ async def test_incoming_inline(mocker):
     message_dict["item_type"] = "inline"
 
     message = parse_message(message_dict)
-    status, ops = await message_processor.incoming(message, check_message=True)
+    pending_message = PendingMessageDb.from_obj(message)
+    status, ops = await message_processor.incoming(pending_message)
     assert status == IncomingStatus.MESSAGE_HANDLED

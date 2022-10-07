@@ -88,9 +88,9 @@ def make_matching_messages_query(
         select_stmt = select_stmt.where(MessageDb.channel.in_(channels))
 
     order_by_column = (
-        MessageDb.time.asc()
+        MessageDb.time.desc()
         if sort_order == SortOrder.DESCENDING
-        else MessageDb.time.desc()
+        else MessageDb.time.asc()
     )
 
     select_stmt = select_stmt.order_by(order_by_column).offset((page - 1) * pagination)

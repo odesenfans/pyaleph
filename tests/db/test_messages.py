@@ -10,6 +10,7 @@ from aleph.db.accessors.messages import (
 )
 from aleph.db.models import MessageDb, MessageConfirmationDb, ChainTxDb
 from aleph.toolkit.timestamp import timestamp_to_datetime
+from aleph.types.channel import Channel
 from aleph.types.db_session import DbSessionFactory
 
 
@@ -34,7 +35,7 @@ def fixture_message() -> MessageDb:
         item_type=ItemType.inline,
         size=2000,
         time=pytz.utc.localize(dt.datetime.utcfromtimestamp(1664999872)),
-        channel="CHANEL-N5",
+        channel=Channel("CHANEL-N5"),
     )
 
 

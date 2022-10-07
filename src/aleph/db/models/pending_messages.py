@@ -2,13 +2,15 @@ import datetime as dt
 from typing import Optional
 
 from aleph_message.models import Chain, MessageType, ItemType
-from sqlalchemy import Boolean, Column, TIMESTAMP, String, Integer, ForeignKey
+from sqlalchemy import Boolean, BIGINT, Column, TIMESTAMP, String, Integer, ForeignKey, Index
+from sqlalchemy.orm import relationship
 from sqlalchemy_utils.types.choice import ChoiceType
 
 from aleph.schemas.pending_messages import BasePendingMessage
-from .base import Base
-from ...toolkit.timestamp import timestamp_to_datetime
+from aleph.toolkit.timestamp import timestamp_to_datetime
 from aleph.types.channel import Channel
+from .base import Base
+from .chains import ChainTxDb
 
 
 class PendingMessageDb(Base):
@@ -18,7 +20,8 @@ class PendingMessageDb(Base):
 
     __tablename__ = "pending_messages"
 
-    item_hash = Column(String, primary_key=True)
+    id: int = Column(BIGINT, primary_key=True)
+    item_hash: str = Column(String, nullable=False)
     message_type: MessageType = Column(ChoiceType(MessageType), nullable=False)
     chain: Chain = Column(ChoiceType(Chain), nullable=False)
     sender = Column(String, nullable=False)
@@ -31,6 +34,8 @@ class PendingMessageDb(Base):
     check_message = Column(Boolean, nullable=False)
     retries = Column(Integer, nullable=False)
     tx_hash: Optional[str] = Column(ForeignKey("chain_txs.hash"), nullable=True)
+
+    tx: Optional[ChainTxDb] = relationship("ChainTxDb")
 
     @classmethod
     def from_obj(
@@ -52,3 +57,11 @@ class PendingMessageDb(Base):
             retries=0,
             tx_hash=tx_hash,
         )
+
+    @property
+    def type(self):
+        return self.message_type
+
+
+# Used when processing pending messages
+Index("ix_retries_time", PendingMessageDb.retries.asc(), PendingMessageDb.time.asc())

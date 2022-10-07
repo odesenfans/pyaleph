@@ -19,7 +19,6 @@ from web3.middleware.geth_poa import geth_poa_middleware
 
 from aleph.chains.common import get_verification_buffer
 from aleph.db.accessors.chains import get_last_height, upsert_chain_sync_status
-from aleph.model.pending import pending_messages_count
 from aleph.schemas.pending_messages import BasePendingMessage
 from aleph.types.db_session import DbSessionFactory
 from aleph.utils import run_in_executor
@@ -27,6 +26,7 @@ from .chaindata import ChainDataService
 from .connector import ChainWriter, Verifier
 from .tx_context import TxContext
 from ..db.accessors.messages import get_unconfirmed_messages
+from ..db.accessors.pending_messages import count_pending_messages
 from ..db.accessors.pending_txs import count_pending_txs
 
 LOGGER = logging.getLogger("chains.ethereum")
@@ -257,8 +257,9 @@ class EthereumConnector(Verifier, ChainWriter):
         while True:
             async with self.session_factory() as session:
 
+                # Wait for sync operations to complete
                 if (await count_pending_txs(session=session, chain=Chain.ETH)) or (
-                    await pending_messages_count(source_chain=CHAIN_NAME)
+                    await count_pending_messages(session=session, chain=Chain.ETH)
                 ) > 1000:
                     await asyncio.sleep(30)
                     continue

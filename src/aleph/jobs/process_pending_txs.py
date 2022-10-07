@@ -13,7 +13,7 @@ from sqlalchemy import insert, delete
 
 from aleph.chains.chaindata import ChainDataService
 from aleph.chains.tx_context import TxContext
-from aleph.db.accessors.pending_txs import get_pending_txs
+from aleph.db.accessors.pending_txs import get_pending_txs_stream
 from aleph.db.bulk_operations import DbBulkOperation
 from aleph.db.connection import make_engine, make_session_factory
 from aleph.db.models import PendingMessageDb
@@ -134,7 +134,7 @@ class PendingTxProcessor:
         seen_ids: List[str] = []
         LOGGER.info("handling TXs")
         async with self.session_factory() as session:
-            async for pending_tx in await get_pending_txs(session):
+            async for pending_tx in await get_pending_txs_stream(session):
                 if pending_tx.content["content"] in seen_offchain_hashes:
                     continue
 
@@ -145,7 +145,7 @@ class PendingTxProcessor:
                     await self.process_tx_job_results(session=session, tasks=done)
                     await session.commit()
 
-                seen_offchain_hashes.add(pending_tx["content"]["content"])
+                seen_offchain_hashes.add(pending_tx.content["content"])
                 tx_task = asyncio.create_task(
                     self.handle_pending_tx(pending_tx, seen_ids=seen_ids)
                 )

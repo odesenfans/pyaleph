@@ -23,7 +23,6 @@ from nuls2.model.data import (
 from nuls2.model.transaction import Transaction
 
 from aleph.chains.common import get_verification_buffer
-from aleph.model.pending import pending_messages_count
 from aleph.types.db_session import DbSessionFactory
 from aleph.utils import run_in_executor
 from .chaindata import ChainDataService
@@ -31,6 +30,7 @@ from .connector import Verifier, ChainWriter
 from .tx_context import TxContext
 from ..db.accessors.chains import get_last_height, upsert_chain_sync_status
 from ..db.accessors.messages import get_unconfirmed_messages
+from ..db.accessors.pending_messages import count_pending_messages
 from ..db.accessors.pending_txs import count_pending_txs
 from ..schemas.pending_messages import BasePendingMessage
 
@@ -164,7 +164,7 @@ class Nuls2Connector(Verifier, ChainWriter):
         while True:
             async with self.session_factory() as session:
                 if (await count_pending_txs(session=session, chain=Chain.NULS2)) or (
-                    await pending_messages_count(source_chain=CHAIN_NAME)
+                    await count_pending_messages(session=session, chain=Chain.NULS2)
                 ):
                     await asyncio.sleep(30)
                     continue

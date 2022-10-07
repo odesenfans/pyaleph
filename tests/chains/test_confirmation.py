@@ -83,18 +83,13 @@ async def test_confirm_message(
     await message_handler.process_one_message(message)
 
     async with session_factory() as session:
-        message_in_db = await get_message_by_item_hash(session=session, item_hash=item_hash)
+        message_in_db = await get_message_by_item_hash(
+            session=session, item_hash=item_hash
+        )
 
     assert message_in_db is not None
     assert message_in_db.content == content
     assert not message_in_db.confirmed
-
-    # TODO: determine what to do with the capped collection
-    # capped_message_in_db = await CappedMessage.collection.find_one(
-    #     {"item_hash": item_hash}
-    # )
-    # assert capped_message_in_db is not None
-    # assert remove_id_key(message_in_db) == remove_id_key(capped_message_in_db)
 
     # Now, confirm the message
 
@@ -103,30 +98,18 @@ async def test_confirm_message(
         session.add(chain_tx)
         await session.commit()
 
-    await message_handler.process_one_message(
-        message=message,
-        chain_name=chain_tx.chain.value,
-        tx_hash=chain_tx.hash,
-        height=chain_tx.height,
-    )
+    await message_handler.process_one_message(message=message, chain_tx=chain_tx)
 
     async with session_factory() as session:
-        message_in_db = await get_message_by_item_hash(session=session, item_hash=item_hash)
+        message_in_db = await get_message_by_item_hash(
+            session=session, item_hash=item_hash
+        )
 
     assert message_in_db is not None
     assert message_in_db.confirmed
     assert len(message_in_db.confirmations) == 1
     confirmation = message_in_db.confirmations[0]
     compare_chain_txs(expected=chain_tx, actual=confirmation.tx)
-
-    # TODO: capped collections, same as above
-    # capped_message_after_confirmation = await CappedMessage.collection.find_one(
-    #     {"item_hash": item_hash}
-    # )
-    #
-    # assert capped_message_after_confirmation == capped_message_in_db
-    # assert not capped_message_after_confirmation["confirmed"]
-    # assert "confirmations" not in capped_message_after_confirmation
 
 
 @pytest.mark.asyncio
@@ -157,26 +140,15 @@ async def test_process_confirmed_message(
         await session.commit()
 
     message = parse_message(MESSAGE_DICT)
-    await message_handler.process_one_message(
-        message=message,
-        chain_name=chain_tx.chain.value,
-        tx_hash=chain_tx.hash,
-        height=chain_tx.height,
-    )
+    await message_handler.process_one_message(message=message, chain_tx=chain_tx)
 
     async with session_factory() as session:
-        message_in_db = await get_message_by_item_hash(session=session, item_hash=item_hash)
+        message_in_db = await get_message_by_item_hash(
+            session=session, item_hash=item_hash
+        )
 
     assert message_in_db is not None
     assert message_in_db.confirmed
     assert len(message_in_db.confirmations) == 1
     confirmation = message_in_db.confirmations[0]
     compare_chain_txs(expected=chain_tx, actual=confirmation.tx)
-
-    # TODO: capped collection
-    # capped_message_in_db = await CappedMessage.collection.find_one(
-    #     {"item_hash": item_hash}
-    # )
-    #
-    # # Historical messages are not supposed to be added to capped messages
-    # assert capped_message_in_db is None

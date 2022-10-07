@@ -2,7 +2,6 @@ from enum import IntEnum
 from typing import Optional, Dict, Tuple, List
 
 from aleph_message.models import MessageConfirmation
-from bson import ObjectId
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,7 +13,12 @@ from aleph.db.accessors.messages import (
     get_message_by_item_hash,
 )
 from aleph.db.bulk_operations import DbBulkOperation
-from aleph.db.models import PendingMessageDb, MessageDb, MessageConfirmationDb
+from aleph.db.models import (
+    PendingMessageDb,
+    MessageDb,
+    MessageConfirmationDb,
+    ChainTxDb,
+)
 from aleph.exceptions import (
     InvalidMessageError,
     InvalidContent,
@@ -26,12 +30,12 @@ from aleph.schemas.pending_messages import BasePendingMessage
 from aleph.schemas.validated_message import (
     validate_pending_message,
     ValidatedStoreMessage,
-    ValidatedForgetMessage,
+    ValidatedForgetMessage, BaseValidatedMessage,
 )
 from aleph.storage import StorageService
+from aleph.types.db_session import DbSessionFactory
 from .forget import ForgetMessageHandler
 from .storage import StoreMessageHandler
-from aleph.types.db_session import DbSessionFactory
 
 
 class IncomingStatus(IntEnum):
@@ -61,25 +65,19 @@ class MessageHandler:
     @staticmethod
     async def _mark_message_for_retry(
         session: AsyncSession,
-        message: BasePendingMessage,
-        tx_hash: Optional[str],
-        check_message: bool,
+        pending_message: PendingMessageDb,
         retrying: bool,
-        existing_id,
     ):
         if not retrying:
-            session.add(
-                PendingMessageDb.from_obj(
-                    obj=message,
-                    tx_hash=tx_hash,
-                    check_message=check_message,  # should we store this?
-                )
-            )
+            session.add(pending_message)
         else:
-            LOGGER.debug(f"Incrementing for {existing_id}")
+            LOGGER.debug(
+                f"Incrementing for item hash: {pending_message.item_hash} - ID: {pending_message.id}"
+            )
+            # TODO: write accessor instead
             update_stmt = (
                 update(PendingMessageDb)
-                .where(PendingMessageDb.item_hash == message.item_hash)
+                .where(PendingMessageDb.item_hash == pending_message.item_hash)
                 .values(retries=PendingMessageDb.retries + 1)
             )
             await session.execute(update_stmt)
@@ -98,14 +96,9 @@ class MessageHandler:
 
     async def incoming(
         self,
-        pending_message: BasePendingMessage,
-        chain_name: Optional[str] = None,
-        tx_hash: Optional[str] = None,
-        height: Optional[int] = None,
+        pending_message: PendingMessageDb,
         seen_ids: Optional[Dict[Tuple, int]] = None,
-        check_message: bool = False,
         retrying: bool = False,
-        existing_id: Optional[ObjectId] = None,
     ) -> Tuple[IncomingStatus, List[DbBulkOperation]]:
         """New incoming message from underlying chain.
 
@@ -115,29 +108,36 @@ class MessageHandler:
 
         item_hash = pending_message.item_hash
         sender = pending_message.sender
+        chain_tx = pending_message.tx
         # TODO: refactor this mechanism, no need for a list here and we can probably simplify
         #       the logic a lot
-        confirmations = []
-        ids_key = (item_hash, sender, chain_name)
+        confirmations: List[MessageConfirmation] = []
+        if chain_tx:
+            ids_key = (item_hash, sender, chain_tx.chain)
+        else:
+            ids_key = (item_hash, sender, None)
 
-        if chain_name and tx_hash and height:
+        if chain_tx:
             if seen_ids is not None:
                 if ids_key in seen_ids.keys():
-                    if height > seen_ids[ids_key]:
+                    if chain_tx.height > seen_ids[ids_key]:
                         return IncomingStatus.MESSAGE_HANDLED, []
 
             confirmations.append(
-                MessageConfirmation(chain=chain_name, hash=tx_hash, height=height)
+                MessageConfirmation(chain=chain_tx.chain, hash=chain_tx.hash, height=chain_tx.height)
             )
 
         async with self.session_factory() as session:
-            existing = await get_message_by_item_hash(session=session, item_hash=item_hash)
+            existing = await get_message_by_item_hash(
+                session=session, item_hash=item_hash
+            )
 
-        if check_message:
+        if pending_message.check_message:
             if existing is None or (existing.signature != pending_message.signature):
                 # check/sanitize the message if needed
                 try:
-                    await self.chain_service.verify_signature(pending_message)
+                    # TODO: remove type: ignore by deciding the pending message type
+                    await self.chain_service.verify_signature(pending_message)  # type: ignore
                 except InvalidMessageError:
                     return IncomingStatus.FAILED_PERMANENTLY, []
 
@@ -149,14 +149,14 @@ class MessageHandler:
         updates = []
 
         if existing:
-            if seen_ids is not None and height is not None:
+            if seen_ids is not None and chain_tx:
                 if ids_key in seen_ids.keys():
-                    if height > seen_ids[ids_key]:
+                    if chain_tx.height > seen_ids[ids_key]:
                         return IncomingStatus.MESSAGE_HANDLED, []
                     else:
-                        seen_ids[ids_key] = height
+                        seen_ids[ids_key] = chain_tx.height
                 else:
-                    seen_ids[ids_key] = height
+                    seen_ids[ids_key] = chain_tx.height
 
             LOGGER.debug("Updating %s." % item_hash)
 
@@ -165,7 +165,8 @@ class MessageHandler:
                     DbBulkOperation(
                         model=MessageConfirmationDb,
                         operation=make_confirmation_upsert_query(
-                            item_hash=item_hash, tx_hash=confirmation.hash
+                            item_hash=item_hash,
+                            tx_hash=confirmation.hash,
                         ),
                     )
                     for confirmation in confirmations
@@ -189,15 +190,12 @@ class MessageHandler:
                 async with self.session_factory() as session:
                     await self._mark_message_for_retry(
                         session=session,
-                        message=pending_message,
-                        tx_hash=tx_hash,
-                        check_message=check_message,
+                        pending_message=pending_message,
                         retrying=retrying,
-                        existing_id=existing_id,
                     )
                 return IncomingStatus.RETRYING_LATER, []
 
-            validated_message = validate_pending_message(
+            validated_message: BaseValidatedMessage = validate_pending_message(
                 pending_message=pending_message,
                 content=content,
                 confirmations=confirmations,
@@ -240,11 +238,8 @@ class MessageHandler:
                 async with self.session_factory() as session:
                     await self._mark_message_for_retry(
                         session=session,
-                        message=pending_message,
-                        tx_hash=tx_hash,
-                        check_message=check_message,
+                        pending_message=pending_message,
                         retrying=retrying,
-                        existing_id=existing_id,
                     )
                 return IncomingStatus.RETRYING_LATER, []
 
@@ -259,14 +254,14 @@ class MessageHandler:
                 LOGGER.warning("Invalid sender for %s" % item_hash)
                 return IncomingStatus.MESSAGE_HANDLED, []
 
-            if seen_ids is not None and height is not None:
+            if seen_ids is not None and chain_tx:
                 if ids_key in seen_ids.keys():
-                    if height > seen_ids[ids_key]:
+                    if chain_tx.height > seen_ids[ids_key]:
                         return IncomingStatus.MESSAGE_HANDLED, []
                     else:
-                        seen_ids[ids_key] = height
+                        seen_ids[ids_key] = chain_tx.height
                 else:
-                    seen_ids[ids_key] = height
+                    seen_ids[ids_key] = chain_tx.height
 
             LOGGER.debug("New message to store for %s." % item_hash)
 
@@ -302,12 +297,20 @@ class MessageHandler:
 
         return IncomingStatus.MESSAGE_HANDLED, []
 
-    async def process_one_message(self, message: BasePendingMessage, *args, **kwargs):
+    # TODO: refactor this function to take a PendingMessageDb directly
+    async def process_one_message(
+        self,
+        message: BasePendingMessage,
+        chain_tx: Optional[ChainTxDb] = None,
+    ):
         """
         Helper function to process a message on the spot.
         """
 
-        status, ops = await self.incoming(message, *args, **kwargs)
+        pending_message = PendingMessageDb.from_obj(message)
+        pending_message.tx = chain_tx
+
+        status, ops = await self.incoming(pending_message=pending_message)
 
         async with self.session_factory() as session:
             async with session.begin():
