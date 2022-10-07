@@ -1,4 +1,3 @@
-import json
 from typing import Any, Dict
 
 from aleph_message.models import Chain, MessageType, ItemType
@@ -7,9 +6,8 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy_utils.types.choice import ChoiceType
 
-from . import ChainTxDb
-from .base import Base
 from aleph.toolkit.timestamp import timestamp_to_datetime
+from .base import Base
 
 
 class MessageDb(Base):
@@ -28,9 +26,6 @@ class MessageDb(Base):
     item_content = Column(String, nullable=True)
     content = Column(JSONB, nullable=False)
     time = Column(TIMESTAMP(timezone=True), nullable=False, index=True)
-    # reception_time = Column(
-    #     TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
-    # )
     channel = Column(String, nullable=True, index=True)
     size = Column(Integer, nullable=False)
 
@@ -61,18 +56,7 @@ class MessageDb(Base):
             time=timestamp_to_datetime(message_dict["time"]),
             channel=message_dict.get("channel"),
             size=message_dict.get("size", 0),
-            # confirmations=[
-            #     MessageConfirmationDb(
-            #         item_hash=item_hash, tx=ChainTxDb.from_dict(confirmation_dict)
-            #     )
-            #     for confirmation_dict in message_dict.get("confirmations", [])
-            # ],
         )
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            column.name: getattr(self, column.name) for column in self.__table__.columns
-        }
 
 
 class MessageConfirmationDb(Base):

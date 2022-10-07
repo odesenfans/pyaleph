@@ -1,19 +1,17 @@
+import datetime as dt
 from typing import Dict
 
 import pytest
 import pytz
-from sqlalchemy.ext.asyncio import AsyncSession
+from aleph_message.models import Chain
+from sqlalchemy import delete, insert, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import Insert
 
-from aleph.db.models import PendingTxDb, ChainSyncProtocol, PendingMessageDb
-from aleph.jobs.job_utils import perform_db_operations
 from aleph.db.bulk_operations import DbBulkOperation
-from sqlalchemy import delete, func, insert, select, Column
-
-import datetime as dt
-from aleph_message.models import Chain
+from aleph.db.models import PendingTxDb, ChainSyncProtocol, PendingMessageDb
 from aleph.db.models.chains import ChainTxDb
+from aleph.jobs.job_utils import perform_db_operations
 
 PENDING_TX = {
     "content": {
@@ -66,18 +64,6 @@ async def insert_chain_tx(session_factory: sessionmaker, chain_tx: ChainTxDb):
         await session.commit()
 
 
-async def count_rows(session: AsyncSession, column: Column):
-    return (await session.execute(func.count(column))).scalar_one()
-
-
-async def count_pending_txs(session: AsyncSession):
-    return await count_rows(session, PendingTxDb.tx_hash)
-
-
-async def count_pending_messages(session: AsyncSession):
-    return await count_rows(session, PendingMessageDb.item_hash)
-
-
 @pytest.mark.asyncio
 async def test_db_operations_insert_one(session_factory, chain_tx, pending_tx):
     await insert_chain_tx(session_factory, chain_tx)
@@ -95,11 +81,11 @@ async def test_db_operations_insert_one(session_factory, chain_tx, pending_tx):
     ]
 
     async with session_factory() as session:
-        start_count = await count_pending_txs(session)
+        start_count = await PendingTxDb.count(session)
         await perform_db_operations(session, db_operations)
         await session.commit()
 
-        end_count = await count_pending_txs(session)
+        end_count = await PendingTxDb.count(session)
         stored_pending_tx = (
             await session.execute(
                 select(PendingTxDb).where(PendingTxDb.tx_hash == chain_tx.hash)
@@ -121,7 +107,7 @@ async def test_db_operations_delete_one(
         session.add(pending_tx)
         await session.commit()
 
-        start_count = await count_pending_txs(session)
+        start_count = await PendingTxDb.count(session)
 
     db_operations = [
         DbBulkOperation(
@@ -136,7 +122,7 @@ async def test_db_operations_delete_one(
         await perform_db_operations(session, db_operations)
         await session.commit()
 
-        end_count = await count_pending_txs(session)
+        end_count = await PendingTxDb.count(session)
 
     assert end_count - start_count == -1
 
@@ -166,8 +152,8 @@ async def test_db_operations_insert_and_delete(
         session.add(pending_tx)
         await session.commit()
 
-        tx_start_count = await count_pending_txs(session)
-        msg_start_count = await count_pending_messages(session)
+        tx_start_count = await PendingTxDb.count(session)
+        msg_start_count = await PendingMessageDb.count(session)
 
     db_operations = [
         DbBulkOperation(
@@ -189,8 +175,8 @@ async def test_db_operations_insert_and_delete(
         await perform_db_operations(session, db_operations)
         await session.commit()
 
-        tx_end_count = await count_pending_txs(session)
-        msg_end_count = await count_pending_messages(session)
+        tx_end_count = await PendingTxDb.count(session)
+        msg_end_count = await PendingMessageDb.count(session)
 
         messages_db = await session.execute(
             select(PendingMessageDb).where(

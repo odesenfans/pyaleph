@@ -5,7 +5,7 @@ from typing import Any, Dict, Sequence
 import pytest_asyncio
 from sqlalchemy.orm import sessionmaker
 
-from aleph.db.models import MessageDb
+from aleph.db.models import MessageDb, ChainTxDb, MessageConfirmationDb
 
 
 async def _load_fixtures(
@@ -19,20 +19,25 @@ async def _load_fixtures(
 
     messages = []
     confirmations = []
+    chain_txs = []
+    tx_hashes = set()
     for message_dict in messages_json:
         messages.append(MessageDb.from_message_dict(message_dict))
-        if message_confirmations := message_dict.get("confirmations", []):
-            confirmations += message_confirmations
-    # messages = [
-    #     MessageDb.from_message_dict(message_dict=message_dict)
-    #     for message_dict in messages_json
-    # ]
+        for confirmation in message_dict.get("confirmations", []):
+            if (tx_hash := confirmation["hash"]) not in tx_hashes:
+                chain_txs.append(ChainTxDb.from_dict(confirmation))
+                tx_hashes.add(tx_hash)
 
-    # Add m
-    # txs =
+            confirmations.append(
+                MessageConfirmationDb(
+                    item_hash=message_dict["item_hash"], tx_hash=tx_hash
+                )
+            )
 
     async with session_factory() as session:
         session.add_all(messages)
+        session.add_all(chain_txs)
+        session.add_all(confirmations)
         await session.commit()
 
     return messages_json

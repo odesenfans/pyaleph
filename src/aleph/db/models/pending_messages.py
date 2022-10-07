@@ -1,12 +1,11 @@
-from typing import Optional, Any, Dict
+from typing import Optional
 
 from aleph_message.models import Chain, MessageType, ItemType
-from sqlalchemy import Boolean, Column, TIMESTAMP, String, func, Integer, ForeignKey
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import Boolean, Column, TIMESTAMP, String, Integer, ForeignKey
 from sqlalchemy_utils.types.choice import ChoiceType
 
-from .base import Base
 from aleph.schemas.pending_messages import BasePendingMessage
+from .base import Base
 
 
 class PendingMessageDb(Base):
@@ -24,9 +23,6 @@ class PendingMessageDb(Base):
     item_type = Column(ChoiceType(ItemType), nullable=False)
     item_content = Column(String, nullable=True)
     time = Column(TIMESTAMP(timezone=True), nullable=False)
-    # reception_time = Column(
-    #     TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
-    # )
     channel = Column(String, nullable=True)
 
     check_message = Column(Boolean, nullable=False)
@@ -53,8 +49,3 @@ class PendingMessageDb(Base):
             retries=0,
             tx_hash=tx_hash,
         )
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            column.name: getattr(self, column.name) for column in self.__table__.columns
-        }
