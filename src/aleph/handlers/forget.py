@@ -7,11 +7,11 @@ from typing import Optional, List, Mapping
 from aioipfs.api import RepoAPI
 from aioipfs.exceptions import NotPinnedError
 from aleph_message.models import ItemType, MessageType
-from sqlalchemy.orm import sessionmaker
 
 from aleph.db.accessors.file_pins import is_pinned_file
 from aleph.model.messages import Message
 from aleph.schemas.validated_message import ValidatedForgetMessage
+from aleph.types.db_session import DbSessionFactory
 from aleph.storage import StorageService
 from aleph.utils import item_type_from_hash
 
@@ -85,7 +85,7 @@ async def file_references_exist(storage_hash: str) -> bool:
 
 
 class ForgetMessageHandler:
-    def __init__(self, session_factory: sessionmaker, storage_service: StorageService):
+    def __init__(self, session_factory: DbSessionFactory, storage_service: StorageService):
         self.session_factory = session_factory
         self.storage_service = storage_service
 

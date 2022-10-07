@@ -3,7 +3,7 @@ from typing import Coroutine, List
 
 from aleph_p2p_client import AlephP2PServiceClient
 from configmanager import Config
-from sqlalchemy.orm import sessionmaker
+from aleph.types.db_session import DbSessionFactory
 
 from aleph.services.ipfs import IpfsService
 from aleph.services.peers.monitor import monitor_hosts_ipfs, monitor_hosts_p2p
@@ -19,7 +19,7 @@ public_adresses = []
 
 async def initialize_host(
     config: Config,
-    session_factory: sessionmaker,
+    session_factory: DbSessionFactory,
     p2p_client: AlephP2PServiceClient,
     ipfs_service: IpfsService,
     api_servers: List[str],

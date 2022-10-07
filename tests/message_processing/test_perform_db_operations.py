@@ -5,13 +5,13 @@ import pytest
 import pytz
 from aleph_message.models import Chain
 from sqlalchemy import delete, insert, select
-from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import Insert
 
 from aleph.db.bulk_operations import DbBulkOperation
 from aleph.db.models import PendingTxDb, ChainSyncProtocol, PendingMessageDb
 from aleph.db.models.chains import ChainTxDb
 from aleph.jobs.job_utils import perform_db_operations
+from aleph.types.db_session import DbSessionFactory
 
 PENDING_TX = {
     "content": {
@@ -58,7 +58,7 @@ def pending_tx(chain_tx):
     )
 
 
-async def insert_chain_tx(session_factory: sessionmaker, chain_tx: ChainTxDb):
+async def insert_chain_tx(session_factory: DbSessionFactory, chain_tx: ChainTxDb):
     async with session_factory() as session:
         session.add(chain_tx)
         await session.commit()
@@ -99,7 +99,7 @@ async def test_db_operations_insert_one(session_factory, chain_tx, pending_tx):
 
 @pytest.mark.asyncio
 async def test_db_operations_delete_one(
-    session_factory: sessionmaker, chain_tx: ChainTxDb, pending_tx: PendingTxDb
+    session_factory: DbSessionFactory, chain_tx: ChainTxDb, pending_tx: PendingTxDb
 ):
 
     async with session_factory() as session:
@@ -138,7 +138,7 @@ def make_insert_message_statement(msg: Dict) -> Insert:
 
 @pytest.mark.asyncio
 async def test_db_operations_insert_and_delete(
-    session_factory: sessionmaker,
+    session_factory: DbSessionFactory,
     fixture_messages,
     chain_tx: ChainTxDb,
     pending_tx: PendingTxDb,

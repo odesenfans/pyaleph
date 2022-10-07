@@ -11,7 +11,6 @@ from configmanager import Config
 from eth_account import Account
 from eth_account.messages import encode_defunct
 from hexbytes import HexBytes
-from sqlalchemy.orm import sessionmaker
 from web3 import Web3
 from web3._utils.events import get_event_data
 from web3.gas_strategies.rpc import rpc_gas_price_strategy
@@ -27,6 +26,7 @@ from aleph.utils import run_in_executor
 from .chaindata import ChainDataService
 from .connector import ChainWriter, Verifier
 from .tx_context import TxContext
+from aleph.types.db_session import DbSessionFactory
 
 LOGGER = logging.getLogger("chains.ethereum")
 CHAIN_NAME = "ETH"
@@ -68,7 +68,7 @@ async def get_logs_query(web3: Web3, contract, start_height, end_height):
 
 class EthereumConnector(Verifier, ChainWriter):
     def __init__(
-        self, session_factory: sessionmaker, chain_data_service: ChainDataService
+        self, session_factory: DbSessionFactory, chain_data_service: ChainDataService
     ):
         self.session_factory = session_factory
         self.chain_data_service = chain_data_service

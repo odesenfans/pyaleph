@@ -7,17 +7,17 @@ import logging
 
 import aioipfs
 from configmanager import Config
-from sqlalchemy.orm import sessionmaker
 
 from aleph.db.accessors.peers import get_all_addresses_by_peer_type
 from aleph.db.models import PeerType
 from aleph.services.ipfs import IpfsService
+from aleph.types.db_session import DbSessionFactory
 
 LOGGER = logging.getLogger("jobs.reconnect_ipfs")
 
 
 async def reconnect_ipfs_job(
-    config: Config, session_factory: sessionmaker, ipfs_service: IpfsService
+    config: Config, session_factory: DbSessionFactory, ipfs_service: IpfsService
 ):
     from aleph.services.utils import get_IP
 

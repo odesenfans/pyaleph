@@ -3,10 +3,10 @@ import datetime as dt
 import pytest
 import pytz
 from aleph_message.models import Chain, MessageType, ItemType
-from sqlalchemy.orm import sessionmaker
 
 from aleph.db.accessors.messages import get_message_by_item_hash
 from aleph.db.models import MessageDb, MessageConfirmationDb, ChainTxDb
+from aleph.types.db_session import DbSessionFactory
 
 
 @pytest.fixture
@@ -47,7 +47,7 @@ def compare_messages(expected: MessageDb, actual: MessageDb):
 
 
 @pytest.mark.asyncio
-async def test_get_message(session_factory: sessionmaker, fixture_message: MessageDb):
+async def test_get_message(session_factory: DbSessionFactory, fixture_message: MessageDb):
     async with session_factory() as session:
         session.add(fixture_message)
         await session.commit()
@@ -67,7 +67,7 @@ async def test_get_message(session_factory: sessionmaker, fixture_message: Messa
 
 @pytest.mark.asyncio
 async def test_get_message_with_confirmations(
-    session_factory: sessionmaker, fixture_message: MessageDb
+    session_factory: DbSessionFactory, fixture_message: MessageDb
 ):
     confirmations = [
         MessageConfirmationDb(
@@ -120,11 +120,11 @@ async def test_get_message_with_confirmations(
         assert confirmation.tx.publisher == original.tx.publisher
 
 
-async def test_upsert_query_confirmation(session_factory: sessionmaker):
+async def test_upsert_query_confirmation(session_factory: DbSessionFactory):
     # TODO
     assert False
 
 
-async def test_upsert_query_message(session_factory: sessionmaker):
+async def test_upsert_query_message(session_factory: DbSessionFactory):
     # TODO
     assert False

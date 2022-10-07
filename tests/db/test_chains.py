@@ -4,14 +4,14 @@ import pytest
 import pytz
 from aleph_message.models import Chain
 from sqlalchemy import select
-from sqlalchemy.orm import sessionmaker
+from aleph.types.db_session import DbSessionFactory
 
 from aleph.db.accessors.chains import upsert_chain_sync_status, get_last_height
 from aleph.db.models.chains import ChainSyncStatusDb
 
 
 @pytest.mark.asyncio
-async def test_get_last_height(session_factory: sessionmaker):
+async def test_get_last_height(session_factory: DbSessionFactory):
     eth_sync_status = ChainSyncStatusDb(
         chain=Chain.ETH,
         height=123,
@@ -29,7 +29,7 @@ async def test_get_last_height(session_factory: sessionmaker):
 
 
 @pytest.mark.asyncio
-async def test_get_last_height_no_data(session_factory: sessionmaker):
+async def test_get_last_height_no_data(session_factory: DbSessionFactory):
     async with session_factory() as session:
         height = await get_last_height(session=session, chain=Chain.NULS2)
 
@@ -37,7 +37,7 @@ async def test_get_last_height_no_data(session_factory: sessionmaker):
 
 
 @pytest.mark.asyncio
-async def test_upsert_chain_sync_status_insert(session_factory: sessionmaker):
+async def test_upsert_chain_sync_status_insert(session_factory: DbSessionFactory):
     chain = Chain.ETH
     update_datetime = pytz.utc.localize(dt.datetime(2022, 11, 1))
     height = 10
@@ -57,7 +57,7 @@ async def test_upsert_chain_sync_status_insert(session_factory: sessionmaker):
             await session.execute(
                 select(ChainSyncStatusDb).where(ChainSyncStatusDb.chain == chain)
             )
-        ).scalar()
+        ).scalar_one()
 
     assert chain_sync_status.chain == chain
     assert chain_sync_status.height == height
@@ -65,7 +65,7 @@ async def test_upsert_chain_sync_status_insert(session_factory: sessionmaker):
 
 
 @pytest.mark.asyncio
-async def test_upsert_peer_replace(session_factory: sessionmaker):
+async def test_upsert_peer_replace(session_factory: DbSessionFactory):
     existing_entry = ChainSyncStatusDb(
         chain=Chain.TEZOS,
         height=1000,
@@ -95,7 +95,7 @@ async def test_upsert_peer_replace(session_factory: sessionmaker):
                     ChainSyncStatusDb.chain == existing_entry.chain
                 )
             )
-        ).scalar()
+        ).scalar_one()
 
     assert chain_sync_status.chain == existing_entry.chain
     assert chain_sync_status.height == new_height

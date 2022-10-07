@@ -5,12 +5,12 @@ the same file.
 from pathlib import Path
 
 import pytest
-from sqlalchemy.orm import sessionmaker
 
 from aleph.chains.chain_service import ChainService
 from aleph.handlers.message_handler import MessageHandler
 from aleph.model.messages import Message
 from aleph.schemas.pending_messages import parse_message
+from aleph.types.db_session import DbSessionFactory
 from aleph.storage import StorageService
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -18,7 +18,7 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 @pytest.mark.asyncio
 async def test_forget_multiusers_storage(
-    test_db, session_factory: sessionmaker, test_storage_service: StorageService
+    test_db, session_factory: DbSessionFactory, test_storage_service: StorageService
 ):
     """
     Tests that a file stored by two different users is not deleted if one of the users

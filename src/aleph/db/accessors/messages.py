@@ -1,17 +1,18 @@
 import datetime as dt
-from typing import Optional, Sequence, List, Union
+from typing import Optional, Sequence, Union, Iterable
 
 from aleph_message.models import ItemHash, Chain, MessageType
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from sqlalchemy.sql import Insert
+from sqlalchemy.sql import Insert, Select
 
 from aleph.schemas.validated_message import BaseValidatedMessage
 from aleph.toolkit.timestamp import timestamp_to_datetime
+from aleph.types.db_session import DbSession
+from aleph.types.sort_order import SortOrder
 from ..models.messages import MessageDb, MessageConfirmationDb
-from ...services.types.sort_order import SortOrder
 
 
 async def get_message_by_item_hash(
@@ -57,7 +58,7 @@ def make_matching_messages_query(
     pagination: int = 20,
     # TODO: remove once all filters are supported
     **kwargs,
-):
+) -> Select:
     select_stmt = select(MessageDb)
 
     start_datetime = coerce_to_datetime(start_date)
@@ -84,9 +85,11 @@ def make_matching_messages_query(
     if channels:
         select_stmt = select_stmt.where(MessageDb.channel.in_(channels))
 
-    order_by_column = MessageDb.time
-    if sort_order == SortOrder.DESCENDING:
-        order_by_column = order_by_column.desc()
+    order_by_column = (
+        MessageDb.time.asc()
+        if sort_order == SortOrder.DESCENDING
+        else MessageDb.time.desc()
+    )
 
     select_stmt = select_stmt.order_by(order_by_column).offset((page - 1) * pagination)
 
@@ -100,7 +103,7 @@ def make_matching_messages_query(
 async def get_matching_messages(
     session: AsyncSession,
     **kwargs,  # Same as make_matching_messages_query
-) -> List[MessageDb]:
+) -> Iterable[MessageDb]:
     """
     Applies the specified filters on the message table and returns matching entries.
     """
@@ -109,13 +112,13 @@ async def get_matching_messages(
 
 
 async def count_matching_messages(
-    session: AsyncSession,
+    session: DbSession,
     **kwargs,  # Same as make_matching_messages_query
 ):
     # TODO implement properly
     # count_stmt = make_matching_messages_query(**kwargs).count()
     # return (await session.execute(count_stmt)).scalar()
-    return (await session.execute("SELECT COUNT(*) FROM messages")).scalar()
+    return await MessageDb.count(session)
 
 
 def make_message_upsert_query(message: BaseValidatedMessage) -> Insert:

@@ -3,13 +3,13 @@ from pathlib import Path
 from typing import Any, Dict, Sequence
 
 import pytest_asyncio
-from sqlalchemy.orm import sessionmaker
 
 from aleph.db.models import MessageDb, ChainTxDb, MessageConfirmationDb
+from aleph.types.db_session import DbSessionFactory
 
 
 async def _load_fixtures(
-    session_factory: sessionmaker, filename: str
+    session_factory: DbSessionFactory, filename: str
 ) -> Sequence[Dict[str, Any]]:
     fixtures_dir = Path(__file__).parent / "fixtures"
     fixtures_file = fixtures_dir / filename
@@ -44,19 +44,19 @@ async def _load_fixtures(
 
 
 @pytest_asyncio.fixture
-async def fixture_messages(session_factory: sessionmaker) -> Sequence[Dict[str, Any]]:
+async def fixture_messages(session_factory: DbSessionFactory) -> Sequence[Dict[str, Any]]:
     return await _load_fixtures(session_factory, "fixture_messages.json")
 
 
 @pytest_asyncio.fixture
 async def fixture_aggregate_messages(
-    session_factory: sessionmaker,
+    session_factory: DbSessionFactory,
 ) -> Sequence[Dict[str, Any]]:
     return await _load_fixtures(session_factory, "fixture_aggregates.json")
 
 
 @pytest_asyncio.fixture
 async def fixture_post_messages(
-    session_factory: sessionmaker,
+    session_factory: DbSessionFactory,
 ) -> Sequence[Dict[str, Any]]:
     return await _load_fixtures(session_factory, "fixture_posts.json")

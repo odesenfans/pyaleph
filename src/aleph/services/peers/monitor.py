@@ -5,17 +5,17 @@ import logging
 from urllib.parse import unquote
 
 from aleph_p2p_client import AlephP2PServiceClient
-from sqlalchemy.orm import sessionmaker
 
 from aleph.db.accessors.peers import upsert_peer
 from aleph.db.models import PeerType
 from aleph.services.ipfs import IpfsService
+from aleph.types.db_session import DbSessionFactory
 
 LOGGER = logging.getLogger(__name__)
 
 
 async def handle_incoming_host(
-    session_factory: sessionmaker,
+    session_factory: DbSessionFactory,
     data: bytes,
     sender: str,
     source: PeerType,
@@ -53,7 +53,7 @@ async def handle_incoming_host(
 
 
 async def monitor_hosts_p2p(
-    p2p_client: AlephP2PServiceClient, session_factory: sessionmaker, alive_topic: str
+    p2p_client: AlephP2PServiceClient, session_factory: DbSessionFactory, alive_topic: str
 ) -> None:
     while True:
         try:
@@ -74,7 +74,7 @@ async def monitor_hosts_p2p(
 
 
 async def monitor_hosts_ipfs(
-    ipfs_service: IpfsService, session_factory: sessionmaker, alive_topic: str
+    ipfs_service: IpfsService, session_factory: DbSessionFactory, alive_topic: str
 ):
     while True:
         try:

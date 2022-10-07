@@ -1,3 +1,4 @@
+import datetime as dt
 from enum import Enum
 
 from sqlalchemy import Column, String, TIMESTAMP
@@ -16,7 +17,7 @@ class PeerDb(Base):
     __tablename__ = "peers"
 
     peer_id = Column(String, primary_key=True)
-    peer_type = Column(ChoiceType(PeerType), primary_key=True)
+    peer_type: PeerType = Column(ChoiceType(PeerType), primary_key=True)
     address = Column(String, nullable=False)
-    source = Column(ChoiceType(PeerType), nullable=False)
-    last_seen = Column(TIMESTAMP(timezone=True), nullable=False)
+    source: PeerType = Column(ChoiceType(PeerType), nullable=False)
+    last_seen: dt.datetime = Column(TIMESTAMP(timezone=True), nullable=False)

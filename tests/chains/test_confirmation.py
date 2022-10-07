@@ -5,7 +5,7 @@ from typing import Dict, Mapping
 import pytest
 import pytz
 from aleph_message.models import Chain
-from sqlalchemy.orm import sessionmaker
+from aleph.types.db_session import DbSessionFactory
 
 from aleph.chains.chain_service import ChainService
 from aleph.db.accessors.messages import get_message_by_item_hash
@@ -43,16 +43,16 @@ def chain_tx() -> ChainTxDb:
 
 
 def compare_chain_txs(expected: ChainTxDb, actual: ChainTxDb):
-    assert actual.tx.chain == expected.chain
-    assert actual.tx.hash == expected.hash
-    assert actual.tx.height == expected.height
-    assert actual.tx.datetime == expected.datetime
-    assert actual.tx.publisher == expected.publisher
+    assert actual.chain == expected.chain
+    assert actual.hash == expected.hash
+    assert actual.height == expected.height
+    assert actual.datetime == expected.datetime
+    assert actual.publisher == expected.publisher
 
 
 @pytest.mark.asyncio
 async def test_confirm_message(
-    session_factory: sessionmaker,
+    session_factory: DbSessionFactory,
     test_storage_service: StorageService,
     chain_tx: ChainTxDb,
 ):
@@ -117,7 +117,7 @@ async def test_confirm_message(
     assert message_in_db.confirmed
     assert len(message_in_db.confirmations) == 1
     confirmation = message_in_db.confirmations[0]
-    compare_chain_txs(expected=chain_tx, actual=confirmation)
+    compare_chain_txs(expected=chain_tx, actual=confirmation.tx)
 
     # TODO: capped collections, same as above
     # capped_message_after_confirmation = await CappedMessage.collection.find_one(
@@ -131,7 +131,7 @@ async def test_confirm_message(
 
 @pytest.mark.asyncio
 async def test_process_confirmed_message(
-    session_factory: sessionmaker,
+    session_factory: DbSessionFactory,
     test_storage_service: StorageService,
     chain_tx: ChainTxDb,
 ):
@@ -171,7 +171,7 @@ async def test_process_confirmed_message(
     assert message_in_db.confirmed
     assert len(message_in_db.confirmations) == 1
     confirmation = message_in_db.confirmations[0]
-    compare_chain_txs(expected=chain_tx, actual=confirmation)
+    compare_chain_txs(expected=chain_tx, actual=confirmation.tx)
 
     # TODO: capped collection
     # capped_message_in_db = await CappedMessage.collection.find_one(

@@ -1,3 +1,4 @@
+import datetime as dt
 from typing import Optional
 
 from aleph_message.models import Chain, MessageType, ItemType
@@ -6,6 +7,7 @@ from sqlalchemy_utils.types.choice import ChoiceType
 
 from aleph.schemas.pending_messages import BasePendingMessage
 from .base import Base
+from ...toolkit.timestamp import timestamp_to_datetime
 
 
 class PendingMessageDb(Base):
@@ -16,18 +18,18 @@ class PendingMessageDb(Base):
     __tablename__ = "pending_messages"
 
     item_hash = Column(String, primary_key=True)
-    message_type = Column(ChoiceType(MessageType), nullable=False)
-    chain = Column(ChoiceType(Chain), nullable=False)
+    message_type: MessageType = Column(ChoiceType(MessageType), nullable=False)
+    chain: Chain = Column(ChoiceType(Chain), nullable=False)
     sender = Column(String, nullable=False)
     signature = Column(String, nullable=False)
-    item_type = Column(ChoiceType(ItemType), nullable=False)
+    item_type: ItemType = Column(ChoiceType(ItemType), nullable=False)
     item_content = Column(String, nullable=True)
-    time = Column(TIMESTAMP(timezone=True), nullable=False)
+    time: dt.datetime = Column(TIMESTAMP(timezone=True), nullable=False)
     channel = Column(String, nullable=True)
 
     check_message = Column(Boolean, nullable=False)
     retries = Column(Integer, nullable=False)
-    tx_hash = Column(ForeignKey("chain_txs.hash"), nullable=True)
+    tx_hash: Optional[str] = Column(ForeignKey("chain_txs.hash"), nullable=True)
 
     @classmethod
     def from_obj(
@@ -44,7 +46,7 @@ class PendingMessageDb(Base):
             signature=obj.signature,
             item_type=obj.item_type,
             item_content=obj.item_content,
-            time=obj.time,
+            time=timestamp_to_datetime(obj.time),
             check_message=check_message,
             retries=0,
             tx_hash=tx_hash,

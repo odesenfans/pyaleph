@@ -8,7 +8,6 @@ import pymongo
 import pytest
 import pytest_asyncio
 from configmanager import Config
-from sqlalchemy.orm import sessionmaker
 
 import aleph.config
 from aleph.config import get_defaults
@@ -19,6 +18,7 @@ from aleph.services.ipfs import IpfsService
 from aleph.services.ipfs.common import make_ipfs_client
 from aleph.services.storage.fileystem_engine import FileSystemStorageEngine
 from aleph.storage import StorageService
+from aleph.types.db_session import DbSessionFactory
 from aleph.web import create_app
 
 TEST_DB = "ccn_automated_tests"
@@ -96,7 +96,7 @@ async def test_storage_service(mock_config) -> StorageService:
 
 @pytest_asyncio.fixture
 async def ccn_api_client(
-    mocker, aiohttp_client, mock_config, session_factory: sessionmaker
+    mocker, aiohttp_client, mock_config, session_factory: DbSessionFactory
 ):
     # Make aiohttp return the stack trace on 500 errors
     event_loop = asyncio.get_event_loop()

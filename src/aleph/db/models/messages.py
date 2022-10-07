@@ -1,4 +1,5 @@
-from typing import Any, Dict
+import datetime as dt
+from typing import Any, Dict, List
 
 from aleph_message.models import Chain, MessageType, ItemType
 from sqlalchemy import Column, TIMESTAMP, String, Integer, ForeignKey, UniqueConstraint
@@ -8,6 +9,7 @@ from sqlalchemy_utils.types.choice import ChoiceType
 
 from aleph.toolkit.timestamp import timestamp_to_datetime
 from .base import Base
+from .chains import ChainTxDb
 
 
 class MessageDb(Base):
@@ -17,19 +19,21 @@ class MessageDb(Base):
 
     __tablename__ = "messages"
 
-    item_hash = Column(String, primary_key=True)
-    message_type = Column(ChoiceType(MessageType), nullable=False)
-    chain = Column(ChoiceType(Chain), nullable=False)
-    sender = Column(String, nullable=False, index=True)
-    signature = Column(String, nullable=False)
-    item_type = Column(ChoiceType(ItemType), nullable=False)
-    item_content = Column(String, nullable=True)
-    content = Column(JSONB, nullable=False)
-    time = Column(TIMESTAMP(timezone=True), nullable=False, index=True)
-    channel = Column(String, nullable=True, index=True)
-    size = Column(Integer, nullable=False)
+    item_hash: str = Column(String, primary_key=True)
+    message_type: MessageType = Column(ChoiceType(MessageType), nullable=False)
+    chain: Chain = Column(ChoiceType(Chain), nullable=False)
+    sender: str = Column(String, nullable=False, index=True)
+    signature: str = Column(String, nullable=False)
+    item_type: ItemType = Column(ChoiceType(ItemType), nullable=False)
+    item_content: str = Column(String, nullable=True)
+    content: Any = Column(JSONB, nullable=False)
+    time: dt.datetime = Column(TIMESTAMP(timezone=True), nullable=False, index=True)
+    channel: str = Column(String, nullable=True, index=True)
+    size: int = Column(Integer, nullable=False)
 
-    confirmations = relationship("MessageConfirmationDb", back_populates="message")
+    confirmations: "List[MessageConfirmationDb]" = relationship(
+        "MessageConfirmationDb", back_populates="message"
+    )
 
     @property
     def confirmed(self) -> bool:
@@ -64,8 +68,8 @@ class MessageConfirmationDb(Base):
     __table_args__ = (UniqueConstraint("item_hash", "tx_hash"),)
 
     id = Column(Integer, primary_key=True)
-    item_hash = Column(ForeignKey(MessageDb.item_hash), nullable=False, index=True)
-    tx_hash = Column(ForeignKey("chain_txs.hash"), nullable=False)
+    item_hash: str = Column(ForeignKey(MessageDb.item_hash), nullable=False, index=True)
+    tx_hash: str = Column(ForeignKey("chain_txs.hash"), nullable=False)
 
-    message = relationship(MessageDb, back_populates="confirmations")
-    tx = relationship("ChainTxDb")
+    message: MessageDb = relationship(MessageDb, back_populates="confirmations")
+    tx: ChainTxDb = relationship("ChainTxDb")

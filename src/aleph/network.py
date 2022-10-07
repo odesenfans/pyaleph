@@ -4,7 +4,7 @@ from typing import Coroutine, List
 from urllib.parse import unquote
 
 from aleph_p2p_client import AlephP2PServiceClient
-from sqlalchemy.orm import sessionmaker
+from aleph.types.db_session import DbSessionFactory
 
 from aleph.chains.chain_service import ChainService
 from aleph.exceptions import InvalidMessageError
@@ -38,7 +38,7 @@ async def decode_pubsub_message(message_data: bytes) -> BasePendingMessage:
 
 
 def listener_tasks(
-    config, session_factory: sessionmaker, p2p_client: AlephP2PServiceClient
+    config, session_factory: DbSessionFactory, p2p_client: AlephP2PServiceClient
 ) -> List[Coroutine]:
     from aleph.services.p2p.protocol import incoming_channel as incoming_p2p_channel
 

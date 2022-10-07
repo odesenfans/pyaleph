@@ -3,14 +3,14 @@ import datetime as dt
 import pytest
 import pytz
 from sqlalchemy import select
-from sqlalchemy.orm import sessionmaker
 
 from aleph.db.accessors.peers import upsert_peer, get_all_addresses_by_peer_type
 from aleph.db.models.peers import PeerDb, PeerType
+from aleph.types.db_session import DbSessionFactory
 
 
 @pytest.mark.asyncio
-async def test_get_all_addresses_by_peer_type(session_factory: sessionmaker):
+async def test_get_all_addresses_by_peer_type(session_factory: DbSessionFactory):
     peer_id = "some-peer-id"
     last_seen = pytz.utc.localize(dt.datetime(2022, 10, 1))
     source = PeerType.P2P
@@ -62,7 +62,7 @@ async def test_get_all_addresses_by_peer_type(session_factory: sessionmaker):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("peer_type", (PeerType.HTTP, PeerType.P2P, PeerType.IPFS))
 async def test_get_all_addresses_by_peer_type_no_match(
-    session_factory: sessionmaker, peer_type: PeerType
+    session_factory: DbSessionFactory, peer_type: PeerType
 ):
     async with session_factory() as session:
         entries = await get_all_addresses_by_peer_type(
@@ -73,7 +73,7 @@ async def test_get_all_addresses_by_peer_type_no_match(
 
 
 @pytest.mark.asyncio
-async def test_upsert_peer_insert(session_factory: sessionmaker):
+async def test_upsert_peer_insert(session_factory: DbSessionFactory):
     peer_id = "peer-id"
     peer_type = PeerType.HTTP
     address = "http://127.0.0.1:4024"
@@ -112,7 +112,7 @@ async def test_upsert_peer_insert(session_factory: sessionmaker):
 
 
 @pytest.mark.asyncio
-async def test_upsert_peer_replace(session_factory: sessionmaker):
+async def test_upsert_peer_replace(session_factory: DbSessionFactory):
     peer_id = "peer-id"
     peer_type = PeerType.HTTP
     address = "http://127.0.0.1:4024"

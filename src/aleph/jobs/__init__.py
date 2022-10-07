@@ -2,8 +2,6 @@ import logging
 from multiprocessing import Process
 from typing import Dict, List, Coroutine
 
-from sqlalchemy.orm import sessionmaker
-
 from aleph.jobs.process_pending_messages import (
     pending_messages_subprocess,
     retry_messages_task,
@@ -11,13 +9,14 @@ from aleph.jobs.process_pending_messages import (
 from aleph.jobs.process_pending_txs import pending_txs_subprocess, handle_txs_task
 from aleph.jobs.reconnect_ipfs import reconnect_ipfs_job
 from aleph.services.ipfs import IpfsService
+from aleph.types.db_session import DbSessionFactory
 
 LOGGER = logging.getLogger("jobs")
 
 
 def start_jobs(
     config,
-    session_factory: sessionmaker,
+    session_factory: DbSessionFactory,
     shared_stats: Dict,
     ipfs_service: IpfsService,
     api_servers: List[str],

@@ -21,7 +21,6 @@ from nuls2.model.data import (
     CHEAP_UNIT_FEE,
 )
 from nuls2.model.transaction import Transaction
-from sqlalchemy.orm import sessionmaker
 
 from aleph.chains.common import get_verification_buffer
 from aleph.model.messages import Message
@@ -32,6 +31,7 @@ from .connector import Verifier, ChainWriter
 from .tx_context import TxContext
 from ..db.accessors.chains import get_last_height, upsert_chain_sync_status
 from ..schemas.pending_messages import BasePendingMessage
+from aleph.types.db_session import DbSessionFactory
 
 LOGGER = logging.getLogger("chains.nuls2")
 CHAIN_NAME = "NULS2"
@@ -42,7 +42,7 @@ DECIMALS = None  # will get populated later... bad?
 
 class Nuls2Connector(Verifier, ChainWriter):
     def __init__(
-        self, session_factory: sessionmaker, chain_data_service: ChainDataService
+        self, session_factory: DbSessionFactory, chain_data_service: ChainDataService
     ):
         self.session_factory = session_factory
         self.chain_data_service = chain_data_service
@@ -131,17 +131,17 @@ class Nuls2Connector(Verifier, ChainWriter):
         last_stored_height = await self.get_last_height()
 
         LOGGER.info("Last block is #%d" % last_stored_height)
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession() as http_session:
             while True:
                 last_stored_height = await self.get_last_height()
                 async for jdata, context in self._request_transactions(
-                    config, session, last_stored_height + 1
+                    config, http_session, last_stored_height + 1
                 ):
-                    async with self.session_factory() as session:
+                    async with self.session_factory() as db_session:
                         await self.chain_data_service.incoming_chaindata(
-                            session=session, content=jdata, context=context
+                            session=db_session, content=jdata, context=context
                         )
-                        await session.commit()
+                        await db_session.commit()
 
                 await asyncio.sleep(10)
 

@@ -8,11 +8,11 @@ from aleph_message.models import MessageType, ItemHash, Chain
 from bson.objectid import ObjectId
 from pydantic import BaseModel, Field, validator, ValidationError, root_validator
 from pymongo.cursor import CursorType
-from sqlalchemy.orm import sessionmaker
 
 from aleph.db.accessors.messages import get_matching_messages, count_matching_messages
 from aleph.model.messages import CappedMessage
-from aleph.services.types.sort_order import SortOrder
+from aleph.types.db_session import DbSessionFactory
+from aleph.types.sort_order import SortOrder
 from aleph.web.controllers.utils import (
     LIST_FIELD_SEPARATOR,
     Pagination,
@@ -202,11 +202,12 @@ async def view_messages_list(request):
     pagination_per_page = query_params.pagination
     pagination_skip = (query_params.page - 1) * query_params.pagination
 
-    session_factory: sessionmaker = request.app["session_factory"]
+    session_factory: DbSessionFactory = request.app["session_factory"]
     async with session_factory() as session:
+        results = await get_matching_messages(session, **find_filters)
         messages = [
             message.to_dict()
-            for message in await get_matching_messages(session, **find_filters)
+            for message in results
         ]
 
         context = {"messages": messages}

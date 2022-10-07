@@ -11,13 +11,12 @@ from configmanager import Config
 from pymongo.errors import CursorNotFound
 from setproctitle import setproctitle
 from sqlalchemy import insert, delete
-from sqlalchemy.orm import sessionmaker
 
 from aleph.chains.chaindata import ChainDataService
 from aleph.chains.tx_context import TxContext
+from aleph.db.bulk_operations import DbBulkOperation
 from aleph.exceptions import InvalidMessageError
 from aleph.logging import setup_logging
-from aleph.db.bulk_operations import DbBulkOperation
 from aleph.model.pending import PendingTX
 from aleph.schemas.pending_messages import parse_message
 from aleph.services.ipfs.common import make_ipfs_client
@@ -29,12 +28,14 @@ from .job_utils import prepare_loop, process_job_results
 from ..db.connection import make_engine, make_session_factory
 from ..db.models import PendingMessageDb
 from ..db.models.pending_txs import PendingTxDb
+from aleph.types.db_session import DbSessionFactory, DbSession
 
 LOGGER = logging.getLogger("jobs.pending_txs")
 
 
 class PendingTxProcessor:
-    def __init__(self, session_factory: sessionmaker, storage_service: StorageService):
+    def __init__(self, session_factory: DbSessionFactory, storage_service: StorageService):
+        self.session_factory = session_factory
         self.storage_service = storage_service
         self.chain_data_service = ChainDataService(
             session_factory=session_factory, storage_service=storage_service
@@ -113,9 +114,10 @@ class PendingTxProcessor:
         return db_operations
 
     @staticmethod
-    async def process_tx_job_results(tasks: Set[asyncio.Task]):
+    async def process_tx_job_results(session: DbSession, tasks: Set[asyncio.Task]):
         await process_job_results(
-            tasks,
+            session=session,
+            tasks=tasks,
             on_error=lambda e: LOGGER.exception(
                 "error in incoming txs task",
                 exc_info=(type(e), e, e.__traceback__),
@@ -141,7 +143,9 @@ class PendingTxProcessor:
                 done, tasks = await asyncio.wait(
                     tasks, return_when=asyncio.FIRST_COMPLETED
                 )
-                await self.process_tx_job_results(done)
+                async with self.session_factory() as session:
+                    await self.process_tx_job_results(session=session, tasks=done)
+                    await session.commit()
 
             seen_offchain_hashes.add(pending_tx["content"]["content"])
             tx_task = asyncio.create_task(
@@ -152,7 +156,9 @@ class PendingTxProcessor:
         # Wait for the last tasks
         if tasks:
             done, _ = await asyncio.wait(tasks, return_when=asyncio.ALL_COMPLETED)
-            await self.process_tx_job_results(done)
+            async with self.session_factory() as session:
+                await self.process_tx_job_results(session=session, tasks=done)
+                await session.commit()
 
 
 async def handle_txs_task(config: Config):

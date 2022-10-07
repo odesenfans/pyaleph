@@ -10,10 +10,11 @@ from configmanager import Config
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import aleph.config
-from aleph.model import init_db_globals
 from aleph.db.bulk_operations import DbBulkOperation
+from aleph.model import init_db_globals
 from aleph.toolkit.split import split_iterable
 from aleph.toolkit.timer import Timer
+from aleph.types.db_session import DbSession
 
 LOGGER = logging.getLogger(__name__)
 
@@ -37,7 +38,9 @@ def prepare_loop(config_values: Dict) -> Tuple[asyncio.AbstractEventLoop, Config
     return loop, config
 
 
-async def perform_db_operations(session: AsyncSession, db_operations: Iterable[DbBulkOperation]) -> None:
+async def perform_db_operations(
+    session: AsyncSession, db_operations: Iterable[DbBulkOperation]
+) -> None:
     # Sort the operations by collection name before grouping and executing them.
     sorted_operations = sorted(
         db_operations,
@@ -68,6 +71,7 @@ async def perform_db_operations(session: AsyncSession, db_operations: Iterable[D
 
 
 async def process_job_results(
+    session: DbSession,
     tasks: Iterable[asyncio.Task],  # TODO: switch to a generic type when moving to 3.9+
     on_error: Callable[[BaseException], None],
 ):
@@ -77,6 +81,7 @@ async def process_job_results(
     Splits successful and failed jobs, handles exceptions and performs
     DB operations.
 
+    :param: session:
     :param tasks: Finished job tasks. Each of these tasks must return a list of
                   DbBulkOperation objects. It is up to the caller to determine
                   when tasks are done, for example by using asyncio.wait.
@@ -92,4 +97,4 @@ async def process_job_results(
 
     db_operations = (op for success in successes for op in success.result())
 
-    await perform_db_operations(db_operations)
+    await perform_db_operations(session=session, db_operations=db_operations)

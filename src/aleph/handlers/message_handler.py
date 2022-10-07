@@ -5,7 +5,6 @@ from aleph_message.models import MessageConfirmation
 from bson import ObjectId
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import sessionmaker
 
 from aleph.chains.chain_service import ChainService
 from aleph.chains.common import LOGGER
@@ -32,6 +31,7 @@ from aleph.schemas.validated_message import (
 from aleph.storage import StorageService
 from .forget import ForgetMessageHandler
 from .storage import StoreMessageHandler
+from aleph.types.db_session import DbSessionFactory
 
 
 class IncomingStatus(IntEnum):
@@ -43,7 +43,7 @@ class IncomingStatus(IntEnum):
 class MessageHandler:
     def __init__(
         self,
-        session_factory: sessionmaker,
+        session_factory: DbSessionFactory,
         chain_service: ChainService,
         storage_service: StorageService,
     ):

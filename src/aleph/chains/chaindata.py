@@ -1,14 +1,14 @@
 import asyncio
-import datetime as dt
 import json
 from typing import Dict, Optional, List
 
+from aleph_message.models import Chain
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import sessionmaker
 
 from aleph.chains.common import LOGGER
 from aleph.chains.tx_context import TxContext
 from aleph.config import get_config
+from aleph.db.models import ChainTxDb
 from aleph.db.models.file_pins import FilePinDb
 from aleph.db.models.pending_txs import ChainSyncProtocol, PendingTxDb
 from aleph.exceptions import (
@@ -17,10 +17,14 @@ from aleph.exceptions import (
     ContentCurrentlyUnavailable,
 )
 from aleph.storage import StorageService
+from aleph.toolkit.timestamp import timestamp_to_datetime
+from aleph.types.db_session import DbSessionFactory
 
 
 class ChainDataService:
-    def __init__(self, session_factory: sessionmaker, storage_service: StorageService):
+    def __init__(
+        self, session_factory: DbSessionFactory, storage_service: StorageService
+    ):
         self.session_factory = session_factory
         self.storage_service = storage_service
 
@@ -126,13 +130,15 @@ class ChainDataService:
         """
         session.add(
             PendingTxDb(
-                tx_hash=context.tx_hash,
-                chain=context.chain_name,
-                tx_height=context.height,
-                tx_datetime=dt.datetime.utcfromtimestamp(context.time),
-                tx_publisher=context.publisher,
                 protocol=content["protocol"],
                 protocol_version=content["version"],
                 content=content["content"],
+                tx=ChainTxDb(
+                    hash=context.tx_hash,
+                    chain=Chain(context.chain_name),
+                    height=context.height,
+                    datetime=timestamp_to_datetime(context.time),
+                    publisher=context.publisher,
+                ),
             )
         )

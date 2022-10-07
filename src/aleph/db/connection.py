@@ -3,6 +3,7 @@ from typing import Optional
 from configmanager import Config
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
+from aleph.types.db_session import DbSessionFactory
 
 from aleph.config import get_config
 
@@ -31,5 +32,5 @@ def make_engine(config: Optional[Config] = None, echo: bool = False) -> AsyncEng
     return create_async_engine(get_db_url(config=config), future=True, echo=echo)
 
 
-def make_session_factory(engine: AsyncEngine) -> sessionmaker:
+def make_session_factory(engine: AsyncEngine) -> DbSessionFactory:
     return sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)

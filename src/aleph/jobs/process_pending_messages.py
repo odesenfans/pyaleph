@@ -12,6 +12,7 @@ from aleph_message.models import MessageType
 from configmanager import Config, NotFound
 from pymongo import DeleteOne, DeleteMany, ASCENDING
 from setproctitle import setproctitle
+from sqlalchemy import delete
 
 from aleph.chains.chain_service import ChainService
 from aleph.exceptions import InvalidMessageError
@@ -27,6 +28,8 @@ from aleph.services.storage.fileystem_engine import FileSystemStorageEngine
 from aleph.storage import StorageService
 from .job_utils import prepare_loop, process_job_results
 from ..db.connection import make_engine, make_session_factory
+from ..db.models import PendingMessageDb
+from ..types.db_session import DbSession, DbSessionFactory
 
 LOGGER = getLogger("jobs.pending_messages")
 
@@ -77,7 +80,10 @@ def _get_pending_message_id(pending_message: Dict) -> Tuple:
 
 
 class PendingMessageProcessor:
-    def __init__(self, message_handler: MessageHandler):
+    def __init__(
+        self, session_factory: DbSessionFactory, message_handler: MessageHandler
+    ):
+        self.session_factory = session_factory
         self.message_handler = message_handler
 
     async def _handle_pending_message(
@@ -88,7 +94,10 @@ class PendingMessageProcessor:
     ) -> List[DbBulkOperation]:
 
         delete_pending_message_op = DbBulkOperation(
-            PendingMessage, DeleteOne({"_id": pending["_id"]})
+            model=PendingMessageDb,
+            operation=delete(PendingMessageDb).where(
+                PendingMessageDb.item_hash == pending["item_hash"]
+            ),
         )
 
         try:
@@ -116,13 +125,15 @@ class PendingMessageProcessor:
 
     @staticmethod
     async def _process_message_job_results(
+        session: DbSession,
         finished_tasks: Set[asyncio.Task],
         task_message_dict: Dict[asyncio.Task, Dict],
         shared_stats: Dict[str, Any],
         processing_messages: Set[Tuple],
     ):
         await process_job_results(
-            finished_tasks,
+            session=session,
+            tasks=finished_tasks,
             on_error=partial(LOGGER.exception, "Error while processing message: %s"),
         )
 
@@ -176,12 +187,14 @@ class PendingMessageProcessor:
                     finished_tasks, pending_tasks = await asyncio.wait(
                         pending_tasks, return_when=asyncio.FIRST_COMPLETED
                     )
-                    await self._process_message_job_results(
-                        finished_tasks,
-                        task_message_dict,
-                        shared_stats,
-                        processing_messages,
-                    )
+                    async with self.session_factory() as session:
+                        await self._process_message_job_results(
+                            session=session,
+                            finished_tasks=finished_tasks,
+                            task_message_dict=task_message_dict,
+                            shared_stats=shared_stats,
+                            processing_messages=processing_messages,
+                        )
 
                 _validate_pending_message(pending)
                 message_type = MessageType(pending["message"]["type"])
@@ -205,9 +218,14 @@ class PendingMessageProcessor:
                 finished_tasks, pending_tasks = await asyncio.wait(
                     pending_tasks, return_when=asyncio.FIRST_COMPLETED
                 )
-                await self._process_message_job_results(
-                    finished_tasks, task_message_dict, shared_stats, processing_messages
-                )
+                async with self.session_factory() as session:
+                    await self._process_message_job_results(
+                        session=session,
+                        finished_tasks=finished_tasks,
+                        task_message_dict=task_message_dict,
+                        shared_stats=shared_stats,
+                        processing_messages=processing_messages,
+                    )
 
             # TODO: move this to a dedicated job and/or check unicity on insertion
             #       in pending messages
@@ -243,13 +261,17 @@ async def retry_messages_task(config: Config, shared_stats: Dict):
         storage_engine=FileSystemStorageEngine(folder=config.storage.folder.value),
         ipfs_service=ipfs_service,
     )
-    chain_service = ChainService(session_factory=session_factory, storage_service=storage_service)
+    chain_service = ChainService(
+        session_factory=session_factory, storage_service=storage_service
+    )
     message_handler = MessageHandler(
         session_factory=session_factory,
         chain_service=chain_service,
         storage_service=storage_service,
     )
-    pending_message_handler = PendingMessageProcessor(message_handler=message_handler)
+    pending_message_handler = PendingMessageProcessor(
+        session_factory=session_factory, message_handler=message_handler
+    )
 
     while True:
         try:
