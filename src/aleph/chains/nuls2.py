@@ -23,15 +23,16 @@ from nuls2.model.data import (
 from nuls2.model.transaction import Transaction
 
 from aleph.chains.common import get_verification_buffer
-from aleph.model.messages import Message
-from aleph.model.pending import pending_messages_count, pending_txs_count
+from aleph.model.pending import pending_messages_count
+from aleph.types.db_session import DbSessionFactory
 from aleph.utils import run_in_executor
 from .chaindata import ChainDataService
 from .connector import Verifier, ChainWriter
 from .tx_context import TxContext
 from ..db.accessors.chains import get_last_height, upsert_chain_sync_status
+from ..db.accessors.messages import get_unconfirmed_messages
+from ..db.accessors.pending_txs import count_pending_txs
 from ..schemas.pending_messages import BasePendingMessage
-from aleph.types.db_session import DbSessionFactory
 
 LOGGER = logging.getLogger("chains.nuls2")
 CHAIN_NAME = "NULS2"
@@ -161,23 +162,23 @@ class Nuls2Connector(Verifier, ChainWriter):
         nonce = await get_nonce(server, address, chain_id)
 
         while True:
-            if (await pending_txs_count(chain=CHAIN_NAME)) or (
-                await pending_messages_count(source_chain=CHAIN_NAME)
-            ):
-                await asyncio.sleep(30)
-                continue
+            async with self.session_factory() as session:
+                if (await count_pending_txs(session=session, chain=Chain.NULS2)) or (
+                    await pending_messages_count(source_chain=CHAIN_NAME)
+                ):
+                    await asyncio.sleep(30)
+                    continue
 
-            if i >= 100:
-                await asyncio.sleep(30)  # wait three (!!) blocks
-                nonce = await get_nonce(server, address, chain_id)
-                i = 0
+                if i >= 100:
+                    await asyncio.sleep(30)  # wait three (!!) blocks
+                    nonce = await get_nonce(server, address, chain_id)
+                    i = 0
 
-            messages = [
-                message
-                async for message in (
-                    await Message.get_unconfirmed_raw(limit=10000, for_chain=CHAIN_NAME)
+                messages = list(
+                    await get_unconfirmed_messages(
+                        session=session, limit=10000, chain=Chain.ETH
+                    )
                 )
-            ]
 
             if len(messages):
                 content = await self.chain_data_service.get_chaindata(messages)

@@ -1,16 +1,12 @@
-import asyncio
 import logging
 from typing import Any, List, Optional
 from typing import Mapping
 
 from aiohttp import web
 from aleph_message.models import MessageType, ItemHash, Chain
-from bson.objectid import ObjectId
 from pydantic import BaseModel, Field, validator, ValidationError, root_validator
-from pymongo.cursor import CursorType
 
 from aleph.db.accessors.messages import get_matching_messages, count_matching_messages
-from aleph.model.messages import CappedMessage
 from aleph.types.db_session import DbSessionFactory
 from aleph.types.sort_order import SortOrder
 from aleph.web.controllers.utils import (
@@ -240,59 +236,60 @@ async def view_messages_list(request):
     return cond_output(request, context, "TODO.html")
 
 
-async def messages_ws(request: web.Request):
-    ws = web.WebSocketResponse()
-    await ws.prepare(request)
-
-    collection = CappedMessage.collection
-    last_id = None
-
-    query_params = WsMessageQueryParams.parse_obj(request.query)
-    find_filters = query_params.to_mongodb_filters()
-
-    initial_count = query_params.history
-
-    items = [
-        item
-        async for item in collection.find(find_filters)
-        .sort([("$natural", -1)])
-        .limit(initial_count)
-    ]
-    for item in reversed(items):
-        item["_id"] = str(item["_id"])
-
-        last_id = item["_id"]
-        await ws.send_json(item)
-
-    closing = False
-
-    while not closing:
-        try:
-            cursor = collection.find(
-                {"_id": {"$gt": ObjectId(last_id)}},
-                cursor_type=CursorType.TAILABLE_AWAIT,
-            )
-            while cursor.alive:
-                async for item in cursor:
-                    if ws.closed:
-                        closing = True
-                        break
-                    item["_id"] = str(item["_id"])
-
-                    last_id = item["_id"]
-                    await ws.send_json(item)
-
-                await asyncio.sleep(1)
-
-                if closing:
-                    break
-
-        except ConnectionResetError:
-            break
-
-        except Exception:
-            if ws.closed:
-                break
-
-            LOGGER.exception("Error processing")
-            await asyncio.sleep(1)
+# TODO: reactivate/reimplement messages WS
+# async def messages_ws(request: web.Request):
+#     ws = web.WebSocketResponse()
+#     await ws.prepare(request)
+#
+#     collection = CappedMessage.collection
+#     last_id = None
+#
+#     query_params = WsMessageQueryParams.parse_obj(request.query)
+#     find_filters = query_params.to_mongodb_filters()
+#
+#     initial_count = query_params.history
+#
+#     items = [
+#         item
+#         async for item in collection.find(find_filters)
+#         .sort([("$natural", -1)])
+#         .limit(initial_count)
+#     ]
+#     for item in reversed(items):
+#         item["_id"] = str(item["_id"])
+#
+#         last_id = item["_id"]
+#         await ws.send_json(item)
+#
+#     closing = False
+#
+#     while not closing:
+#         try:
+#             cursor = collection.find(
+#                 {"_id": {"$gt": ObjectId(last_id)}},
+#                 cursor_type=CursorType.TAILABLE_AWAIT,
+#             )
+#             while cursor.alive:
+#                 async for item in cursor:
+#                     if ws.closed:
+#                         closing = True
+#                         break
+#                     item["_id"] = str(item["_id"])
+#
+#                     last_id = item["_id"]
+#                     await ws.send_json(item)
+#
+#                 await asyncio.sleep(1)
+#
+#                 if closing:
+#                     break
+#
+#         except ConnectionResetError:
+#             break
+#
+#         except Exception:
+#             if ws.closed:
+#                 break
+#
+#             LOGGER.exception("Error processing")
+#             await asyncio.sleep(1)

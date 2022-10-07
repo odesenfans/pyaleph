@@ -7,18 +7,18 @@ from pathlib import Path
 import pytest
 
 from aleph.chains.chain_service import ChainService
+from aleph.db.accessors.messages import get_message_by_item_hash
 from aleph.handlers.message_handler import MessageHandler
-from aleph.model.messages import Message
 from aleph.schemas.pending_messages import parse_message
-from aleph.types.db_session import DbSessionFactory
 from aleph.storage import StorageService
+from aleph.types.db_session import DbSessionFactory
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
 @pytest.mark.asyncio
 async def test_forget_multiusers_storage(
-    test_db, session_factory: DbSessionFactory, test_storage_service: StorageService
+    session_factory: DbSessionFactory, test_storage_service: StorageService
 ):
     """
     Tests that a file stored by two different users is not deleted if one of the users
@@ -83,10 +83,11 @@ async def test_forget_multiusers_storage(
     message_user1 = parse_message(message_user1_dict)
     await message_handler.process_one_message(message_user1)
 
-    message1_db = await Message.collection.find_one(
-        {"item_hash": message_user1.item_hash}
-    )
-    assert message1_db is not None
+    async with session_factory() as session:
+        message_user1_db = await get_message_by_item_hash(
+            session=session, item_hash=message_user1.item_hash
+        )
+    assert message_user1_db is not None
 
     message_user2 = parse_message(message_user2_dict)
     await message_handler.process_one_message(message_user2)
@@ -99,19 +100,22 @@ async def test_forget_multiusers_storage(
     await message_handler.process_one_message(forget_message_user1)
 
     # Check that the message was properly forgotten
-    forgotten_message = await Message.collection.find_one(
-        {"item_hash": message_user1.item_hash}
-    )
+    async with session_factory() as session:
+        forgotten_message = await get_message_by_item_hash(
+            session=session, item_hash=message_user1.item_hash
+        )
     assert forgotten_message is not None
-    assert forgotten_message["forgotten_by"] == [forget_message_user1.item_hash]
+    assert forgotten_message.forgotten_by == [forget_message_user1.item_hash]
 
     # Check that the message from user 2 is not affected
-    message_user2_db = await Message.collection.find_one(
-        {"item_hash": message_user2.item_hash}
-    )
+    async with session_factory() as session:
+        message_user2_db = await get_message_by_item_hash(
+            session=session, item_hash=message_user2.item_hash
+        )
     assert message_user2_db is not None
-    assert "forgotten_by" not in message_user2_db
-    assert message_user2_db["item_content"] == message_user2.item_content
+
+    assert not message_user2_db.forgotten_by
+    assert message_user2_db.item_content == message_user2.item_content
 
     # Check that the file still exists
     db_file_data = await storage_engine.read(file_hash)

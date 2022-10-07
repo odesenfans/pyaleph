@@ -1,20 +1,17 @@
+import datetime as dt
 from collections import defaultdict
 from typing import Dict, List
 
 import pytest
-from bson.objectid import ObjectId
-from pymongo import DeleteOne, InsertOne
+import pytz
 from sqlalchemy.sql import Delete, Insert
 
 from aleph.db.models import PendingMessageDb
-from aleph.jobs.process_pending_txs import PendingTxProcessor
-from aleph.model.pending import PendingMessage, PendingTX
-from aleph.storage import StorageService
-from .load_fixtures import load_fixture_messages
-import datetime as dt
-import pytz
 from aleph.db.models.chains import ChainTxDb
 from aleph.db.models.pending_txs import PendingTxDb, ChainSyncProtocol
+from aleph.jobs.process_pending_txs import PendingTxProcessor
+from aleph.storage import StorageService
+from .load_fixtures import load_fixture_messages
 
 
 # TODO: try to replace this fixture by a get_json fixture. Currently, the pinning
@@ -79,6 +76,7 @@ async def test_process_pending_tx(mocker, test_storage_service: StorageService):
         assert insert_sql_op.table == PendingMessageDb.__table__
         # TODO: reactivate comparison tests. The easiest way might be to perform the insert
         #       statements and compare the expected values with the DB.
+        assert False
         # pending_message = pending_msg_op.operation._doc["message"]
         # expected_message = fixture_messages_by_hash[
         #     pending_msg_op.operation._doc["message"]["item_hash"]

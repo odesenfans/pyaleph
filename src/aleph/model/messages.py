@@ -8,37 +8,6 @@ from aleph.model.base import BaseClass
 logger = logging.getLogger(__name__)
 
 
-INCOMING_MESSAGE_AUTHORIZED_FIELDS = [
-    "item_hash",
-    "item_content",
-    "item_type",
-    "chain",
-    "channel",
-    "sender",
-    "type",
-    "time",
-    "signature",
-]
-
-RAW_MSG_PROJECTION = {field: 1 for field in INCOMING_MESSAGE_AUTHORIZED_FIELDS}
-RAW_MSG_PROJECTION.update({"_id": 0})
-
-
-class CappedMessage(BaseClass):
-    COLLECTION = "log_messages"
-
-    @classmethod
-    def is_capped(cls):
-        return True
-
-    @classmethod
-    def create(cls, db):
-        if cls.COLLECTION not in db.list_collection_names():
-            db.create_collection(
-                cls.COLLECTION, capped=True, size=(1024 ** 2) * 100  # 100mb
-            )
-
-
 class Message(BaseClass):
     COLLECTION = "messages"
     INDEXES = [  # Index("hash", unique=True),
@@ -90,40 +59,6 @@ class Message(BaseClass):
         #    IndexModel([("confirmations.height", DESCENDING)]),
         IndexModel([("confirmed", DESCENDING)]),
     ]
-
-    @classmethod
-    async def get_unconfirmed_raw(cls, limit=100, for_chain=None):
-        """Return raw unconfirmed txs, ready for broadcast."""
-        if for_chain is None:
-            return (
-                cls.collection.find({"confirmed": False}, projection=RAW_MSG_PROJECTION)
-                .sort([("time", 1)])
-                .limit(limit)
-            )
-        else:
-            return (
-                cls.collection.find(
-                    {
-                        "confirmations.chain": {"$ne": for_chain},
-                        "tx_hash": {"$exists": False},
-                    },  # tx_hash means chain native
-                    projection=RAW_MSG_PROJECTION,
-                )
-                .sort([("time", 1)])
-                .limit(limit)
-            )
-
-    @classmethod
-    def fix_message_confirmations(cls, db):
-        logger.info("Fixing message confirmation status...")
-        cls.get_collection(cls, db).update_many(
-            {
-                "confirmed": {"$exists": False},
-                "confirmations": {"$exists": True, "$ne": []},
-            },
-            {"$set": {"confirmed": True}},
-        )
-        logger.info("Fixed message confirmation status.")
 
 
 async def get_computed_address_aggregates(

@@ -8,27 +8,26 @@ from typing import List, Dict, Optional, Set
 
 import sentry_sdk
 from configmanager import Config
-from pymongo.errors import CursorNotFound
 from setproctitle import setproctitle
 from sqlalchemy import insert, delete
 
 from aleph.chains.chaindata import ChainDataService
 from aleph.chains.tx_context import TxContext
+from aleph.db.accessors.pending_txs import get_pending_txs
 from aleph.db.bulk_operations import DbBulkOperation
+from aleph.db.connection import make_engine, make_session_factory
+from aleph.db.models import PendingMessageDb
+from aleph.db.models.pending_txs import PendingTxDb
 from aleph.exceptions import InvalidMessageError
 from aleph.logging import setup_logging
-from aleph.model.pending import PendingTX
 from aleph.schemas.pending_messages import parse_message
 from aleph.services.ipfs.common import make_ipfs_client
 from aleph.services.ipfs.service import IpfsService
 from aleph.services.p2p import singleton
 from aleph.services.storage.fileystem_engine import FileSystemStorageEngine
 from aleph.storage import StorageService
-from .job_utils import prepare_loop, process_job_results
-from ..db.connection import make_engine, make_session_factory
-from ..db.models import PendingMessageDb
-from ..db.models.pending_txs import PendingTxDb
 from aleph.types.db_session import DbSessionFactory, DbSession
+from .job_utils import prepare_loop, process_job_results
 
 LOGGER = logging.getLogger("jobs.pending_txs")
 
@@ -134,29 +133,27 @@ class PendingTxProcessor:
         seen_offchain_hashes = set()
         seen_ids: List[str] = []
         LOGGER.info("handling TXs")
-        async for pending_tx in PendingTX.collection.find().sort([("context.time", 1)]):
-            if pending_tx["content"]["protocol"] == "aleph-offchain":
-                if pending_tx["content"]["content"] in seen_offchain_hashes:
+        async with self.session_factory() as session:
+            async for pending_tx in await get_pending_txs(session):
+                if pending_tx.content["content"] in seen_offchain_hashes:
                     continue
 
-            if len(tasks) == max_concurrent_tasks:
-                done, tasks = await asyncio.wait(
-                    tasks, return_when=asyncio.FIRST_COMPLETED
-                )
-                async with self.session_factory() as session:
+                if len(tasks) == max_concurrent_tasks:
+                    done, tasks = await asyncio.wait(
+                        tasks, return_when=asyncio.FIRST_COMPLETED
+                    )
                     await self.process_tx_job_results(session=session, tasks=done)
                     await session.commit()
 
-            seen_offchain_hashes.add(pending_tx["content"]["content"])
-            tx_task = asyncio.create_task(
-                self.handle_pending_tx(pending_tx, seen_ids=seen_ids)
-            )
-            tasks.add(tx_task)
+                seen_offchain_hashes.add(pending_tx["content"]["content"])
+                tx_task = asyncio.create_task(
+                    self.handle_pending_tx(pending_tx, seen_ids=seen_ids)
+                )
+                tasks.add(tx_task)
 
-        # Wait for the last tasks
-        if tasks:
-            done, _ = await asyncio.wait(tasks, return_when=asyncio.ALL_COMPLETED)
-            async with self.session_factory() as session:
+            # Wait for the last tasks
+            if tasks:
+                done, _ = await asyncio.wait(tasks, return_when=asyncio.ALL_COMPLETED)
                 await self.process_tx_job_results(session=session, tasks=done)
                 await session.commit()
 
@@ -182,8 +179,6 @@ async def handle_txs_task(config: Config):
         try:
             await pending_tx_processor.process_pending_txs(max_concurrent_tasks)
             await asyncio.sleep(5)
-        except CursorNotFound:
-            LOGGER.exception("Cursor error in pending txs job ")
         except Exception:
             LOGGER.exception("Error in pending txs job")
 

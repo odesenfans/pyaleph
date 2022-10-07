@@ -4,8 +4,12 @@ import pytest
 import pytz
 from aleph_message.models import Chain, MessageType, ItemType
 
-from aleph.db.accessors.messages import get_message_by_item_hash
+from aleph.db.accessors.messages import (
+    get_message_by_item_hash,
+    get_unconfirmed_messages,
+)
 from aleph.db.models import MessageDb, MessageConfirmationDb, ChainTxDb
+from aleph.toolkit.timestamp import timestamp_to_datetime
 from aleph.types.db_session import DbSessionFactory
 
 
@@ -20,6 +24,7 @@ def fixture_message() -> MessageDb:
         sender=sender,
         signature="0x705ca1365a0b794cbfcf89ce13239376d0aab0674d8e7f39965590a46e5206a664bc4b313f3351f313564e033c9fe44fd258492dfbd6c36b089677d73224da0a1c",
         message_type=MessageType.aggregate,
+        item_content='{"address": "0x51A58800b26AA1451aaA803d1746687cB88E0500", "key": "my-aggregate", "time": 1664999873, "content": {"easy": "as", "a-b": "c"}}',
         content={
             "address": sender,
             "key": "my-aggregate",
@@ -33,7 +38,7 @@ def fixture_message() -> MessageDb:
     )
 
 
-def compare_messages(expected: MessageDb, actual: MessageDb):
+def assert_messages_equal(expected: MessageDb, actual: MessageDb):
     assert actual.item_hash == expected.item_hash
     assert actual.chain == expected.chain
     assert actual.sender == expected.sender
@@ -47,7 +52,9 @@ def compare_messages(expected: MessageDb, actual: MessageDb):
 
 
 @pytest.mark.asyncio
-async def test_get_message(session_factory: DbSessionFactory, fixture_message: MessageDb):
+async def test_get_message(
+    session_factory: DbSessionFactory, fixture_message: MessageDb
+):
     async with session_factory() as session:
         session.add(fixture_message)
         await session.commit()
@@ -58,7 +65,7 @@ async def test_get_message(session_factory: DbSessionFactory, fixture_message: M
         )
 
     assert fetched_message is not None
-    compare_messages(expected=fixture_message, actual=fetched_message)
+    assert_messages_equal(expected=fixture_message, actual=fetched_message)
 
     # Check confirmation fields/properties
     assert fetched_message.confirmations == []
@@ -104,11 +111,13 @@ async def test_get_message_with_confirmations(
         )
 
     assert fetched_message is not None
-    compare_messages(expected=fixture_message, actual=fetched_message)
+    assert_messages_equal(expected=fixture_message, actual=fetched_message)
 
     assert fetched_message.confirmed
 
-    confirmations_by_hash = {confirmation.tx.hash: confirmation for confirmation in confirmations}
+    confirmations_by_hash = {
+        confirmation.tx.hash: confirmation for confirmation in confirmations
+    }
     for confirmation in fetched_message.confirmations:
         original = confirmations_by_hash[confirmation.tx.hash]
         assert confirmation.item_hash == original.item_hash
@@ -120,11 +129,72 @@ async def test_get_message_with_confirmations(
         assert confirmation.tx.publisher == original.tx.publisher
 
 
+@pytest.mark.asyncio
 async def test_upsert_query_confirmation(session_factory: DbSessionFactory):
     # TODO
     assert False
 
 
+@pytest.mark.asyncio
 async def test_upsert_query_message(session_factory: DbSessionFactory):
     # TODO
+    assert False
+
+
+@pytest.mark.asyncio
+async def test_get_unconfirmed_messages(
+    session_factory: DbSessionFactory, fixture_message
+):
+    async with session_factory() as session:
+        session.add(fixture_message)
+        await session.commit()
+
+    async with session_factory() as session:
+        unconfirmed_messages = list(await get_unconfirmed_messages(session))
+
+    assert len(unconfirmed_messages) == 1
+    assert_messages_equal(fixture_message, unconfirmed_messages[0])
+
+    # Confirm the message and check that it is not returned anymore
+    tx = ChainTxDb(
+        hash="1234",
+        chain=Chain.SOL,
+        height=8000,
+        datetime=timestamp_to_datetime(1664999900),
+        publisher="0xabadbabe",
+    )
+    async with session_factory() as session:
+        session.add(tx)
+        session.add(
+            MessageConfirmationDb(item_hash=fixture_message.item_hash, tx_hash=tx.hash)
+        )
+        await session.commit()
+
+    async with session_factory() as session:
+        # Check that the message is now ignored
+        unconfirmed_messages = list(await get_unconfirmed_messages(session))
+        assert unconfirmed_messages == []
+
+        # Check that it is also ignored when the chain parameter is specified
+        unconfirmed_messages = list(
+            await get_unconfirmed_messages(session, chain=tx.chain)
+        )
+        assert unconfirmed_messages == []
+
+        # Check that it reappears if we specify a different chain
+        unconfirmed_messages = list(
+            await get_unconfirmed_messages(session, chain=Chain.TEZOS)
+        )
+        assert len(unconfirmed_messages) == 1
+        assert_messages_equal(fixture_message, unconfirmed_messages[0])
+
+        # Check that the limit parameter is respected
+        unconfirmed_messages = list(
+            await get_unconfirmed_messages(session, chain=Chain.TEZOS, limit=0)
+        )
+        assert unconfirmed_messages == []
+
+
+@pytest.mark.asyncio
+async def test_get_distinct_channels(session_factory: DbSessionFactory):
     assert False

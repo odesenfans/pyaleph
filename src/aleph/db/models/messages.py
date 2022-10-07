@@ -1,5 +1,5 @@
 import datetime as dt
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from aleph_message.models import Chain, MessageType, ItemType
 from sqlalchemy import Column, TIMESTAMP, String, Integer, ForeignKey, UniqueConstraint
@@ -10,6 +10,7 @@ from sqlalchemy_utils.types.choice import ChoiceType
 from aleph.toolkit.timestamp import timestamp_to_datetime
 from .base import Base
 from .chains import ChainTxDb
+from aleph.types.channel import Channel
 
 
 class MessageDb(Base):
@@ -25,10 +26,10 @@ class MessageDb(Base):
     sender: str = Column(String, nullable=False, index=True)
     signature: str = Column(String, nullable=False)
     item_type: ItemType = Column(ChoiceType(ItemType), nullable=False)
-    item_content: str = Column(String, nullable=True)
+    item_content: Optional[str] = Column(String, nullable=True)
     content: Any = Column(JSONB, nullable=False)
     time: dt.datetime = Column(TIMESTAMP(timezone=True), nullable=False, index=True)
-    channel: str = Column(String, nullable=True, index=True)
+    channel: Optional[Channel] = Column(String, nullable=True, index=True)
     size: int = Column(Integer, nullable=False)
 
     confirmations: "List[MessageConfirmationDb]" = relationship(

@@ -10,8 +10,10 @@ from sqlalchemy.sql import Insert, Select
 
 from aleph.schemas.validated_message import BaseValidatedMessage
 from aleph.toolkit.timestamp import timestamp_to_datetime
+from aleph.types.channel import Channel
 from aleph.types.db_session import DbSession
 from aleph.types.sort_order import SortOrder
+from ..models import ChainTxDb
 from ..models.messages import MessageDb, MessageConfirmationDb
 
 
@@ -93,7 +95,7 @@ def make_matching_messages_query(
 
     select_stmt = select_stmt.order_by(order_by_column).offset((page - 1) * pagination)
 
-    # If pagination == 0, return all the matching results
+    # If pagination == 0, return all matching results
     if pagination:
         select_stmt = select_stmt.limit(pagination)
 
@@ -119,6 +121,34 @@ async def count_matching_messages(
     # count_stmt = make_matching_messages_query(**kwargs).count()
     # return (await session.execute(count_stmt)).scalar()
     return await MessageDb.count(session)
+
+
+# TODO: declare a type that will match the result (something like UnconfirmedMessageDb)
+#       and translate the time field to epoch.
+async def get_unconfirmed_messages(
+    session: DbSession, limit: int = 100, chain: Optional[Chain] = None
+) -> Iterable[MessageDb]:
+
+    where_clause = MessageConfirmationDb.item_hash == MessageDb.item_hash
+    if chain:
+        where_clause = where_clause & (ChainTxDb.chain == chain)
+
+    #         (MessageDb.item_hash,
+    #         MessageDb.message_type,
+    #         MessageDb.chain,
+    #         MessageDb.sender,
+    #         MessageDb.signature,
+    #         MessageDb.item_type,
+    #         MessageDb.item_content,
+    #         # TODO: exclude content field
+    #         MessageDb.content,
+    #         MessageDb.time,
+    #         MessageDb.channel,)
+    select_stmt = select(MessageDb).where(
+        ~select(MessageConfirmationDb.item_hash).where(where_clause).exists()
+    )
+
+    return (await session.execute(select_stmt.limit(limit))).scalars()
 
 
 def make_message_upsert_query(message: BaseValidatedMessage) -> Insert:
@@ -151,3 +181,8 @@ def make_confirmation_upsert_query(item_hash: str, tx_hash: str) -> Insert:
         .values(item_hash=item_hash, tx_hash=tx_hash)
         .on_conflict_do_nothing()
     )
+
+
+async def get_distinct_channels(session: DbSession) -> Iterable[Channel]:
+    select_stmt = select(MessageDb.channel).distinct().order_by(MessageDb.channel)
+    return (await session.execute(select_stmt)).scalars()

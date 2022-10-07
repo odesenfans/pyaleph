@@ -19,14 +19,15 @@ from web3.middleware.geth_poa import geth_poa_middleware
 
 from aleph.chains.common import get_verification_buffer
 from aleph.db.accessors.chains import get_last_height, upsert_chain_sync_status
-from aleph.model.messages import Message
-from aleph.model.pending import pending_messages_count, pending_txs_count
+from aleph.model.pending import pending_messages_count
 from aleph.schemas.pending_messages import BasePendingMessage
+from aleph.types.db_session import DbSessionFactory
 from aleph.utils import run_in_executor
 from .chaindata import ChainDataService
 from .connector import ChainWriter, Verifier
 from .tx_context import TxContext
-from aleph.types.db_session import DbSessionFactory
+from ..db.accessors.messages import get_unconfirmed_messages
+from ..db.accessors.pending_txs import count_pending_txs
 
 LOGGER = logging.getLogger("chains.ethereum")
 CHAIN_NAME = "ETH"
@@ -254,31 +255,32 @@ class EthereumConnector(Verifier, ChainWriter):
         i = 0
         gas_price = web3.eth.generateGasPrice()
         while True:
-            if (await pending_txs_count(chain=CHAIN_NAME)) or (
-                await pending_messages_count(source_chain=CHAIN_NAME)
-            ) > 1000:
-                await asyncio.sleep(30)
-                continue
-            gas_price = web3.eth.generateGasPrice()
+            async with self.session_factory() as session:
 
-            if i >= 100:
-                await asyncio.sleep(30)  # wait three (!!) blocks
+                if (await count_pending_txs(session=session, chain=Chain.ETH)) or (
+                    await pending_messages_count(source_chain=CHAIN_NAME)
+                ) > 1000:
+                    await asyncio.sleep(30)
+                    continue
                 gas_price = web3.eth.generateGasPrice()
-                i = 0
 
-            if gas_price > config.ethereum.max_gas_price.value:
-                # gas price too high, wait a bit and retry.
-                await asyncio.sleep(60)
-                continue
+                if i >= 100:
+                    await asyncio.sleep(30)  # wait three (!!) blocks
+                    gas_price = web3.eth.generateGasPrice()
+                    i = 0
 
-            nonce = web3.eth.getTransactionCount(account.address)
+                if gas_price > config.ethereum.max_gas_price.value:
+                    # gas price too high, wait a bit and retry.
+                    await asyncio.sleep(60)
+                    continue
 
-            messages = [
-                message
-                async for message in (
-                    await Message.get_unconfirmed_raw(limit=10000, for_chain=CHAIN_NAME)
+                nonce = web3.eth.getTransactionCount(account.address)
+
+                messages = list(
+                    await get_unconfirmed_messages(
+                        session=session, limit=10000, chain=Chain.ETH
+                    )
                 )
-            ]
 
             if len(messages):
                 content = await self.chain_data_service.get_chaindata(

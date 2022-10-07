@@ -8,6 +8,7 @@ from sqlalchemy_utils.types.choice import ChoiceType
 from aleph.schemas.pending_messages import BasePendingMessage
 from .base import Base
 from ...toolkit.timestamp import timestamp_to_datetime
+from aleph.types.channel import Channel
 
 
 class PendingMessageDb(Base):
@@ -25,7 +26,7 @@ class PendingMessageDb(Base):
     item_type: ItemType = Column(ChoiceType(ItemType), nullable=False)
     item_content = Column(String, nullable=True)
     time: dt.datetime = Column(TIMESTAMP(timezone=True), nullable=False)
-    channel = Column(String, nullable=True)
+    channel: Optional[Channel] = Column(String, nullable=True)
 
     check_message = Column(Boolean, nullable=False)
     retries = Column(Integer, nullable=False)

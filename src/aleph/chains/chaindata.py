@@ -1,6 +1,6 @@
 import asyncio
 import json
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Any, Mapping
 
 from aleph_message.models import Chain
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from aleph.chains.common import LOGGER
 from aleph.chains.tx_context import TxContext
 from aleph.config import get_config
-from aleph.db.models import ChainTxDb
+from aleph.db.models import ChainTxDb, MessageDb
 from aleph.db.models.file_pins import FilePinDb
 from aleph.db.models.pending_txs import ChainSyncProtocol, PendingTxDb
 from aleph.exceptions import (
@@ -21,6 +21,19 @@ from aleph.toolkit.timestamp import timestamp_to_datetime
 from aleph.types.db_session import DbSessionFactory
 
 
+INCOMING_MESSAGE_AUTHORIZED_FIELDS = [
+    "item_hash",
+    "item_content",
+    "item_type",
+    "chain",
+    "channel",
+    "sender",
+    "type",
+    "time",
+    "signature",
+]
+
+
 class ChainDataService:
     def __init__(
         self, session_factory: DbSessionFactory, storage_service: StorageService
@@ -28,16 +41,36 @@ class ChainDataService:
         self.session_factory = session_factory
         self.storage_service = storage_service
 
-    async def get_chaindata(self, messages, bulk_threshold: int = 2000):
+    async def get_chaindata(
+        self, messages: List[MessageDb], bulk_threshold: int = 2000
+    ):
         """Returns content ready to be broadcasted on-chain (aka chaindata).
 
         If message length is over bulk_threshold (default 2000 chars), store list
         in IPFS and store the object hash instead of raw list.
         """
+
+        # TODO: this function is used to guarantee that the chain sync protocol is not broken
+        #       while shifting to Postgres.
+        #       * exclude the useless fields in the DB query directly and get rid of
+        #         INCOMING_MESSAGE_AUTHORIZED_FIELDS
+        #       * use a Pydantic model to enforce the output format
+        def message_to_dict(_message: MessageDb) -> Mapping[str, Any]:
+            message_dict = {
+                k: v
+                for k, v in _message.to_dict().items()
+                if k in INCOMING_MESSAGE_AUTHORIZED_FIELDS
+            }
+            # Convert the time field to epoch
+            message_dict["time"] = message_dict["time"].timestamp()
+            return message_dict
+
+        message_dicts = [message_to_dict(message) for message in messages]
+
         chaindata = {
             "protocol": ChainSyncProtocol.OnChain,
             "version": 1,
-            "content": {"messages": messages},
+            "content": {"messages": message_dicts},
         }
         content = json.dumps(chaindata)
         if len(content) > bulk_threshold:
