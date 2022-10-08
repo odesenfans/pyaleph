@@ -91,12 +91,12 @@ class MessageDb(Base):
         )
 
 
-class BaseContentMixin:
-    address: str = Column(String, nullable=False)
-    time: dt.datetime = Column(TIMESTAMP(timezone=True), nullable=False)
-
-
 # TODO: figure this out later
+# class BaseContentMixin:
+#     address: str = Column(String, nullable=False)
+#     time: dt.datetime = Column(TIMESTAMP(timezone=True), nullable=False)
+#
+#
 # class AggregateMessageDb(MessageDb, BaseContentMixin):
 #     __tablename__ = "message_contents_aggregate"
 #     __mapper_args__ = {

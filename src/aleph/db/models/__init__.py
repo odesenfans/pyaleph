@@ -1,4 +1,6 @@
 from .base import Base
+
+from .aggregates import *
 from .chains import *
 from .file_pins import *
 from .messages import *

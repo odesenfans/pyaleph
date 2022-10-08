@@ -24,6 +24,7 @@ from aleph.exceptions import (
     ContentCurrentlyUnavailable,
     UnknownHashError,
 )
+from aleph.handlers.content.aggregate import AggregateMessageHandler
 from aleph.handlers.content.content_handler import ContentHandler
 from aleph.handlers.content.forget import ForgetMessageHandler
 from aleph.handlers.content.storage import StoreMessageHandler
@@ -69,9 +70,9 @@ class MessageHandler:
         self.storage_service = storage_service
 
         self.content_handlers = {
-            # MessageType.aggregate: AggregateMessageHandler(
-            #     session_factory=session_factory
-            # ),
+            MessageType.aggregate: AggregateMessageHandler(
+                session_factory=session_factory
+            ),
             MessageType.forget: ForgetMessageHandler(
                 session_factory=session_factory, storage_service=storage_service
             ),
@@ -240,7 +241,8 @@ class MessageHandler:
                     f"Invalid IPFS hash for message {item_hash}, won't retry."
                 )
                 return MessageProcessingStatus.FAILED_PERMANENTLY, []
-            except Exception:
+            except Exception as e:
+                print(e)
                 LOGGER.exception("Error using the message type handler")
                 handling_result, ops = MessageProcessingStatus.RETRYING_LATER, []
 
@@ -310,6 +312,16 @@ class MessageHandler:
 
         return MessageProcessingStatus.MESSAGE_HANDLED, []
 
+    async def process_one_message_db(self, pending_message: PendingMessageDb):
+        status, ops = await self.incoming(pending_message=pending_message)
+
+        async with self.session_factory() as session:
+            async with session.begin():
+                for op in ops:
+                    await session.execute(op.operation)
+
+            await session.commit()
+
     # TODO: refactor this function to take a PendingMessageDb directly
     async def process_one_message(
         self,
@@ -322,12 +334,4 @@ class MessageHandler:
 
         pending_message = PendingMessageDb.from_obj(message)
         pending_message.tx = chain_tx
-
-        status, ops = await self.incoming(pending_message=pending_message)
-
-        async with self.session_factory() as session:
-            async with session.begin():
-                for op in ops:
-                    await session.execute(op.operation)
-
-            await session.commit()
+        await self.process_one_message_db(pending_message)

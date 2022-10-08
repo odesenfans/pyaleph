@@ -1,8 +1,17 @@
 import datetime as dt
-from typing import Optional
+from typing import Optional, Any, Dict
 
 from aleph_message.models import Chain, MessageType, ItemType
-from sqlalchemy import Boolean, BIGINT, Column, TIMESTAMP, String, Integer, ForeignKey, Index
+from sqlalchemy import (
+    Boolean,
+    BIGINT,
+    Column,
+    TIMESTAMP,
+    String,
+    Integer,
+    ForeignKey,
+    Index,
+)
 from sqlalchemy.orm import relationship
 from sqlalchemy_utils.types.choice import ChoiceType
 
@@ -53,6 +62,35 @@ class PendingMessageDb(Base):
             item_type=obj.item_type,
             item_content=obj.item_content,
             time=timestamp_to_datetime(obj.time),
+            check_message=check_message,
+            retries=0,
+            tx_hash=tx_hash,
+        )
+
+    @classmethod
+    def from_message_dict(
+        cls,
+        message_dict: Dict[str, Any],
+        tx_hash: Optional[str] = None,
+        check_message: bool = True,
+    ) -> "PendingMessageDb":
+        """
+        Utility function to translate Aleph message dictionaries, such as those returned by the API,
+        in the corresponding DB object.
+        """
+
+        item_hash = message_dict["item_hash"]
+
+        return cls(
+            item_hash=item_hash,
+            message_type=message_dict["type"],
+            chain=Chain(message_dict["chain"]),
+            sender=message_dict["sender"],
+            signature=message_dict["signature"],
+            item_type=ItemType(message_dict.get("item_type", ItemType.inline)),
+            item_content=message_dict.get("item_content"),
+            time=timestamp_to_datetime(message_dict["time"]),
+            channel=message_dict.get("channel"),
             check_message=check_message,
             retries=0,
             tx_hash=tx_hash,

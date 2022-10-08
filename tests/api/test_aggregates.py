@@ -6,7 +6,7 @@ import pytest
 
 AGGREGATES_URI = "/api/v0/aggregates/{address}.json"
 
-# Another address with three aggregates
+# An address with three aggregates
 ADDRESS_1 = "0x720F319A9c3226dCDd7D8C49163D79EDa1084E98"
 # Another address with one aggregate
 ADDRESS_2 = "0xaC033C1cA5C49Eff98A1D9a56BeDBC4840010BA4"
