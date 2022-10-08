@@ -36,7 +36,7 @@ from aleph.schemas.validated_message import (
 )
 from aleph.storage import StorageService
 from aleph.types.db_session import DbSessionFactory
-from aleph.types.processing_status import MessageProcessingStatus
+from aleph.types.message_status import MessageProcessingStatus
 
 
 # TODO: don't forget to clean up between this function and validated_messages.py

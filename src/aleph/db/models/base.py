@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Dict, Any, Optional, Set
 
 from sqlalchemy import Table
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,10 +9,13 @@ class AugmentedBase:
     __tablename__: str
     __table__: Table
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self, exclude: Optional[Set[str]] = None) -> Dict[str, Any]:
+        exclude_set = exclude if exclude is not None else set()
+
         return {
             column.name: getattr(self, column.name)
             for column in self.__table__.columns
+            if column.name not in exclude_set
         }
 
     @classmethod

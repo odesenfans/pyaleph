@@ -5,7 +5,7 @@ from aleph_message.models import BaseContent
 
 from aleph.db.bulk_operations import DbBulkOperation
 from aleph.db.models import MessageDb
-from aleph.types.processing_status import MessageProcessingStatus
+from aleph.types.message_status import MessageProcessingStatus
 
 
 class ContentHandler(abc.ABC):

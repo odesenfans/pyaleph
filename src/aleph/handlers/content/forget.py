@@ -16,7 +16,7 @@ from aleph.model.messages import Message
 from aleph.schemas.validated_message import ValidatedForgetMessage
 from aleph.types.db_session import DbSessionFactory
 from aleph.storage import StorageService
-from aleph.types.processing_status import MessageProcessingStatus
+from aleph.types.message_status import MessageProcessingStatus
 from aleph.utils import item_type_from_hash
 
 logger = logging.getLogger(__name__)

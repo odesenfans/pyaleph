@@ -27,7 +27,7 @@ from aleph.services.storage.fileystem_engine import FileSystemStorageEngine
 from aleph.storage import StorageService
 from aleph.types.db_session import DbSession, DbSessionFactory
 from .job_utils import prepare_loop, process_job_results
-from ..types.processing_status import MessageProcessingStatus
+from ..types.message_status import MessageProcessingStatus
 
 LOGGER = getLogger("jobs.pending_messages")
 

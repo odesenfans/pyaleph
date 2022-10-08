@@ -9,14 +9,14 @@ from typing import List, Dict, Optional, Set
 import sentry_sdk
 from configmanager import Config
 from setproctitle import setproctitle
-from sqlalchemy import insert, delete
+from sqlalchemy import delete
 
 from aleph.chains.chaindata import ChainDataService
 from aleph.chains.tx_context import TxContext
 from aleph.db.accessors.pending_txs import get_pending_txs_stream
 from aleph.db.bulk_operations import DbBulkOperation
 from aleph.db.connection import make_engine, make_session_factory
-from aleph.db.models import PendingMessageDb
+from aleph.db.models import PendingMessageDb, MessageStatusDb, ChainTxDb
 from aleph.db.models.pending_txs import PendingTxDb
 from aleph.exceptions import InvalidMessageError
 from aleph.logging import setup_logging
@@ -28,12 +28,17 @@ from aleph.services.storage.fileystem_engine import FileSystemStorageEngine
 from aleph.storage import StorageService
 from aleph.types.db_session import DbSessionFactory, DbSession
 from .job_utils import prepare_loop, process_job_results
+from sqlalchemy.dialects.postgresql import insert
+
+from ..types.message_status import MessageStatus
 
 LOGGER = logging.getLogger("jobs.pending_txs")
 
 
 class PendingTxProcessor:
-    def __init__(self, session_factory: DbSessionFactory, storage_service: StorageService):
+    def __init__(
+        self, session_factory: DbSessionFactory, storage_service: StorageService
+    ):
         self.session_factory = session_factory
         self.storage_service = storage_service
         self.chain_data_service = ChainDataService(
@@ -82,18 +87,33 @@ class PendingTxProcessor:
 
                 message.time = tx_context.time + (i / 1000)  # force order
 
+                # TODO: optimize this ex: by adding a to_db_dict() method on BasePendingMessage
+                pending_message_dict = PendingMessageDb.from_obj(
+                    message, pending_tx.tx_hash, check_message=True
+                ).to_dict(exclude={"id"})
+
                 # we add it to the message queue... bad idea? should we process it asap?
-                db_operations.append(
+                # TODO: write DB accessor and consider using a trigger on pending messages to
+                #       update the message status
+                db_operations += [
+                    DbBulkOperation(
+                        model=MessageStatusDb,
+                        operation=insert(MessageStatusDb)
+                        .values(
+                            item_hash=message.item_hash, status=MessageStatus.PENDING
+                        )
+                        .on_conflict_do_update(
+                            index_elements=["item_hash"],
+                            set_={"status": MessageStatus.PENDING},
+                            where=MessageStatusDb.status == MessageStatus.REJECTED,
+                        ),
+                    ),
                     DbBulkOperation(
                         model=PendingMessageDb,
-                        operation=insert(PendingMessageDb).values(
-                            # TODO: optimize this ex: by adding a to_db_dict() method on BasePendingMessage
-                            **PendingMessageDb.from_obj(
-                                message, pending_tx.tx_hash, check_message=True
-                            ).to_dict()
-                        ),
-                    )
-                )
+                        operation=insert(PendingMessageDb).values(**pending_message_dict),
+                    ),
+                ]
+
                 await asyncio.sleep(0)
 
         else:

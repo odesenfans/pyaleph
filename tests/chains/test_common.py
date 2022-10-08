@@ -8,7 +8,7 @@ from aleph.chains.common import get_verification_buffer
 from aleph.db.models import PendingMessageDb
 from aleph.handlers.message_handler import MessageHandler
 from aleph.schemas.pending_messages import BasePendingMessage, parse_message
-from aleph.types.processing_status import MessageProcessingStatus
+from aleph.types.message_status import MessageProcessingStatus
 
 
 @pytest.mark.asyncio

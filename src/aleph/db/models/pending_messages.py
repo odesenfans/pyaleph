@@ -4,7 +4,7 @@ from typing import Optional, Any, Dict
 from aleph_message.models import Chain, MessageType, ItemType
 from sqlalchemy import (
     Boolean,
-    BIGINT,
+    BigInteger,
     Column,
     TIMESTAMP,
     String,
@@ -29,7 +29,7 @@ class PendingMessageDb(Base):
 
     __tablename__ = "pending_messages"
 
-    id: int = Column(BIGINT, primary_key=True)
+    id: int = Column(BigInteger, primary_key=True)
     item_hash: str = Column(String, nullable=False)
     message_type: MessageType = Column(ChoiceType(MessageType), nullable=False)
     chain: Chain = Column(ChoiceType(Chain), nullable=False)

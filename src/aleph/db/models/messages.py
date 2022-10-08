@@ -9,9 +9,17 @@ from sqlalchemy_utils.types.choice import ChoiceType
 
 from aleph.toolkit.timestamp import timestamp_to_datetime
 from aleph.types.channel import Channel
+from aleph.types.message_status import MessageStatus
 from .base import Base
 from .chains import ChainTxDb
 from .pending_messages import PendingMessageDb
+
+
+class MessageStatusDb(Base):
+    __tablename__ = "message_status"
+
+    item_hash: str = Column(String, primary_key=True)
+    status: MessageStatus = Column(ChoiceType(MessageStatus), nullable=False)
 
 
 class MessageDb(Base):
@@ -89,6 +97,29 @@ class MessageDb(Base):
             channel=pending_message.channel,
             size=content_size,
         )
+
+
+# TODO: move these to their own files?
+class ForgottenMessageDb(Base):
+    __tablename__ = "forgotten_messages"
+
+    item_hash: str = Column(String, primary_key=True)
+    message_type: MessageType = Column(ChoiceType(MessageType), nullable=False)
+    chain: Chain = Column(ChoiceType(Chain), nullable=False)
+    sender: str = Column(String, nullable=False, index=True)
+    signature: str = Column(String, nullable=False)
+    item_type: ItemType = Column(ChoiceType(ItemType), nullable=False)
+    time: dt.datetime = Column(TIMESTAMP(timezone=True), nullable=False, index=True)
+    channel: Optional[Channel] = Column(String, nullable=True, index=True)
+    forgotten_by: Dict[str, Any] = Column(JSONB, nullable=False)
+
+
+class RejectedMessageDb(Base):
+    __tablename__ = "rejected_messages"
+
+    item_hash: str = Column(String, primary_key=True)
+    reason: str = Column(String, nullable=False)
+    traceback: str = Column(String, nullable=False)
 
 
 # TODO: figure this out later
