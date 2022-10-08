@@ -1,1 +1,1 @@
-from aleph.handlers import storage
+from aleph.handlers.content import storage

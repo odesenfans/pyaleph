@@ -1,7 +1,6 @@
-from enum import IntEnum
 from typing import Optional, Dict, Tuple, List
 
-from aleph_message.models import MessageConfirmation
+from aleph_message.models import MessageConfirmation, BaseContent, MessageType
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,26 +24,40 @@ from aleph.exceptions import (
     ContentCurrentlyUnavailable,
     UnknownHashError,
 )
+from aleph.handlers.content.content_handler import ContentHandler
+from aleph.handlers.content.forget import ForgetMessageHandler
+from aleph.handlers.content.storage import StoreMessageHandler
 from aleph.permissions import check_sender_authorization
+from aleph.schemas.message_content import MessageContent
 from aleph.schemas.pending_messages import BasePendingMessage
 from aleph.schemas.validated_message import (
-    validate_pending_message,
-    ValidatedStoreMessage,
-    ValidatedForgetMessage, BaseValidatedMessage,
+    validate_message_content,
 )
 from aleph.storage import StorageService
 from aleph.types.db_session import DbSessionFactory
-from .forget import ForgetMessageHandler
-from .storage import StoreMessageHandler
+from aleph.types.processing_status import MessageProcessingStatus
 
 
-class IncomingStatus(IntEnum):
-    FAILED_PERMANENTLY = -1
-    RETRYING_LATER = 0
-    MESSAGE_HANDLED = 1
+# TODO: don't forget to clean up between this function and validated_messages.py
+def validate_pending_message(
+    pending_message: PendingMessageDb, content: MessageContent
+) -> Tuple[MessageDb, BaseContent]:
+    # Some values may be missing in the content, adjust them
+    validated_content = validate_message_content(
+        pending_message=pending_message, content_dict=content.value
+    )
+    message_db = MessageDb.from_pending_message(
+        pending_message=pending_message,
+        content_dict=validated_content.dict(exclude_none=True),
+        content_size=len(content.raw_value),
+    )
+
+    return message_db, validated_content
 
 
 class MessageHandler:
+    content_handlers: Dict[MessageType, ContentHandler]
+
     def __init__(
         self,
         session_factory: DbSessionFactory,
@@ -55,12 +68,19 @@ class MessageHandler:
         self.chain_service = chain_service
         self.storage_service = storage_service
 
-        self.store_message_handler = StoreMessageHandler(
-            storage_service=storage_service
-        )
-        self.forget_message_handler = ForgetMessageHandler(
-            session_factory=session_factory, storage_service=storage_service
-        )
+        self.content_handlers = {
+            # MessageType.aggregate: AggregateMessageHandler(
+            #     session_factory=session_factory
+            # ),
+            MessageType.forget: ForgetMessageHandler(
+                session_factory=session_factory, storage_service=storage_service
+            ),
+            # MessageType.post: PostMessageHandler(session_factory=session_factory),
+            # MessageType.program: ProgramMessageHandler(session_factory=session_factory),
+            MessageType.store: StoreMessageHandler(
+                session_factory=session_factory, storage_service=storage_service
+            ),
+        }
 
     @staticmethod
     async def _mark_message_for_retry(
@@ -82,6 +102,14 @@ class MessageHandler:
             )
             await session.execute(update_stmt)
 
+    async def process_message_content(self, message: MessageDb, content: BaseContent):
+        try:
+            content_handler = self.content_handlers[message.message_type]
+        except KeyError:
+            return True
+
+        return await content_handler.handle_content(message=message, content=content)
+
     async def delayed_incoming(
         self,
         message: BasePendingMessage,
@@ -99,7 +127,7 @@ class MessageHandler:
         pending_message: PendingMessageDb,
         seen_ids: Optional[Dict[Tuple, int]] = None,
         retrying: bool = False,
-    ) -> Tuple[IncomingStatus, List[DbBulkOperation]]:
+    ) -> Tuple[MessageProcessingStatus, List[DbBulkOperation]]:
         """New incoming message from underlying chain.
 
         For regular messages it will be marked as confirmed
@@ -121,10 +149,12 @@ class MessageHandler:
             if seen_ids is not None:
                 if ids_key in seen_ids.keys():
                     if chain_tx.height > seen_ids[ids_key]:
-                        return IncomingStatus.MESSAGE_HANDLED, []
+                        return MessageProcessingStatus.MESSAGE_HANDLED, []
 
             confirmations.append(
-                MessageConfirmation(chain=chain_tx.chain, hash=chain_tx.hash, height=chain_tx.height)
+                MessageConfirmation(
+                    chain=chain_tx.chain, hash=chain_tx.hash, height=chain_tx.height
+                )
             )
 
         async with self.session_factory() as session:
@@ -139,7 +169,7 @@ class MessageHandler:
                     # TODO: remove type: ignore by deciding the pending message type
                     await self.chain_service.verify_signature(pending_message)  # type: ignore
                 except InvalidMessageError:
-                    return IncomingStatus.FAILED_PERMANENTLY, []
+                    return MessageProcessingStatus.FAILED_PERMANENTLY, []
 
         if retrying:
             LOGGER.debug("(Re)trying %s." % item_hash)
@@ -152,7 +182,7 @@ class MessageHandler:
             if seen_ids is not None and chain_tx:
                 if ids_key in seen_ids.keys():
                     if chain_tx.height > seen_ids[ids_key]:
-                        return IncomingStatus.MESSAGE_HANDLED, []
+                        return MessageProcessingStatus.MESSAGE_HANDLED, []
                     else:
                         seen_ids[ids_key] = chain_tx.height
                 else:
@@ -182,7 +212,7 @@ class MessageHandler:
                 LOGGER.warning(
                     "Can't get content of object %r, won't retry." % item_hash
                 )
-                return IncomingStatus.FAILED_PERMANENTLY, []
+                return MessageProcessingStatus.FAILED_PERMANENTLY, []
 
             except (ContentCurrentlyUnavailable, Exception) as e:
                 if not isinstance(e, ContentCurrentlyUnavailable):
@@ -193,42 +223,21 @@ class MessageHandler:
                         pending_message=pending_message,
                         retrying=retrying,
                     )
-                return IncomingStatus.RETRYING_LATER, []
+                return MessageProcessingStatus.RETRYING_LATER, []
 
-            validated_message: BaseValidatedMessage = validate_pending_message(
-                pending_message=pending_message,
-                content=content,
-                confirmations=confirmations,
+            validated_message, validated_content = validate_pending_message(
+                pending_message=pending_message, content=content
             )
 
-            # warning: those handlers can modify message and content in place
-            # and return a status. None has to be retried, -1 is discarded, True is
-            # handled and kept.
-            # TODO: change this, it's messy.
             try:
-                if isinstance(validated_message, ValidatedStoreMessage):
-                    handling_result = (
-                        await self.store_message_handler.handle_new_storage(
-                            validated_message
-                        )
-                    )
-                elif isinstance(validated_message, ValidatedForgetMessage):
-                    # Handling it here means that there we ensure that the message
-                    # has been forgotten before it is saved on the node.
-                    # We may want the opposite instead: ensure that the message has
-                    # been saved before it is forgotten.
-                    handling_result = (
-                        await self.forget_message_handler.handle_forget_message(
-                            validated_message
-                        )
-                    )
-                else:
-                    handling_result = True
+                handling_result = await self.process_message_content(
+                    message=validated_message, content=validated_content
+                )
             except UnknownHashError:
                 LOGGER.warning(
                     f"Invalid IPFS hash for message {item_hash}, won't retry."
                 )
-                return IncomingStatus.FAILED_PERMANENTLY, []
+                return MessageProcessingStatus.FAILED_PERMANENTLY, []
             except Exception:
                 LOGGER.exception("Error using the message type handler")
                 handling_result = None
@@ -241,23 +250,25 @@ class MessageHandler:
                         pending_message=pending_message,
                         retrying=retrying,
                     )
-                return IncomingStatus.RETRYING_LATER, []
+                return MessageProcessingStatus.RETRYING_LATER, []
 
             if not handling_result:
                 LOGGER.warning(
                     "Message type handler has failed permanently for "
                     "%r, won't retry." % item_hash
                 )
-                return IncomingStatus.FAILED_PERMANENTLY, []
+                return MessageProcessingStatus.FAILED_PERMANENTLY, []
 
-            if not await check_sender_authorization(validated_message):
+            if not await check_sender_authorization(
+                message=validated_message, content=validated_content
+            ):
                 LOGGER.warning("Invalid sender for %s" % item_hash)
-                return IncomingStatus.MESSAGE_HANDLED, []
+                return MessageProcessingStatus.MESSAGE_HANDLED, []
 
             if seen_ids is not None and chain_tx:
                 if ids_key in seen_ids.keys():
                     if chain_tx.height > seen_ids[ids_key]:
-                        return IncomingStatus.MESSAGE_HANDLED, []
+                        return MessageProcessingStatus.MESSAGE_HANDLED, []
                     else:
                         seen_ids[ids_key] = chain_tx.height
                 else:
@@ -271,7 +282,7 @@ class MessageHandler:
                     operation=make_message_upsert_query(validated_message),
                 )
             ]
-            for confirmation in validated_message.confirmations:
+            for confirmation in confirmations:
                 updates.append(
                     DbBulkOperation(
                         model=MessageConfirmationDb,
@@ -293,9 +304,9 @@ class MessageHandler:
             # if tx_hash is None:
             # bulk_ops.append(DbBulkOperation(CappedMessage, update_op))
 
-            return IncomingStatus.MESSAGE_HANDLED, bulk_ops
+            return MessageProcessingStatus.MESSAGE_HANDLED, bulk_ops
 
-        return IncomingStatus.MESSAGE_HANDLED, []
+        return MessageProcessingStatus.MESSAGE_HANDLED, []
 
     # TODO: refactor this function to take a PendingMessageDb directly
     async def process_one_message(

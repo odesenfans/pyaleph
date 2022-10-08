@@ -1,19 +1,21 @@
+from aleph_message.models import BaseContent
+
+from aleph.db.models import MessageDb
 from aleph.model.messages import get_computed_address_aggregates
 from aleph.schemas.validated_message import (
-    BaseValidatedMessage,
     ValidatedPostMessage,
     ValidatedAggregateMessage,
 )
 
 
-async def check_sender_authorization(message: BaseValidatedMessage) -> bool:
+async def check_sender_authorization(message: MessageDb, content: BaseContent) -> bool:
     """Checks a content against a message to verify if sender is authorized.
 
     TODO: implement "security" aggregate key check.
     """
 
     sender = message.sender
-    address = message.content.address
+    address = content.address
 
     # if sender is the content address, all good.
     if sender == address:

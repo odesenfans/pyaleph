@@ -5,7 +5,7 @@ from aiohttp import web
 from aleph_message.models import ItemType
 
 from aleph.exceptions import AlephStorageException, UnknownHashError
-from aleph.handlers.forget import count_file_references
+from aleph.handlers.content.forget import count_file_references
 from aleph.storage import StorageService
 from aleph.utils import run_in_executor, item_type_from_hash
 

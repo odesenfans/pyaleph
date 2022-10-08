@@ -3,7 +3,7 @@ import json
 import pytest
 from aleph_message.models import MessageConfirmation
 
-from aleph.handlers.storage import StoreMessageHandler
+from aleph.handlers.content.storage import StoreMessageHandler
 from aleph.schemas.message_content import ContentSource, RawContent
 from aleph.schemas.validated_message import (
     ValidatedStoreMessage,
@@ -89,7 +89,7 @@ async def test_handle_new_storage_file(
     )
     storage_service.get_hash_content = get_hash_content_mock = mocker.AsyncMock(return_value=raw_content)  # type: ignore
     store_message_handler = StoreMessageHandler(storage_service=storage_service)
-    result = await store_message_handler.handle_new_storage(message)
+    result = await store_message_handler.handle_content(message)
     assert result
 
     # The IPFS stats are not added for files
@@ -124,7 +124,7 @@ async def test_handle_new_storage_directory(
     )
     store_message_handler = StoreMessageHandler(storage_service=storage_service)
 
-    result = await store_message_handler.handle_new_storage(message)
+    result = await store_message_handler.handle_content(message)
     assert result
 
     # Check the updates to the message content

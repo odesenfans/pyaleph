@@ -8,9 +8,10 @@ from sqlalchemy.orm import relationship
 from sqlalchemy_utils.types.choice import ChoiceType
 
 from aleph.toolkit.timestamp import timestamp_to_datetime
+from aleph.types.channel import Channel
 from .base import Base
 from .chains import ChainTxDb
-from aleph.types.channel import Channel
+from .pending_messages import PendingMessageDb
 
 
 class MessageDb(Base):
@@ -35,6 +36,11 @@ class MessageDb(Base):
     confirmations: "List[MessageConfirmationDb]" = relationship(
         "MessageConfirmationDb", back_populates="message"
     )
+
+    # __mapper_args__ = {
+    #     "polymorphic_identity": "unknown",
+    #     "polymorphic_on": message_type,
+    # }
 
     @property
     def confirmed(self) -> bool:
@@ -62,6 +68,74 @@ class MessageDb(Base):
             channel=message_dict.get("channel"),
             size=message_dict.get("size", 0),
         )
+
+    @classmethod
+    def from_pending_message(
+        cls,
+        pending_message: PendingMessageDb,
+        content_dict: Dict[str, Any],
+        content_size: int,
+    ):
+        return cls(
+            item_hash=pending_message.item_hash,
+            message_type=pending_message.message_type,
+            chain=pending_message.chain,
+            sender=pending_message.sender,
+            signature=pending_message.signature,
+            item_type=pending_message.item_type,
+            item_content=pending_message.item_content,
+            content=content_dict,
+            time=pending_message.time,
+            channel=pending_message.channel,
+            size=content_size,
+        )
+
+
+class BaseContentMixin:
+    address: str = Column(String, nullable=False)
+    time: dt.datetime = Column(TIMESTAMP(timezone=True), nullable=False)
+
+
+# TODO: figure this out later
+# class AggregateMessageDb(MessageDb, BaseContentMixin):
+#     __tablename__ = "message_contents_aggregate"
+#     __mapper_args__ = {
+#         "polymorphic_identity": MessageType.aggregate.value,
+#     }
+#
+#     key: str = Column(String, nullable=False)
+#     content: Any = Column(JSONB, nullable=False)
+#
+#
+# class ForgetMessageDb(MessageDb, BaseContentMixin):
+#     __tablename__ = "message_contents_forget"
+#     __mapper_args__ = {
+#         "polymorphic_identity": MessageType.forget.value,
+#     }
+#
+#     hashes: List[str] = Column(ARRAY(String), nullable=False)
+#     aggregates: Optional[List[str]] = Column(ARRAY(String), nullable=False)
+#
+#
+# class PostMessageDb(MessageDb, BaseContentMixin):
+#     __tablename__ = "message_contents_post"
+#     __mapper_args__ = {
+#         "polymorphic_identity": MessageType.post.value,
+#     }
+#
+#
+# class ProgramMessageDb(MessageDb, BaseContentMixin):
+#     __tablename__ = "message_contents_program"
+#     __mapper_args__ = {
+#         "polymorphic_identity": MessageType.program.value,
+#     }
+#
+#
+# class StoreMessageDb(MessageDb, BaseContentMixin):
+#     __tablename__ = "message_contents_store"
+#     __mapper_args__ = {
+#         "polymorphic_identity": MessageType.store.value,
+#     }
 
 
 class MessageConfirmationDb(Base):

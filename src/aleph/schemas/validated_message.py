@@ -14,17 +14,13 @@ from aleph_message.models import (
     PostContent,
     ProgramContent,
     StoreContent,
+    BaseContent,
 )
 from pydantic import BaseModel, Field
 
 from aleph.schemas.base_messages import AlephBaseMessage, ContentType, MType
 from aleph.schemas.pending_messages import (
     BasePendingMessage,
-    PendingAggregateMessage,
-    PendingForgetMessage,
-    PendingPostMessage,
-    PendingProgramMessage,
-    PendingStoreMessage,
 )
 from .message_content import MessageContent
 from ..db.models import PendingMessageDb
@@ -94,6 +90,29 @@ class ValidatedStoreMessage(
     pass
 
 
+CONTENT_TYPE_MAP: Dict[MessageType, Type[BaseContent]] = {
+    MessageType.aggregate: AggregateContent,
+    MessageType.forget: ForgetContent,
+    MessageType.post: PostContent,
+    MessageType.program: ProgramContent,
+    MessageType.store: StoreContent,
+}
+
+
+def validate_message_content(
+    pending_message: PendingMessageDb,
+    content_dict: Dict[str, Any],
+) -> BaseContent:
+
+    if content_dict.get("address") is None:
+        content_dict["address"] = pending_message.message_sender
+
+    if content_dict.get("time") is None:
+        content_dict["time"] = pending_message.time.timestamp()
+
+    return CONTENT_TYPE_MAP[pending_message.message_type].parse_obj(content_dict)
+
+
 def validate_pending_message(
     pending_message: Union[BasePendingMessage[MType, ContentType], PendingMessageDb],
     content: MessageContent,
@@ -102,7 +121,9 @@ def validate_pending_message(
 
     # TODO: try avoid the union between pydantic and sqla model
     #       and get rid of this patchwork here.
-    def pending_message_db_to_dict(_pending_message: PendingMessageDb) -> Dict[str, Any]:
+    def pending_message_db_to_dict(
+        _pending_message: PendingMessageDb,
+    ) -> Dict[str, Any]:
         _m_dict = _pending_message.to_dict()
         del _m_dict["id"]
         del _m_dict["retries"]

@@ -151,26 +151,13 @@ async def get_unconfirmed_messages(
     return (await session.execute(select_stmt.limit(limit))).scalars()
 
 
-def make_message_upsert_query(message: BaseValidatedMessage) -> Insert:
+def make_message_upsert_query(message: MessageDb) -> Insert:
     return (
         insert(MessageDb)
-        .values(
-            item_hash=message.item_hash,
-            message_type=message.type,
-            chain=message.chain,
-            sender=message.sender,
-            signature=message.signature,
-            item_type=message.item_type,
-            content=message.content.dict(exclude_none=True),
-            time=dt.datetime.utcfromtimestamp(message.time),
-            channel=message.channel,
-            size=message.size,
-        )
+        .values(message.to_dict())
         .on_conflict_do_update(
             constraint="messages_pkey",
-            set_={
-                "time": func.least(MessageDb.time, timestamp_to_datetime(message.time))
-            },
+            set_={"time": func.least(MessageDb.time, message.time)},
         )
     )
 

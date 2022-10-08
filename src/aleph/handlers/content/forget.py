@@ -6,9 +6,11 @@ from typing import Optional, List, Mapping
 
 from aioipfs.api import RepoAPI
 from aioipfs.exceptions import NotPinnedError
-from aleph_message.models import ItemType, MessageType
+from aleph_message.models import ItemType, MessageType, ForgetContent
 
 from aleph.db.accessors.file_pins import is_pinned_file
+from aleph.db.models import MessageDb
+from aleph.handlers.content.content_handler import ContentHandler
 from aleph.model.messages import Message
 from aleph.schemas.validated_message import ValidatedForgetMessage
 from aleph.types.db_session import DbSessionFactory
@@ -30,7 +32,7 @@ class TargetMessageInfo:
 
     @classmethod
     def from_db_object(cls, message_dict: Mapping) -> TargetMessageInfo:
-        content = message_dict.get("content", {})
+        content = message_dict.get("", {})
         content_item_type = content.get("item_type")
 
         if content_item_type is not None:
@@ -84,7 +86,7 @@ async def file_references_exist(storage_hash: str) -> bool:
     )
 
 
-class ForgetMessageHandler:
+class ForgetMessageHandler(ContentHandler):
     def __init__(self, session_factory: DbSessionFactory, storage_service: StorageService):
         self.session_factory = session_factory
         self.storage_service = storage_service
@@ -208,14 +210,14 @@ class ForgetMessageHandler:
                 target_info.content_item_hash, target_info.content_item_type
             )
 
-    async def handle_forget_message(
-        self, forget_message: ValidatedForgetMessage
-    ) -> bool:
+    async def handle_content(
+        self, forget_message: MessageDb, content: ForgetContent
+    ) -> Optional[bool]:
         # Parsing and validation
         logger.debug(f"Handling forget message {forget_message.item_hash}")
-        hashes_to_forget = forget_message.content.hashes
+        hashes_to_forget = content.hashes
 
-        for target_aggregate in forget_message.content.aggregates:
+        for target_aggregate in content.aggregates:
             aggregate_hashes = (
                 message["item_hash"]
                 async for message in Message.collection.find(

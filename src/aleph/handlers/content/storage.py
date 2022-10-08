@@ -13,43 +13,46 @@ import logging
 from typing import Optional
 
 import aioipfs
-from aleph_message.models import ItemType
+from aleph_message.models import ItemType, StoreContent
 
 from aleph.config import get_config
+from aleph.db.models import MessageDb
 from aleph.exceptions import AlephStorageException, UnknownHashError
+from aleph.handlers.content.content_handler import ContentHandler
 from aleph.schemas.validated_message import (
     StoreContentWithMetadata,
-    ValidatedStoreMessage,
     EngineInfo,
 )
 from aleph.storage import StorageService
+from aleph.types.db_session import DbSessionFactory
 from aleph.utils import item_type_from_hash
 
 LOGGER = logging.getLogger("HANDLERS.STORAGE")
 
 
-class StoreMessageHandler:
-    def __init__(self, storage_service: StorageService):
+class StoreMessageHandler(ContentHandler):
+    def __init__(self, session_factory: DbSessionFactory, storage_service: StorageService):
+        self.session_factory = session_factory
         self.storage_service = storage_service
 
-    async def handle_new_storage(
-        self, store_message: ValidatedStoreMessage
+    async def handle_content(
+        self, message: MessageDb, content: StoreContent
     ) -> Optional[bool]:
         config = get_config()
         if not config.storage.store_files.value:
             return True  # Ignore
 
-        item_type = store_message.content.item_type
+        item_type = content.item_type
         try:
             engine = ItemType(item_type)
         except ValueError:
             LOGGER.warning("Got invalid storage engine %s" % item_type)
             return False  # not allowed, ignore.
 
-        output_content = StoreContentWithMetadata.from_content(store_message.content)
+        output_content = StoreContentWithMetadata.from_content(content)
 
         is_folder = False
-        item_hash = store_message.content.item_hash
+        item_hash = content.item_hash
 
         ipfs_enabled = config.ipfs.enabled.value
         do_standard_lookup = True
@@ -120,6 +123,6 @@ class StoreMessageHandler:
             output_content.size = len(file_content)
 
         output_content.content_type = "directory" if is_folder else "file"
-        store_message.content = output_content
+        # store_message.content = output_content
 
         return True

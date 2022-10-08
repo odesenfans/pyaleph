@@ -3,7 +3,7 @@ from typing import Mapping
 import pytest
 from message_test_helpers import make_validated_message_from_dict
 
-from aleph.handlers.forget import ForgetMessageHandler, TargetMessageInfo
+from aleph.handlers.content.forget import ForgetMessageHandler, TargetMessageInfo
 
 
 @pytest.fixture
