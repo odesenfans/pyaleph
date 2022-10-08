@@ -102,11 +102,13 @@ class MessageHandler:
             )
             await session.execute(update_stmt)
 
-    async def process_message_content(self, message: MessageDb, content: BaseContent):
+    async def process_message_content(
+        self, message: MessageDb, content: BaseContent
+    ) -> Tuple[MessageProcessingStatus, List[DbBulkOperation]]:
         try:
             content_handler = self.content_handlers[message.message_type]
         except KeyError:
-            return True
+            return MessageProcessingStatus.MESSAGE_HANDLED, []
 
         return await content_handler.handle_content(message=message, content=content)
 
@@ -230,7 +232,7 @@ class MessageHandler:
             )
 
             try:
-                handling_result = await self.process_message_content(
+                handling_result, ops = await self.process_message_content(
                     message=validated_message, content=validated_content
                 )
             except UnknownHashError:
@@ -240,9 +242,9 @@ class MessageHandler:
                 return MessageProcessingStatus.FAILED_PERMANENTLY, []
             except Exception:
                 LOGGER.exception("Error using the message type handler")
-                handling_result = None
+                handling_result, ops = MessageProcessingStatus.RETRYING_LATER, []
 
-            if handling_result is None:
+            if handling_result == MessageProcessingStatus.RETRYING_LATER:
                 LOGGER.debug("Message type handler has failed, retrying later.")
                 async with self.session_factory() as session:
                     await self._mark_message_for_retry(
@@ -250,14 +252,14 @@ class MessageHandler:
                         pending_message=pending_message,
                         retrying=retrying,
                     )
-                return MessageProcessingStatus.RETRYING_LATER, []
+                return MessageProcessingStatus.RETRYING_LATER, ops
 
-            if not handling_result:
+            if handling_result == MessageProcessingStatus.FAILED_PERMANENTLY:
                 LOGGER.warning(
                     "Message type handler has failed permanently for "
                     "%r, won't retry." % item_hash
                 )
-                return MessageProcessingStatus.FAILED_PERMANENTLY, []
+                return MessageProcessingStatus.FAILED_PERMANENTLY, ops
 
             if not await check_sender_authorization(
                 message=validated_message, content=validated_content

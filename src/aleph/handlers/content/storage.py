@@ -10,12 +10,13 @@ TODO:
 
 import asyncio
 import logging
-from typing import Optional
+from typing import List, Tuple
 
 import aioipfs
 from aleph_message.models import ItemType, StoreContent
 
 from aleph.config import get_config
+from aleph.db.bulk_operations import DbBulkOperation
 from aleph.db.models import MessageDb
 from aleph.exceptions import AlephStorageException, UnknownHashError
 from aleph.handlers.content.content_handler import ContentHandler
@@ -25,30 +26,27 @@ from aleph.schemas.validated_message import (
 )
 from aleph.storage import StorageService
 from aleph.types.db_session import DbSessionFactory
+from aleph.types.processing_status import MessageProcessingStatus
 from aleph.utils import item_type_from_hash
 
 LOGGER = logging.getLogger("HANDLERS.STORAGE")
 
 
 class StoreMessageHandler(ContentHandler):
-    def __init__(self, session_factory: DbSessionFactory, storage_service: StorageService):
+    def __init__(
+        self, session_factory: DbSessionFactory, storage_service: StorageService
+    ):
         self.session_factory = session_factory
         self.storage_service = storage_service
 
     async def handle_content(
         self, message: MessageDb, content: StoreContent
-    ) -> Optional[bool]:
+    ) -> Tuple[MessageProcessingStatus, List[DbBulkOperation]]:
         config = get_config()
         if not config.storage.store_files.value:
-            return True  # Ignore
+            return MessageProcessingStatus.MESSAGE_HANDLED, []  # Ignore
 
-        item_type = content.item_type
-        try:
-            engine = ItemType(item_type)
-        except ValueError:
-            LOGGER.warning("Got invalid storage engine %s" % item_type)
-            return False  # not allowed, ignore.
-
+        engine = content.item_type
         output_content = StoreContentWithMetadata.from_content(content)
 
         is_folder = False
@@ -74,7 +72,7 @@ class StoreMessageHandler(ContentHandler):
                         f"Invalid IPFS hash from API: '{item_hash}'"
                     ) from e
                 if stats is None:
-                    return None
+                    return MessageProcessingStatus.RETRYING_LATER, []
 
                 if (
                     stats["Type"] == "file"
@@ -90,7 +88,10 @@ class StoreMessageHandler(ContentHandler):
                     async for status in ipfs_client.pin.add(item_hash):
                         timer += 1
                         if timer > 30 and "Pins" not in status:
-                            return None  # Can't retrieve data now.
+                            return (
+                                MessageProcessingStatus.RETRYING_LATER,
+                                [],
+                            )  # Can't retrieve data now.
                     do_standard_lookup = False
 
             except asyncio.TimeoutError as error:
@@ -118,11 +119,11 @@ class StoreMessageHandler(ContentHandler):
                     store_value=True,
                 )
             except AlephStorageException:
-                return None
+                return MessageProcessingStatus.RETRYING_LATER, []
 
             output_content.size = len(file_content)
 
         output_content.content_type = "directory" if is_folder else "file"
         # store_message.content = output_content
 
-        return True
+        return MessageProcessingStatus.MESSAGE_HANDLED, []

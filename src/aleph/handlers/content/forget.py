@@ -2,19 +2,21 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Optional, List, Mapping
+from typing import Optional, List, Mapping, Tuple
 
 from aioipfs.api import RepoAPI
 from aioipfs.exceptions import NotPinnedError
 from aleph_message.models import ItemType, MessageType, ForgetContent
 
 from aleph.db.accessors.file_pins import is_pinned_file
+from aleph.db.bulk_operations import DbBulkOperation
 from aleph.db.models import MessageDb
 from aleph.handlers.content.content_handler import ContentHandler
 from aleph.model.messages import Message
 from aleph.schemas.validated_message import ValidatedForgetMessage
 from aleph.types.db_session import DbSessionFactory
 from aleph.storage import StorageService
+from aleph.types.processing_status import MessageProcessingStatus
 from aleph.utils import item_type_from_hash
 
 logger = logging.getLogger(__name__)
@@ -212,7 +214,7 @@ class ForgetMessageHandler(ContentHandler):
 
     async def handle_content(
         self, forget_message: MessageDb, content: ForgetContent
-    ) -> Optional[bool]:
+    ) -> Tuple[MessageProcessingStatus, List[DbBulkOperation]]:
         # Parsing and validation
         logger.debug(f"Handling forget message {forget_message.item_hash}")
         hashes_to_forget = content.hashes
@@ -243,4 +245,4 @@ class ForgetMessageHandler(ContentHandler):
                 target_info=target_info, forget_message=forget_message
             )
 
-        return True
+        return MessageProcessingStatus.MESSAGE_HANDLED, []
