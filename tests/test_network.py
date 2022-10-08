@@ -1,7 +1,7 @@
 import pytest
 
 from aleph.exceptions import InvalidMessageError
-from aleph.handlers.message_handler import IncomingStatus, MessageHandler
+from aleph.handlers.message_handler import MessageProcessingStatus, MessageHandler
 from aleph.chains.chain_service import ChainService
 from aleph.schemas.pending_messages import parse_message
 from aleph.storage import StorageService
@@ -114,4 +114,4 @@ async def test_incoming_inline_content(
 
     message = parse_message(message_dict)
     status, ops = await message_handler.incoming(message)
-    assert status == IncomingStatus.MESSAGE_HANDLED
+    assert status == MessageProcessingStatus.MESSAGE_HANDLED

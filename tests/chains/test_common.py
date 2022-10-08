@@ -6,8 +6,9 @@ from aleph_message.models import MessageType, ItemType
 from aleph.chains.chain_service import ChainService
 from aleph.chains.common import get_verification_buffer
 from aleph.db.models import PendingMessageDb
-from aleph.handlers.message_handler import MessageHandler, IncomingStatus
+from aleph.handlers.message_handler import MessageHandler
 from aleph.schemas.pending_messages import BasePendingMessage, parse_message
+from aleph.types.processing_status import MessageProcessingStatus
 
 
 @pytest.mark.asyncio
@@ -60,4 +61,4 @@ async def test_incoming_inline(mocker):
     message = parse_message(message_dict)
     pending_message = PendingMessageDb.from_obj(message)
     status, ops = await message_processor.incoming(pending_message)
-    assert status == IncomingStatus.MESSAGE_HANDLED
+    assert status == MessageProcessingStatus.MESSAGE_HANDLED

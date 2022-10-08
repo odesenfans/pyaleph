@@ -18,7 +18,7 @@ from aleph.db.accessors.pending_messages import get_pending_messages_stream
 from aleph.db.bulk_operations import DbBulkOperation
 from aleph.db.connection import make_engine, make_session_factory
 from aleph.db.models import PendingMessageDb
-from aleph.handlers.message_handler import MessageHandler, IncomingStatus
+from aleph.handlers.message_handler import MessageHandler
 from aleph.logging import setup_logging
 from aleph.services.ipfs import IpfsService
 from aleph.services.ipfs.common import make_ipfs_client
@@ -27,6 +27,7 @@ from aleph.services.storage.fileystem_engine import FileSystemStorageEngine
 from aleph.storage import StorageService
 from aleph.types.db_session import DbSession, DbSessionFactory
 from .job_utils import prepare_loop, process_job_results
+from ..types.processing_status import MessageProcessingStatus
 
 LOGGER = getLogger("jobs.pending_messages")
 
@@ -94,7 +95,7 @@ class PendingMessageProcessor:
                 retrying=True,
             )
 
-        if status != IncomingStatus.RETRYING_LATER:
+        if status != MessageProcessingStatus.RETRYING_LATER:
             operations.append(delete_pending_message_op)
 
         return operations
