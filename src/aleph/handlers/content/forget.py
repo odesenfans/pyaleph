@@ -8,13 +8,15 @@ from aioipfs.api import RepoAPI
 from aioipfs.exceptions import NotPinnedError
 from aleph_message.models import ItemType, MessageType, ForgetContent
 
+from aleph.db.accessors.aggregates import aggregate_exists, delete_aggregate, get_message_hashes_for_aggregate
 from aleph.db.accessors.file_pins import is_pinned_file
+from aleph.db.accessors.messages import message_exists, get_matching_messages
 from aleph.db.bulk_operations import DbBulkOperation
 from aleph.db.models import MessageDb
 from aleph.handlers.content.content_handler import ContentHandler
 from aleph.model.messages import Message
 from aleph.schemas.validated_message import ValidatedForgetMessage
-from aleph.types.db_session import DbSessionFactory
+from aleph.types.db_session import DbSessionFactory, DbSession
 from aleph.storage import StorageService
 from aleph.types.message_status import MessageProcessingStatus
 from aleph.utils import item_type_from_hash
@@ -89,9 +91,40 @@ async def file_references_exist(storage_hash: str) -> bool:
 
 
 class ForgetMessageHandler(ContentHandler):
-    def __init__(self, session_factory: DbSessionFactory, storage_service: StorageService):
+    def __init__(
+        self, session_factory: DbSessionFactory, storage_service: StorageService
+    ):
         self.session_factory = session_factory
         self.storage_service = storage_service
+
+    async def fetch_related_content(
+        self, session: DbSession, forget_message: MessageDb
+    ) -> Tuple[MessageProcessingStatus, List[DbBulkOperation]]:
+        """
+        We only consider FORGETs as fetched if the messages / aggregates they target
+        already exist. Otherwise, we retry them later.
+        """
+
+        content = forget_message.parsed_content
+
+        logger.debug(f"{forget_message.item_hash}: checking for forget message targets")
+        assert isinstance(content, ForgetContent)
+
+        if not content.hashes and not content.aggregates:
+            # The user did not specify anything to forget.
+            return MessageProcessingStatus.FAILED_PERMANENTLY, []
+
+        for item_hash in content.hashes:
+            if not message_exists(session=session, item_hash=item_hash):
+                return MessageProcessingStatus.RETRYING_LATER, []
+
+        for aggregate_key in content.aggregates:
+            if not aggregate_exists(
+                session=session, key=aggregate_key, owner=content.address
+            ):
+                return MessageProcessingStatus.RETRYING_LATER, []
+
+        return MessageProcessingStatus.MESSAGE_HANDLED, []
 
     async def garbage_collect(self, storage_hash: str, storage_type: ItemType):
         """If a file does not have any reference left, delete or unpin it.
@@ -212,25 +245,48 @@ class ForgetMessageHandler(ContentHandler):
                 target_info.content_item_hash, target_info.content_item_type
             )
 
-    async def handle_content(
-        self, forget_message: MessageDb, content: ForgetContent
-    ) -> Tuple[MessageProcessingStatus, List[DbBulkOperation]]:
-        # Parsing and validation
-        logger.debug(f"Handling forget message {forget_message.item_hash}")
-        hashes_to_forget = content.hashes
+    async def _forget_aggregate(self, session: DbSession, key: str, owner: str):
+        await delete_aggregate(session=session, key=key, owner=owner)
 
-        for target_aggregate in content.aggregates:
-            aggregate_hashes = (
-                message["item_hash"]
-                async for message in Message.collection.find(
-                    {
-                        "type": MessageType.aggregate.value,
-                        "content.key": target_aggregate,
-                    },
-                    projection={"_id": 0, "item_hash": 1},
+    async def _process_forget_message(
+        self, session: DbSession, forget_message: MessageDb
+    ) -> MessageProcessingStatus:
+
+        logger.debug(f"Processing forget message {forget_message.item_hash}...")
+
+        content = forget_message.parsed_content
+        assert isinstance(content, ForgetContent)
+
+        messages_to_forget = content.hashes
+        for aggregate_key in content.aggregates:
+            messages_to_forget.extend(
+                await get_message_hashes_for_aggregate(
+                    session=session, key=aggregate_key, owner=content.address
                 )
             )
-            hashes_to_forget.extend(aggregate_hashes)
+
+        if content.hashes:
+            target_messages = {
+                message.item_hash: message
+                for message in await get_matching_messages(
+                    session=session, hashes=content.hashes
+                )
+            }
+        else:
+            target_messages = []
+
+        await self._check_permissions()
+
+        if content.aggregates:
+            # Check permissions: for the moment, we only allow users to forget messages
+            # directly
+            if forget_message.sender != content.address:
+                return MessageProcessingStatus.FAILED_PERMANENTLY
+
+        for aggregate_key in content.aggregates:
+            await self._forget_aggregate(
+                session=session, key=aggregate_key, owner=content.address
+            )
 
         for target_hash in hashes_to_forget:
             target_info = await get_target_message_info(target_hash)
@@ -245,4 +301,5 @@ class ForgetMessageHandler(ContentHandler):
                 target_info=target_info, forget_message=forget_message
             )
 
-        return MessageProcessingStatus.MESSAGE_HANDLED, []
+    async def process(self, messages: List[MessageDb]) -> MessageProcessingStatus:
+        pass

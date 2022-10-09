@@ -14,7 +14,6 @@ from aleph_message.models import (
     PostContent,
     ProgramContent,
     StoreContent,
-    BaseContent,
 )
 from pydantic import BaseModel, Field
 
@@ -88,29 +87,6 @@ class ValidatedStoreMessage(
     BaseValidatedMessage[Literal[MessageType.store], StoreContent]  # type: ignore
 ):
     pass
-
-
-CONTENT_TYPE_MAP: Dict[MessageType, Type[BaseContent]] = {
-    MessageType.aggregate: AggregateContent,
-    MessageType.forget: ForgetContent,
-    MessageType.post: PostContent,
-    MessageType.program: ProgramContent,
-    MessageType.store: StoreContent,
-}
-
-
-def validate_message_content(
-    pending_message: PendingMessageDb,
-    content_dict: Dict[str, Any],
-) -> BaseContent:
-
-    if content_dict.get("address") is None:
-        content_dict["address"] = pending_message.message_sender
-
-    if content_dict.get("time") is None:
-        content_dict["time"] = pending_message.time.timestamp()
-
-    return CONTENT_TYPE_MAP[pending_message.message_type].parse_obj(content_dict)
 
 
 def validate_pending_message(

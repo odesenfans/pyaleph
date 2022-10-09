@@ -2,7 +2,7 @@ import datetime as dt
 from typing import Optional, Sequence, Union, Iterable
 
 from aleph_message.models import ItemHash, Chain, MessageType
-from sqlalchemy import func, select
+from sqlalchemy import func, select, exists
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -30,6 +30,14 @@ async def get_message_by_item_hash(
         )
     )
     return (await session.execute(select_stmt)).scalar()
+
+
+async def message_exists(session: DbSession, item_hash: str) -> bool:
+    return await MessageDb.exists(
+        session=session,
+        column=MessageDb.item_hash,
+        where=MessageDb.item_hash == item_hash,
+    )
 
 
 def coerce_to_datetime(

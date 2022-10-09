@@ -38,7 +38,7 @@ async def test_process_aggregate_first_element(
             )
         ).scalar_one()
 
-    await message_handler.process_one_message_db(pending_message=pending_message)
+    await message_handler.fetch_and_process_one_message_db(pending_message=pending_message)
 
     # Check the aggregate
     content = json.loads(pending_message.item_content)

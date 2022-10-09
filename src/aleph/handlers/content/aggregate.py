@@ -1,3 +1,4 @@
+import itertools
 from typing import Tuple, List, Dict, Sequence, Iterable
 
 from aleph_message.models import BaseContent, AggregateContent
@@ -74,9 +75,14 @@ class AggregateMessageHandler(ContentHandler):
 
         session.add(new_element)
 
-    async def handle_content(
-        self, message: MessageDb, content: AggregateContent
+    async def fetch_related_content(
+        self, session: DbSession, message: MessageDb
     ) -> Tuple[MessageProcessingStatus, List[DbBulkOperation]]:
+
+        return MessageProcessingStatus.MESSAGE_HANDLED, []
+
+        content = message.parsed_content
+        assert isinstance(content, AggregateContent)
 
         async with self.session_factory() as session:
             element = AggregateElementDb(
@@ -90,3 +96,38 @@ class AggregateMessageHandler(ContentHandler):
             await session.commit()
 
         return MessageProcessingStatus.MESSAGE_HANDLED, []
+
+    async def _update_aggregate(
+        self, session: DbSession, key: str, owner: str, messages: Iterable[MessageDb]
+    ):
+        elements = [
+            AggregateElementDb(
+                item_hash=message.item_hash,
+                key=key,
+                owner=owner,
+                content=message.parsed_content.content,
+                creation_datetime=timestamp_to_datetime(message.parsed_content.time),
+            )
+            for message in messages
+        ]
+        # TODO: to improve performance, only modify the aggregate once -> insert several
+        #       elements at once
+
+        for element in elements:
+            await self._insert_aggregate_element(session=session, new_element=element)
+
+    async def process(self, messages: List[MessageDb]) -> MessageProcessingStatus:
+        sorted_messages = sorted(
+            messages, key=lambda m: (m.parsed_content.key, m.parsed_content.address, m.time)
+        )
+
+        async with self.session_factory() as session:
+            for ((key, owner), messages) in itertools.groupby(
+                sorted_messages, key=lambda m: (m.parsed_content.key, m.parsed_content.address)
+            ):
+                await self._update_aggregate(
+                    session=session, key=key, owner=owner, messages=messages
+                )
+            await session.commit()
+
+        return MessageProcessingStatus.MESSAGE_HANDLED

@@ -1,7 +1,17 @@
 import datetime as dt
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Type
 
-from aleph_message.models import Chain, MessageType, ItemType
+from aleph_message.models import (
+    Chain,
+    MessageType,
+    ItemType,
+    BaseContent,
+    AggregateContent,
+    ForgetContent,
+    PostContent,
+    ProgramContent,
+    StoreContent,
+)
 from sqlalchemy import Column, TIMESTAMP, String, Integer, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
@@ -13,6 +23,29 @@ from aleph.types.message_status import MessageStatus
 from .base import Base
 from .chains import ChainTxDb
 from .pending_messages import PendingMessageDb
+
+
+CONTENT_TYPE_MAP: Dict[MessageType, Type[BaseContent]] = {
+    MessageType.aggregate: AggregateContent,
+    MessageType.forget: ForgetContent,
+    MessageType.post: PostContent,
+    MessageType.program: ProgramContent,
+    MessageType.store: StoreContent,
+}
+
+
+def validate_message_content(
+    pending_message: PendingMessageDb,
+    content_dict: Dict[str, Any],
+) -> BaseContent:
+
+    if content_dict.get("address") is None:
+        content_dict["address"] = pending_message.message_sender
+
+    if content_dict.get("time") is None:
+        content_dict["time"] = pending_message.time.timestamp()
+
+    return CONTENT_TYPE_MAP[pending_message.message_type].parse_obj(content_dict)
 
 
 class MessageStatusDb(Base):
@@ -45,15 +78,58 @@ class MessageDb(Base):
         "MessageConfirmationDb", back_populates="message"
     )
 
-    # __mapper_args__ = {
-    #     "polymorphic_identity": "unknown",
-    #     "polymorphic_on": message_type,
-    # }
+    _parsed_content: Optional[BaseContent] = None
 
     @property
     def confirmed(self) -> bool:
         return bool(self.confirmations)
 
+    @property
+    def parsed_content(self):
+        if self._parsed_content is None:
+            self._parsed_content = validate_message_content(self, self.content)
+        return self._parsed_content
+
+    @staticmethod
+    def _coerce_content(
+        pending_message: PendingMessageDb, content_dict: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        if content_dict.get("address") is None:
+            content_dict["address"] = pending_message.message_sender
+        if content_dict.get("time") is None:
+            content_dict["time"] = pending_message.time.timestamp()
+        return content_dict
+
+    @classmethod
+    def from_pending_message(
+        cls,
+        pending_message: PendingMessageDb,
+        content_dict: Dict[str, Any],
+        content_size: int,
+    ) -> "MessageDb":
+
+        content_dict = cls._coerce_content(pending_message, content_dict)
+        parsed_content = validate_message_content(pending_message, content_dict)
+
+        return cls(
+            item_hash=pending_message.item_hash,
+            message_type=pending_message.message_type,
+            chain=pending_message.chain,
+            sender=pending_message.sender,
+            signature=pending_message.signature,
+            item_type=pending_message.item_type,
+            item_content=pending_message.item_content,
+            content=content_dict,
+            time=pending_message.time,
+            channel=pending_message.channel,
+            size=content_size,
+            _parsed_content=parsed_content,
+        )
+
+    # __mapper_args__ = {
+    #     "polymorphic_identity": "unknown",
+    #     "polymorphic_on": message_type,
+    # }
     @classmethod
     def from_message_dict(cls, message_dict: Dict[str, Any]) -> "MessageDb":
         """
@@ -75,27 +151,6 @@ class MessageDb(Base):
             time=timestamp_to_datetime(message_dict["time"]),
             channel=message_dict.get("channel"),
             size=message_dict.get("size", 0),
-        )
-
-    @classmethod
-    def from_pending_message(
-        cls,
-        pending_message: PendingMessageDb,
-        content_dict: Dict[str, Any],
-        content_size: int,
-    ):
-        return cls(
-            item_hash=pending_message.item_hash,
-            message_type=pending_message.message_type,
-            chain=pending_message.chain,
-            sender=pending_message.sender,
-            signature=pending_message.signature,
-            item_type=pending_message.item_type,
-            item_content=pending_message.item_content,
-            content=content_dict,
-            time=pending_message.time,
-            channel=pending_message.channel,
-            size=content_size,
         )
 
 

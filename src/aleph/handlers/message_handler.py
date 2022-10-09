@@ -1,6 +1,6 @@
 from typing import Optional, Dict, Tuple, List
 
-from aleph_message.models import MessageConfirmation, BaseContent, MessageType
+from aleph_message.models import MessageConfirmation, MessageType
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,31 +29,10 @@ from aleph.handlers.content.content_handler import ContentHandler
 from aleph.handlers.content.forget import ForgetMessageHandler
 from aleph.handlers.content.storage import StoreMessageHandler
 from aleph.permissions import check_sender_authorization
-from aleph.schemas.message_content import MessageContent
 from aleph.schemas.pending_messages import BasePendingMessage
-from aleph.schemas.validated_message import (
-    validate_message_content,
-)
 from aleph.storage import StorageService
-from aleph.types.db_session import DbSessionFactory
+from aleph.types.db_session import DbSessionFactory, DbSession
 from aleph.types.message_status import MessageProcessingStatus
-
-
-# TODO: don't forget to clean up between this function and validated_messages.py
-def validate_pending_message(
-    pending_message: PendingMessageDb, content: MessageContent
-) -> Tuple[MessageDb, BaseContent]:
-    # Some values may be missing in the content, adjust them
-    validated_content = validate_message_content(
-        pending_message=pending_message, content_dict=content.value
-    )
-    message_db = MessageDb.from_pending_message(
-        pending_message=pending_message,
-        content_dict=validated_content.dict(exclude_none=True),
-        content_size=len(content.raw_value),
-    )
-
-    return message_db, validated_content
 
 
 class MessageHandler:
@@ -103,15 +82,21 @@ class MessageHandler:
             )
             await session.execute(update_stmt)
 
+    # TODO typing: make this function generic
+    def get_content_handler(self, message_type: MessageType) -> ContentHandler:
+        return self.content_handlers[message_type]
+
     async def process_message_content(
-        self, message: MessageDb, content: BaseContent
+        self, session: DbSession, message: MessageDb
     ) -> Tuple[MessageProcessingStatus, List[DbBulkOperation]]:
         try:
             content_handler = self.content_handlers[message.message_type]
         except KeyError:
             return MessageProcessingStatus.MESSAGE_HANDLED, []
 
-        return await content_handler.handle_content(message=message, content=content)
+        return await content_handler.fetch_related_content(
+            session=session, message=message
+        )
 
     async def delayed_incoming(
         self,
@@ -228,33 +213,34 @@ class MessageHandler:
                     )
                 return MessageProcessingStatus.RETRYING_LATER, []
 
-            validated_message, validated_content = validate_pending_message(
-                pending_message=pending_message, content=content
+            validated_message = MessageDb.from_pending_message(
+                pending_message=pending_message,
+                content_dict=content.value,
+                content_size=len(content.raw_value),
             )
 
-            try:
-                handling_result, ops = await self.process_message_content(
-                    message=validated_message, content=validated_content
-                )
-            except UnknownHashError:
-                LOGGER.warning(
-                    f"Invalid IPFS hash for message {item_hash}, won't retry."
-                )
-                return MessageProcessingStatus.FAILED_PERMANENTLY, []
-            except Exception as e:
-                print(e)
-                LOGGER.exception("Error using the message type handler")
-                handling_result, ops = MessageProcessingStatus.RETRYING_LATER, []
+            async with self.session_factory() as session:
+                try:
+                    handling_result, ops = await self.process_message_content(
+                        session=session, message=validated_message
+                    )
+                except UnknownHashError:
+                    LOGGER.warning(
+                        f"Invalid IPFS hash for message {item_hash}, won't retry."
+                    )
+                    return MessageProcessingStatus.FAILED_PERMANENTLY, []
+                except Exception:
+                    LOGGER.exception("Error using the message type handler")
+                    handling_result, ops = MessageProcessingStatus.RETRYING_LATER, []
 
-            if handling_result == MessageProcessingStatus.RETRYING_LATER:
-                LOGGER.debug("Message type handler has failed, retrying later.")
-                async with self.session_factory() as session:
+                if handling_result == MessageProcessingStatus.RETRYING_LATER:
+                    LOGGER.debug("Message type handler has failed, retrying later.")
                     await self._mark_message_for_retry(
                         session=session,
                         pending_message=pending_message,
                         retrying=retrying,
                     )
-                return MessageProcessingStatus.RETRYING_LATER, ops
+                    return MessageProcessingStatus.RETRYING_LATER, ops
 
             if handling_result == MessageProcessingStatus.FAILED_PERMANENTLY:
                 LOGGER.warning(
@@ -264,7 +250,7 @@ class MessageHandler:
                 return MessageProcessingStatus.FAILED_PERMANENTLY, ops
 
             if not await check_sender_authorization(
-                message=validated_message, content=validated_content
+                message=validated_message, content=validated_message.parsed_content
             ):
                 LOGGER.warning("Invalid sender for %s" % item_hash)
                 return MessageProcessingStatus.MESSAGE_HANDLED, []
@@ -300,19 +286,12 @@ class MessageHandler:
         if updates:
             bulk_ops = updates
 
-            # Capped collections do not accept updates that increase the size, so
-            # we must ignore confirmations. We also ignore on-chain messages for
-            # performance reasons (bulk inserts on capped collections are slow).
-            # TODO: determine what to do for the websocket (ex: use the message table directly?)
-            # if existing is None:
-            # if tx_hash is None:
-            # bulk_ops.append(DbBulkOperation(CappedMessage, update_op))
-
             return MessageProcessingStatus.MESSAGE_HANDLED, bulk_ops
 
         return MessageProcessingStatus.MESSAGE_HANDLED, []
 
-    async def process_one_message_db(self, pending_message: PendingMessageDb):
+    async def fetch_and_process_one_message_db(self, pending_message: PendingMessageDb):
+        # Fetch
         status, ops = await self.incoming(pending_message=pending_message)
 
         async with self.session_factory() as session:
@@ -321,6 +300,16 @@ class MessageHandler:
                     await session.execute(op.operation)
 
             await session.commit()
+
+            # Process
+            content_handler = self.get_content_handler(pending_message.message_type)
+            # TODO: avoid reloading from the DB, if possible? The idea of having two
+            #       loops might make this impossible to avoid.
+            message = await get_message_by_item_hash(
+                session=session, item_hash=pending_message.item_hash
+            )
+            await content_handler.process(messages=[message])
+
 
     # TODO: refactor this function to take a PendingMessageDb directly
     async def process_one_message(
@@ -334,4 +323,4 @@ class MessageHandler:
 
         pending_message = PendingMessageDb.from_obj(message)
         pending_message.tx = chain_tx
-        await self.process_one_message_db(pending_message)
+        await self.fetch_and_process_one_message_db(pending_message)

@@ -89,7 +89,7 @@ async def test_handle_new_storage_file(
     )
     storage_service.get_hash_content = get_hash_content_mock = mocker.AsyncMock(return_value=raw_content)  # type: ignore
     store_message_handler = StoreMessageHandler(storage_service=storage_service)
-    result = await store_message_handler.handle_content(message)
+    result = await store_message_handler.fetch_related_content(message)
     assert result
 
     # The IPFS stats are not added for files
@@ -124,7 +124,7 @@ async def test_handle_new_storage_directory(
     )
     store_message_handler = StoreMessageHandler(storage_service=storage_service)
 
-    result = await store_message_handler.handle_content(message)
+    result = await store_message_handler.fetch_related_content(message)
     assert result
 
     # Check the updates to the message content

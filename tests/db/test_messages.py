@@ -7,6 +7,7 @@ from aleph_message.models import Chain, MessageType, ItemType
 from aleph.db.accessors.messages import (
     get_message_by_item_hash,
     get_unconfirmed_messages,
+    message_exists,
 )
 from aleph.db.models import MessageDb, MessageConfirmationDb, ChainTxDb
 from aleph.toolkit.timestamp import timestamp_to_datetime
@@ -128,6 +129,21 @@ async def test_get_message_with_confirmations(
         assert confirmation.tx.height == original.tx.height
         assert confirmation.tx.datetime == original.tx.datetime
         assert confirmation.tx.publisher == original.tx.publisher
+
+
+@pytest.mark.asyncio
+async def test_message_exists(session_factory: DbSessionFactory, fixture_message):
+    async with session_factory() as session:
+        assert not await message_exists(
+            session=session, item_hash=fixture_message.item_hash
+        )
+
+        session.add(fixture_message)
+        await session.commit()
+
+        assert await message_exists(
+            session=session, item_hash=fixture_message.item_hash
+        )
 
 
 @pytest.mark.asyncio

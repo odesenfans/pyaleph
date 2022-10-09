@@ -25,7 +25,7 @@ from aleph.schemas.validated_message import (
     EngineInfo,
 )
 from aleph.storage import StorageService
-from aleph.types.db_session import DbSessionFactory
+from aleph.types.db_session import DbSessionFactory, DbSession
 from aleph.types.message_status import MessageProcessingStatus
 from aleph.utils import item_type_from_hash
 
@@ -39,12 +39,15 @@ class StoreMessageHandler(ContentHandler):
         self.session_factory = session_factory
         self.storage_service = storage_service
 
-    async def handle_content(
-        self, message: MessageDb, content: StoreContent
+    async def fetch_related_content(
+        self, session: DbSession, message: MessageDb
     ) -> Tuple[MessageProcessingStatus, List[DbBulkOperation]]:
         config = get_config()
         if not config.storage.store_files.value:
             return MessageProcessingStatus.MESSAGE_HANDLED, []  # Ignore
+
+        content = message.parsed_content
+        assert isinstance(content, StoreContent)
 
         engine = content.item_type
         output_content = StoreContentWithMetadata.from_content(content)
@@ -127,3 +130,6 @@ class StoreMessageHandler(ContentHandler):
         # store_message.content = output_content
 
         return MessageProcessingStatus.MESSAGE_HANDLED, []
+
+    async def process(self, messages: List[MessageDb]) -> MessageProcessingStatus:
+        pass
