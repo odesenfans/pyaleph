@@ -16,8 +16,9 @@ import aioipfs
 from aleph_message.models import ItemType, StoreContent
 
 from aleph.config import get_config
+from aleph.db.accessors.files import upsert_stored_file, make_upsert_stored_file_query
 from aleph.db.bulk_operations import DbBulkOperation
-from aleph.db.models import MessageDb
+from aleph.db.models import MessageDb, StoredFileDb, FileReferenceDb
 from aleph.exceptions import AlephStorageException, UnknownHashError
 from aleph.handlers.content.content_handler import ContentHandler
 from aleph.schemas.validated_message import (
@@ -26,6 +27,7 @@ from aleph.schemas.validated_message import (
 )
 from aleph.storage import StorageService
 from aleph.types.db_session import DbSessionFactory, DbSession
+from aleph.types.file_type import FileType
 from aleph.types.message_status import MessageProcessingStatus
 from aleph.utils import item_type_from_hash
 
@@ -126,10 +128,29 @@ class StoreMessageHandler(ContentHandler):
 
             output_content.size = len(file_content)
 
-        output_content.content_type = "directory" if is_folder else "file"
+        stored_file = StoredFileDb(
+            hash=item_hash, type=FileType.DIRECTORY if is_folder else FileType.FILE
+        )
+        ops = [make_upsert_stored_file_query(stored_file)]
         # store_message.content = output_content
 
-        return MessageProcessingStatus.MESSAGE_HANDLED, []
+        return MessageProcessingStatus.MESSAGE_HANDLED, ops
+
+    async def _create_file_reference(self, session: DbSession, message: MessageDb):
+        content = message.parsed_content
+        assert isinstance(content, StoreContent)
+
+        session.add(
+            FileReferenceDb(
+                file_hash=content.item_hash,
+                owner=content.address,
+                item_hash=message.item_hash,
+            )
+        )
 
     async def process(self, messages: List[MessageDb]) -> MessageProcessingStatus:
-        pass
+        async with self.session_factory() as session:
+            for message in messages:
+                await self._create_file_reference(session=session, message=message)
+
+        return MessageProcessingStatus.MESSAGE_HANDLED

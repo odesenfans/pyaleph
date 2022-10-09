@@ -1,31 +1,35 @@
-from enum import Enum
 from typing import Optional, List
 
-from sqlalchemy import BigInteger, Column, String, ForeignKey, UniqueConstraint
+from sqlalchemy import BigInteger, Column, String, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy_utils import ChoiceType
 
+from aleph.types.file_type import FileType
 from .base import Base
-
-
-class FileType(str, Enum):
-    FILE = "f"
-    DIRECTORY = "d"
 
 
 class StoredFileDb(Base):
     __tablename__ = "files"
 
-    id: int = Column(BigInteger, primary_key=True)
+    # id: int = Column(BigInteger, primary_key=True)
 
-    hash: Optional[str] = Column(String, nullable=True)
-    cidv0: str = Column(String, nullable=False)
-    cidv1: str = Column(String, nullable=False)
+    hash: str = Column(String, nullable=False, primary_key=True)
 
-    size: int = Column(BigInteger, nullable=False)
+    # TODO: compute hash equivalences
+    # TODO: unique index for sha256
+    # TODO: size constraints for hash fields
+    # sha256_hex: Optional[str] = Column(String, nullable=True, index=True)
+    # cidv0: str = Column(String, nullable=False, unique=True, index=True)
+    # cidv1: str = Column(String, nullable=False, unique=True, index=True)
+
+    # size: int = Column(BigInteger, nullable=False)
+    # TODO: compute the size from local storage
+    size: Optional[int] = Column(BigInteger, nullable=True)
     type = Column(ChoiceType(FileType), nullable=False)
 
-    references: List["FileReferenceDb"] = relationship("FileReferenceDb", back_populates="file")
+    references: List["FileReferenceDb"] = relationship(
+        "FileReferenceDb", back_populates="file"
+    )
 
 
 class FileReferenceDb(Base):
@@ -33,7 +37,8 @@ class FileReferenceDb(Base):
 
     id: int = Column(BigInteger, primary_key=True)
 
-    file_id: int = Column(ForeignKey(StoredFileDb.id), nullable=False, index=True)
+    # TODO: should point to ID instead
+    file_hash: int = Column(ForeignKey(StoredFileDb.hash), nullable=False, index=True)
     owner: str = Column(String, nullable=False)
     item_hash: str = Column(String, nullable=False, unique=True)
 
