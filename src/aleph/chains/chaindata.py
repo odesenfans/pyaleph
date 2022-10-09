@@ -9,7 +9,7 @@ from aleph.chains.common import LOGGER
 from aleph.chains.tx_context import TxContext
 from aleph.config import get_config
 from aleph.db.models import ChainTxDb, MessageDb
-from aleph.db.models.file_pins import FilePinDb
+from aleph.db.models.files import FilePinDb
 from aleph.db.models.pending_txs import ChainSyncProtocol, PendingTxDb
 from aleph.exceptions import (
     InvalidContent,

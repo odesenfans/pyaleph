@@ -1,7 +1,7 @@
 import pytest
 from aleph.types.db_session import DbSessionFactory
 
-from aleph.db.accessors.file_pins import is_pinned_file
+from aleph.db.accessors.files import is_pinned_file
 from aleph.db.models import FilePinDb
 
 

@@ -9,7 +9,7 @@ from aioipfs.exceptions import NotPinnedError
 from aleph_message.models import ItemType, MessageType, ForgetContent
 
 from aleph.db.accessors.aggregates import aggregate_exists, delete_aggregate, get_message_hashes_for_aggregate
-from aleph.db.accessors.file_pins import is_pinned_file
+from aleph.db.accessors.files import is_pinned_file
 from aleph.db.accessors.messages import message_exists, get_matching_messages
 from aleph.db.bulk_operations import DbBulkOperation
 from aleph.db.models import MessageDb

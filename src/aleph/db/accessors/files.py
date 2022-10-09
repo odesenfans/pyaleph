@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from ..models.file_pins import FilePinDb
+from ..models.files import FilePinDb
 from sqlalchemy import exists
 
 
