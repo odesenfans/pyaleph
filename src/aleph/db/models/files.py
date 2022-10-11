@@ -1,11 +1,12 @@
 from typing import Optional, List
 
-from sqlalchemy import BigInteger, Column, String, ForeignKey
+from sqlalchemy import BigInteger, Column, String, ForeignKey, TIMESTAMP
 from sqlalchemy.orm import relationship
 from sqlalchemy_utils import ChoiceType
 
 from aleph.types.file_type import FileType
 from .base import Base
+import datetime as dt
 
 
 class StoredFileDb(Base):
@@ -25,7 +26,8 @@ class StoredFileDb(Base):
     # size: int = Column(BigInteger, nullable=False)
     # TODO: compute the size from local storage
     size: Optional[int] = Column(BigInteger, nullable=True)
-    type = Column(ChoiceType(FileType), nullable=False)
+    type: FileType = Column(ChoiceType(FileType), nullable=False)
+    created: dt.datetime = Column(TIMESTAMP(timezone=True), nullable=False)
 
     references: List["FileReferenceDb"] = relationship(
         "FileReferenceDb", back_populates="file"

@@ -211,6 +211,7 @@ class MessageHandler:
                         pending_message=pending_message,
                         retrying=retrying,
                     )
+                    await session.commit()
                 return MessageProcessingStatus.RETRYING_LATER, []
 
             validated_message = MessageDb.from_pending_message(
@@ -241,6 +242,7 @@ class MessageHandler:
                         retrying=retrying,
                     )
                     return MessageProcessingStatus.RETRYING_LATER, ops
+                await session.commit()
 
             if handling_result == MessageProcessingStatus.FAILED_PERMANENTLY:
                 LOGGER.warning(
@@ -309,7 +311,6 @@ class MessageHandler:
                 session=session, item_hash=pending_message.item_hash
             )
             await content_handler.process(messages=[message])
-
 
     # TODO: refactor this function to take a PendingMessageDb directly
     async def process_one_message(

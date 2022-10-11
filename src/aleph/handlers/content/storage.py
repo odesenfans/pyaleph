@@ -9,6 +9,7 @@ TODO:
 """
 
 import asyncio
+import datetime as dt
 import logging
 from typing import List, Tuple
 
@@ -16,7 +17,7 @@ import aioipfs
 from aleph_message.models import ItemType, StoreContent
 
 from aleph.config import get_config
-from aleph.db.accessors.files import upsert_stored_file, make_upsert_stored_file_query
+from aleph.db.accessors.files import make_upsert_stored_file_query
 from aleph.db.bulk_operations import DbBulkOperation
 from aleph.db.models import MessageDb, StoredFileDb, FileReferenceDb
 from aleph.exceptions import AlephStorageException, UnknownHashError
@@ -81,7 +82,7 @@ class StoreMessageHandler(ContentHandler):
 
                 if (
                     stats["Type"] == "file"
-                    and stats["CumulativeSize"] < 1024**2
+                    and stats["CumulativeSize"] < 1024 ** 2
                     and len(item_hash) == 46
                 ):
                     do_standard_lookup = True
@@ -129,12 +130,13 @@ class StoreMessageHandler(ContentHandler):
             output_content.size = len(file_content)
 
         stored_file = StoredFileDb(
-            hash=item_hash, type=FileType.DIRECTORY if is_folder else FileType.FILE
+            hash=item_hash,
+            type=FileType.DIRECTORY if is_folder else FileType.FILE,
+            created=dt.datetime.utcnow(),
         )
-        ops = [make_upsert_stored_file_query(stored_file)]
-        # store_message.content = output_content
+        await session.execute(make_upsert_stored_file_query(stored_file))
 
-        return MessageProcessingStatus.MESSAGE_HANDLED, ops
+        return MessageProcessingStatus.MESSAGE_HANDLED, []
 
     async def _create_file_reference(self, session: DbSession, message: MessageDb):
         content = message.parsed_content
@@ -152,5 +154,6 @@ class StoreMessageHandler(ContentHandler):
         async with self.session_factory() as session:
             for message in messages:
                 await self._create_file_reference(session=session, message=message)
+            await session.commit()
 
         return MessageProcessingStatus.MESSAGE_HANDLED
