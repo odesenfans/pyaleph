@@ -10,6 +10,44 @@ class MessageStatus(str, Enum):
 
 
 class MessageProcessingStatus(IntEnum):
-    FAILED_PERMANENTLY = -1
-    RETRYING_LATER = 0
-    MESSAGE_HANDLED = 1
+    NEW_MESSAGE = 1
+    NEW_CONFIRMATION = 2
+    MESSAGE_ALREADY_PROCESSED = 3
+
+
+class MessageException(Exception):
+    ...
+
+
+class InvalidMessage(MessageException):
+    """
+    The message is invalid and should be rejected.
+    """
+
+    ...
+
+
+class InvalidSignature(InvalidMessage):
+    """
+    The message is invalid, in particular because its signature does not
+    match the expected value.
+    """
+
+    ...
+
+
+class PermissionDenied(MessageException):
+    """
+    The sender does not have the permission to perform the requested operation
+    on the specified object.
+    """
+
+    ...
+
+
+class MessageUnavailable(MessageException):
+    """
+    The message or its related content is not available at the moment.
+    """
+
+    ...

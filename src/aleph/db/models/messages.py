@@ -39,13 +39,7 @@ def validate_message_content(
     content_dict: Dict[str, Any],
 ) -> BaseContent:
 
-    if content_dict.get("address") is None:
-        content_dict["address"] = pending_message.message_sender
-
-    if content_dict.get("time") is None:
-        content_dict["time"] = pending_message.time.timestamp()
-
-    return CONTENT_TYPE_MAP[pending_message.message_type].parse_obj(content_dict)
+    return CONTENT_TYPE_MAP[pending_message.type].parse_obj(content_dict)
 
 
 class MessageStatusDb(Base):
@@ -63,7 +57,7 @@ class MessageDb(Base):
     __tablename__ = "messages"
 
     item_hash: str = Column(String, primary_key=True)
-    message_type: MessageType = Column(ChoiceType(MessageType), nullable=False)
+    type: MessageType = Column(ChoiceType(MessageType), nullable=False)
     chain: Chain = Column(ChoiceType(Chain), nullable=False)
     sender: str = Column(String, nullable=False, index=True)
     signature: str = Column(String, nullable=False)
@@ -95,7 +89,7 @@ class MessageDb(Base):
         pending_message: PendingMessageDb, content_dict: Dict[str, Any]
     ) -> Dict[str, Any]:
         if content_dict.get("address") is None:
-            content_dict["address"] = pending_message.message_sender
+            content_dict["address"] = pending_message.sender
         if content_dict.get("time") is None:
             content_dict["time"] = pending_message.time.timestamp()
         return content_dict
@@ -111,9 +105,9 @@ class MessageDb(Base):
         content_dict = cls._coerce_content(pending_message, content_dict)
         parsed_content = validate_message_content(pending_message, content_dict)
 
-        return cls(
+        message = cls(
             item_hash=pending_message.item_hash,
-            message_type=pending_message.message_type,
+            type=pending_message.type,
             chain=pending_message.chain,
             sender=pending_message.sender,
             signature=pending_message.signature,
@@ -123,13 +117,10 @@ class MessageDb(Base):
             time=pending_message.time,
             channel=pending_message.channel,
             size=content_size,
-            _parsed_content=parsed_content,
         )
+        message._parsed_content = parsed_content
+        return message
 
-    # __mapper_args__ = {
-    #     "polymorphic_identity": "unknown",
-    #     "polymorphic_on": message_type,
-    # }
     @classmethod
     def from_message_dict(cls, message_dict: Dict[str, Any]) -> "MessageDb":
         """
@@ -141,7 +132,7 @@ class MessageDb(Base):
 
         return cls(
             item_hash=item_hash,
-            message_type=message_dict["type"],
+            type=message_dict["type"],
             chain=Chain(message_dict["chain"]),
             sender=message_dict["sender"],
             signature=message_dict["signature"],
@@ -159,7 +150,7 @@ class ForgottenMessageDb(Base):
     __tablename__ = "forgotten_messages"
 
     item_hash: str = Column(String, primary_key=True)
-    message_type: MessageType = Column(ChoiceType(MessageType), nullable=False)
+    type: MessageType = Column(ChoiceType(MessageType), nullable=False)
     chain: Chain = Column(ChoiceType(Chain), nullable=False)
     sender: str = Column(String, nullable=False, index=True)
     signature: str = Column(String, nullable=False)
@@ -176,52 +167,6 @@ class RejectedMessageDb(Base):
     reason: str = Column(String, nullable=False)
     traceback: str = Column(String, nullable=False)
 
-
-# TODO: figure this out later
-# class BaseContentMixin:
-#     address: str = Column(String, nullable=False)
-#     time: dt.datetime = Column(TIMESTAMP(timezone=True), nullable=False)
-#
-#
-# class AggregateMessageDb(MessageDb, BaseContentMixin):
-#     __tablename__ = "message_contents_aggregate"
-#     __mapper_args__ = {
-#         "polymorphic_identity": MessageType.aggregate.value,
-#     }
-#
-#     key: str = Column(String, nullable=False)
-#     content: Any = Column(JSONB, nullable=False)
-#
-#
-# class ForgetMessageDb(MessageDb, BaseContentMixin):
-#     __tablename__ = "message_contents_forget"
-#     __mapper_args__ = {
-#         "polymorphic_identity": MessageType.forget.value,
-#     }
-#
-#     hashes: List[str] = Column(ARRAY(String), nullable=False)
-#     aggregates: Optional[List[str]] = Column(ARRAY(String), nullable=False)
-#
-#
-# class PostMessageDb(MessageDb, BaseContentMixin):
-#     __tablename__ = "message_contents_post"
-#     __mapper_args__ = {
-#         "polymorphic_identity": MessageType.post.value,
-#     }
-#
-#
-# class ProgramMessageDb(MessageDb, BaseContentMixin):
-#     __tablename__ = "message_contents_program"
-#     __mapper_args__ = {
-#         "polymorphic_identity": MessageType.program.value,
-#     }
-#
-#
-# class StoreMessageDb(MessageDb, BaseContentMixin):
-#     __tablename__ = "message_contents_store"
-#     __mapper_args__ = {
-#         "polymorphic_identity": MessageType.store.value,
-#     }
 
 
 class MessageConfirmationDb(Base):

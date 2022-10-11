@@ -34,4 +34,4 @@ class RawContent(StoredContent):
 @dataclass
 class MessageContent(StoredContent):
     value: Any
-    raw_value: str
+    raw_value: Union[bytes, str]

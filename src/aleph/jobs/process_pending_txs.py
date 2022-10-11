@@ -155,7 +155,7 @@ class PendingTxProcessor:
         LOGGER.info("handling TXs")
         async with self.session_factory() as session:
             async for pending_tx in await get_pending_txs_stream(session):
-                if pending_tx.content["content"] in seen_offchain_hashes:
+                if pending_tx.content in seen_offchain_hashes:
                     continue
 
                 if len(tasks) == max_concurrent_tasks:
@@ -165,7 +165,7 @@ class PendingTxProcessor:
                     await self.process_tx_job_results(session=session, tasks=done)
                     await session.commit()
 
-                seen_offchain_hashes.add(pending_tx.content["content"])
+                seen_offchain_hashes.add(pending_tx.content)
                 tx_task = asyncio.create_task(
                     self.handle_pending_tx(pending_tx, seen_ids=seen_ids)
                 )

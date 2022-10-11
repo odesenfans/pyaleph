@@ -87,6 +87,9 @@ async def run_server(
     LOGGER.debug("Setup of runner")
     p2p_client = await init_p2p_client(config, service_name=f"api-server-{port}")
 
+    engine = make_engine(config, echo=config.logging.level.value == logging.DEBUG)
+    session_factory = make_session_factory(engine)
+
     ipfs_client = make_ipfs_client(config)
     ipfs_service = IpfsService(ipfs_client=ipfs_client)
     storage_service = StorageService(
@@ -99,6 +102,7 @@ async def run_server(
     app["shared_stats"] = shared_stats
     app["p2p_client"] = p2p_client
     app["storage_service"] = storage_service
+    app["session_factory"] = session_factory
 
     runner = web.AppRunner(app)
     await runner.setup()
@@ -225,7 +229,9 @@ async def main(args):
         storage_engine=FileSystemStorageEngine(folder=config.storage.folder.value),
         ipfs_service=ipfs_service,
     )
-    chain_service = ChainService(storage_service=storage_service)
+    chain_service = ChainService(
+        session_factory=session_factory, storage_service=storage_service
+    )
 
     set_start_method("spawn")
 

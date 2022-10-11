@@ -130,8 +130,6 @@ async def test_db_operations_delete_one(
 def make_insert_message_statement(msg: Dict) -> Insert:
     values = msg.copy()
     values["time"] = pytz.utc.localize(dt.datetime.utcfromtimestamp(msg["time"]))
-    values["message_type"] = msg["type"]
-    del values["type"]
 
     return insert(PendingMessageDb).values(**values, retries=0, check_message=True)
 
@@ -194,7 +192,7 @@ async def test_db_operations_insert_and_delete(
     for pending_message in messages_db.scalars():
         expected_message = fixture_messages_by_hash[pending_message.item_hash]
         assert pending_message.item_hash == expected_message["item_hash"]
-        assert pending_message.message_type == expected_message["type"]
+        assert pending_message.type == expected_message["type"]
         assert pending_message.chain == expected_message["chain"]
         assert pending_message.sender == expected_message["sender"]
         assert pending_message.signature == expected_message["signature"]

@@ -25,7 +25,7 @@ def fixture_message() -> MessageDb:
         chain=Chain.ETH,
         sender=sender,
         signature="0x705ca1365a0b794cbfcf89ce13239376d0aab0674d8e7f39965590a46e5206a664bc4b313f3351f313564e033c9fe44fd258492dfbd6c36b089677d73224da0a1c",
-        message_type=MessageType.aggregate,
+        type=MessageType.aggregate,
         item_content='{"address": "0x51A58800b26AA1451aaA803d1746687cB88E0500", "key": "my-aggregate", "time": 1664999873, "content": {"easy": "as", "a-b": "c"}}',
         content={
             "address": sender,
@@ -45,7 +45,7 @@ def assert_messages_equal(expected: MessageDb, actual: MessageDb):
     assert actual.chain == expected.chain
     assert actual.sender == expected.sender
     assert actual.signature == expected.signature
-    assert actual.message_type == expected.message_type
+    assert actual.type == expected.type
     assert actual.content == expected.content
     assert actual.item_type == expected.item_type
     assert actual.size == expected.size

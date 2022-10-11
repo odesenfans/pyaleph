@@ -4,17 +4,17 @@ from typing import Coroutine, List
 from urllib.parse import unquote
 
 from aleph_p2p_client import AlephP2PServiceClient
-from aleph.types.db_session import DbSessionFactory
 
 from aleph.chains.chain_service import ChainService
 from aleph.exceptions import InvalidMessageError
 from aleph.handlers.message_handler import MessageHandler
 from aleph.schemas.pending_messages import BasePendingMessage, parse_message
+from aleph.services.ipfs import IpfsService
 from aleph.services.ipfs.common import make_ipfs_client
 from aleph.services.ipfs.pubsub import incoming_channel as incoming_ipfs_channel
-from aleph.services.ipfs import IpfsService
 from aleph.services.storage.fileystem_engine import FileSystemStorageEngine
 from aleph.storage import StorageService
+from aleph.types.db_session import DbSessionFactory
 
 LOGGER = logging.getLogger("NETWORK")
 
@@ -52,7 +52,7 @@ def listener_tasks(
     chain_service = ChainService(
         session_factory=session_factory, storage_service=storage_service
     )
-    message_processor = MessageHandler(
+    message_handler = MessageHandler(
         session_factory=session_factory,
         chain_service=chain_service,
         storage_service=storage_service,
@@ -63,7 +63,7 @@ def listener_tasks(
         incoming_p2p_channel(
             p2p_client=p2p_client,
             topic=config.aleph.queue_topic.value,
-            message_processor=message_processor,
+            message_handler=message_handler,
         )
     ]
     if config.ipfs.enabled.value:
@@ -71,7 +71,7 @@ def listener_tasks(
             incoming_ipfs_channel(
                 ipfs_service=ipfs_service,
                 topic=config.aleph.queue_topic.value,
-                message_processor=message_processor,
+                message_processor=message_handler,
             )
         )
     return tasks

@@ -2,19 +2,20 @@ import datetime as dt
 from typing import Optional, Sequence, Union, Iterable
 
 from aleph_message.models import ItemHash, Chain, MessageType
-from sqlalchemy import func, select, exists
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql import Insert, Select
+from sqlalchemy.sql.elements import BinaryExpression
 
-from aleph.schemas.validated_message import BaseValidatedMessage
 from aleph.toolkit.timestamp import timestamp_to_datetime
 from aleph.types.channel import Channel
 from aleph.types.db_session import DbSession
 from aleph.types.sort_order import SortOrder
 from ..models import ChainTxDb
-from ..models.messages import MessageDb, MessageConfirmationDb
+from ..models.messages import MessageDb, MessageConfirmationDb, MessageStatusDb
+from ...types.message_status import MessageStatus
 
 
 async def get_message_by_item_hash(
@@ -35,7 +36,6 @@ async def get_message_by_item_hash(
 async def message_exists(session: DbSession, item_hash: str) -> bool:
     return await MessageDb.exists(
         session=session,
-        column=MessageDb.item_hash,
         where=MessageDb.item_hash == item_hash,
     )
 
@@ -81,7 +81,7 @@ def make_matching_messages_query(
     if chains:
         select_stmt = select_stmt.where(MessageDb.chain.in_(chains))
     if message_type:
-        select_stmt = select_stmt.where(MessageDb.message_type == message_type)
+        select_stmt = select_stmt.where(MessageDb.type == message_type)
     if start_datetime:
         select_stmt = select_stmt.where(MessageDb.time >= start_datetime)
     if end_datetime:
@@ -175,6 +175,28 @@ def make_confirmation_upsert_query(item_hash: str, tx_hash: str) -> Insert:
         insert(MessageConfirmationDb)
         .values(item_hash=item_hash, tx_hash=tx_hash)
         .on_conflict_do_nothing()
+    )
+
+
+async def get_message_status(
+    session: DbSession, item_hash: str
+) -> Optional[MessageStatusDb]:
+    return (
+        await session.execute(
+            select(MessageStatusDb).where(MessageStatusDb.item_hash == item_hash)
+        )
+    ).scalar()
+
+
+def make_message_status_upsert_query(
+    item_hash: str, new_status: MessageStatus, where: BinaryExpression
+):
+    return (
+        insert(MessageStatusDb)
+        .values(item_hash=item_hash, status=new_status)
+        .on_conflict_do_update(
+            constraint="message_status_pkey", set_={"status": new_status}, where=where
+        )
     )
 
 

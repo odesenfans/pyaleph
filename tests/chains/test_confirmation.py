@@ -5,14 +5,14 @@ from typing import Dict, Mapping
 import pytest
 import pytz
 from aleph_message.models import Chain
-from aleph.types.db_session import DbSessionFactory
 
 from aleph.chains.chain_service import ChainService
 from aleph.db.accessors.messages import get_message_by_item_hash
-from aleph.db.models import ChainTxDb
+from aleph.db.models import ChainTxDb, PendingMessageDb
 from aleph.handlers.message_handler import MessageHandler
 from aleph.schemas.pending_messages import parse_message
 from aleph.storage import StorageService
+from aleph.types.db_session import DbSessionFactory
 
 MESSAGE_DICT: Mapping = {
     "chain": "ETH",
@@ -71,7 +71,7 @@ async def test_confirm_message(
     item_hash = MESSAGE_DICT["item_hash"]
     content = json.loads(MESSAGE_DICT["item_content"])
 
-    message_handler = MessageHandler(
+    message_handler =MessageHandler(
         session_factory=session_factory,
         chain_service=ChainService(
             session_factory=session_factory, storage_service=test_storage_service
@@ -126,7 +126,7 @@ async def test_process_confirmed_message(
 
     item_hash = MESSAGE_DICT["item_hash"]
 
-    message_handler = MessageHandler(
+    message_handler =MessageHandler(
         session_factory=session_factory,
         chain_service=ChainService(
             session_factory=session_factory, storage_service=test_storage_service
@@ -139,7 +139,7 @@ async def test_process_confirmed_message(
         session.add(chain_tx)
         await session.commit()
 
-    message = parse_message(MESSAGE_DICT)
+    pending_message = PendingMessageDb.from_message_dict(MESSAGE_DICT)
     await message_handler.process_one_message(message=message, chain_tx=chain_tx)
 
     async with session_factory() as session:

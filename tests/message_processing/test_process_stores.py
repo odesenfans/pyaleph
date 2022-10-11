@@ -43,7 +43,7 @@ def fixture_store_message() -> PendingMessageDb:
     # }
     return PendingMessageDb(
         item_hash="af2e19894099d954f3d1fa274547f62484bc2d93964658547deecc70316acc72",
-        message_type=MessageType.store,
+        type=MessageType.store,
         chain=Chain.ETH,
         sender="0x696879aE4F6d8DaDD5b8F1cbb1e663B89b08f106",
         signature="0xb9d164e6e43a8fcd341abc01eda47bed0333eaf480e888f2ed2ae0017048939d18850a33352e7281645e95e8673bad733499b6a8ce4069b9da9b9a79ddc1a0b31b",

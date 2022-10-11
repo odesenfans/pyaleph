@@ -208,6 +208,7 @@ class EthereumConnector(Verifier, ChainWriter):
                         height=last_height,
                         update_datetime=dt.datetime.utcnow(),
                     )
+                    await session.commit()
 
     async def fetcher(self, config: Config):
         last_stored_height = await self.get_last_height()

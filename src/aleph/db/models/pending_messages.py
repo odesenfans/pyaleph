@@ -1,5 +1,5 @@
 import datetime as dt
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, Mapping
 
 from aleph_message.models import Chain, MessageType, ItemType
 from sqlalchemy import (
@@ -31,10 +31,10 @@ class PendingMessageDb(Base):
 
     id: int = Column(BigInteger, primary_key=True)
     item_hash: str = Column(String, nullable=False)
-    message_type: MessageType = Column(ChoiceType(MessageType), nullable=False)
+    type: MessageType = Column(ChoiceType(MessageType), nullable=False)
     chain: Chain = Column(ChoiceType(Chain), nullable=False)
-    sender = Column(String, nullable=False)
-    signature = Column(String, nullable=False)
+    sender: str = Column(String, nullable=False)
+    signature: str = Column(String, nullable=False)
     item_type: ItemType = Column(ChoiceType(ItemType), nullable=False)
     item_content = Column(String, nullable=True)
     time: dt.datetime = Column(TIMESTAMP(timezone=True), nullable=False)
@@ -55,7 +55,7 @@ class PendingMessageDb(Base):
     ) -> "PendingMessageDb":
         return cls(
             item_hash=obj.item_hash,
-            message_type=obj.type,
+            type=obj.type,
             chain=obj.chain,
             sender=obj.sender,
             signature=obj.signature,
@@ -70,7 +70,7 @@ class PendingMessageDb(Base):
     @classmethod
     def from_message_dict(
         cls,
-        message_dict: Dict[str, Any],
+        message_dict: Mapping[str, Any],
         tx_hash: Optional[str] = None,
         check_message: bool = True,
     ) -> "PendingMessageDb":
@@ -83,7 +83,7 @@ class PendingMessageDb(Base):
 
         return cls(
             item_hash=item_hash,
-            message_type=message_dict["type"],
+            type=message_dict["type"],
             chain=Chain(message_dict["chain"]),
             sender=message_dict["sender"],
             signature=message_dict["signature"],
@@ -95,10 +95,6 @@ class PendingMessageDb(Base):
             retries=0,
             tx_hash=tx_hash,
         )
-
-    @property
-    def type(self):
-        return self.message_type
 
 
 # Used when processing pending messages

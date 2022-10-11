@@ -1,7 +1,7 @@
 from typing import Optional, AsyncIterator
 
 from aleph_message.models import Chain
-from sqlalchemy import select, func
+from sqlalchemy import select, func, update, delete
 from sqlalchemy.orm import selectinload
 
 from aleph.db.models import PendingMessageDb, ChainTxDb
@@ -36,3 +36,20 @@ async def count_pending_messages(
         )
 
     return (await session.execute(select_stmt)).scalar_one()
+
+
+async def increase_pending_message_retry_count(
+    session: DbSession, pending_message: PendingMessageDb
+):
+    update_stmt = (
+        update(PendingMessageDb)
+        .where(PendingMessageDb.item_hash == pending_message.item_hash)
+        .values(retries=PendingMessageDb.retries + 1)
+    )
+    await session.execute(update_stmt)
+
+
+async def delete_pending_message(session: DbSession, pending_message: PendingMessageDb):
+    await session.execute(
+        delete(PendingMessageDb).where(PendingMessageDb.id == pending_message.id)
+    )

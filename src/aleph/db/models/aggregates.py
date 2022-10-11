@@ -6,7 +6,6 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
 from .base import Base
-from .messages import MessageDb
 
 
 class AggregateElementDb(Base):
@@ -31,7 +30,6 @@ class AggregateElementDb(Base):
 
     __table_args__ = (
         Index("ix_time_desc", creation_datetime.desc()),
-        UniqueConstraint(key, owner),
     )
 
 

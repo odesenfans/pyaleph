@@ -61,8 +61,6 @@ class ChainDataService:
                 for k, v in _message.to_dict().items()
                 if k in INCOMING_MESSAGE_AUTHORIZED_FIELDS
             }
-            # message_type DB field to type field
-            message_dict["type"] = _message.message_type
             # Convert the time field to epoch
             message_dict["time"] = message_dict["time"].timestamp()
             return message_dict

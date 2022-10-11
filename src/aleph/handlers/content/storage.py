@@ -18,7 +18,6 @@ from aleph_message.models import ItemType, StoreContent
 
 from aleph.config import get_config
 from aleph.db.accessors.files import make_upsert_stored_file_query
-from aleph.db.bulk_operations import DbBulkOperation
 from aleph.db.models import MessageDb, StoredFileDb, FileReferenceDb
 from aleph.exceptions import AlephStorageException, UnknownHashError
 from aleph.handlers.content.content_handler import ContentHandler
@@ -29,7 +28,7 @@ from aleph.schemas.validated_message import (
 from aleph.storage import StorageService
 from aleph.types.db_session import DbSessionFactory, DbSession
 from aleph.types.file_type import FileType
-from aleph.types.message_status import MessageProcessingStatus
+from aleph.types.message_status import MessageUnavailable
 from aleph.utils import item_type_from_hash
 
 LOGGER = logging.getLogger("HANDLERS.STORAGE")
@@ -44,10 +43,12 @@ class StoreMessageHandler(ContentHandler):
 
     async def fetch_related_content(
         self, session: DbSession, message: MessageDb
-    ) -> Tuple[MessageProcessingStatus, List[DbBulkOperation]]:
+    ) -> None:
+
+        # TODO: this check is useless, remove it
         config = get_config()
         if not config.storage.store_files.value:
-            return MessageProcessingStatus.MESSAGE_HANDLED, []  # Ignore
+            return  # Ignore
 
         content = message.parsed_content
         assert isinstance(content, StoreContent)
@@ -60,6 +61,7 @@ class StoreMessageHandler(ContentHandler):
 
         ipfs_enabled = config.ipfs.enabled.value
         do_standard_lookup = True
+        size = None
 
         if engine == ItemType.ipfs and ipfs_enabled:
             if item_type_from_hash(item_hash) != ItemType.ipfs:
@@ -78,7 +80,9 @@ class StoreMessageHandler(ContentHandler):
                         f"Invalid IPFS hash from API: '{item_hash}'"
                     ) from e
                 if stats is None:
-                    return MessageProcessingStatus.RETRYING_LATER, []
+                    raise MessageUnavailable(
+                        "Could not retrieve IPFS content at this time"
+                    )
 
                 if (
                     stats["Type"] == "file"
@@ -87,17 +91,16 @@ class StoreMessageHandler(ContentHandler):
                 ):
                     do_standard_lookup = True
                 else:
-                    output_content.size = stats["CumulativeSize"]
+                    size = stats["CumulativeSize"]
                     output_content.engine_info = EngineInfo(**stats)
                     timer = 0
                     is_folder = stats["Type"] == "directory"
                     async for status in ipfs_client.pin.add(item_hash):
                         timer += 1
                         if timer > 30 and "Pins" not in status:
-                            return (
-                                MessageProcessingStatus.RETRYING_LATER,
-                                [],
-                            )  # Can't retrieve data now.
+                            raise MessageUnavailable(
+                                "Could not pin IPFS content at this time"
+                            )
                     do_standard_lookup = False
 
             except asyncio.TimeoutError as error:
@@ -125,18 +128,17 @@ class StoreMessageHandler(ContentHandler):
                     store_value=True,
                 )
             except AlephStorageException:
-                return MessageProcessingStatus.RETRYING_LATER, []
+                raise MessageUnavailable("Could not retrieve file from storage at this time")
 
-            output_content.size = len(file_content)
+            size = len(file_content)
 
         stored_file = StoredFileDb(
             hash=item_hash,
             type=FileType.DIRECTORY if is_folder else FileType.FILE,
             created=dt.datetime.utcnow(),
+            size=size,
         )
         await session.execute(make_upsert_stored_file_query(stored_file))
-
-        return MessageProcessingStatus.MESSAGE_HANDLED, []
 
     async def _create_file_reference(self, session: DbSession, message: MessageDb):
         content = message.parsed_content
@@ -150,10 +152,10 @@ class StoreMessageHandler(ContentHandler):
             )
         )
 
-    async def process(self, messages: List[MessageDb]) -> MessageProcessingStatus:
-        async with self.session_factory() as session:
-            for message in messages:
-                await self._create_file_reference(session=session, message=message)
-            await session.commit()
+    async def process(
+        self, session: DbSession, messages: List[MessageDb]
+    ) -> Tuple[List[MessageDb], List[MessageDb]]:
+        for message in messages:
+            await self._create_file_reference(session=session, message=message)
 
-        return MessageProcessingStatus.MESSAGE_HANDLED
+        return messages, []

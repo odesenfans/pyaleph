@@ -22,7 +22,7 @@ class AugmentedBase:
     async def count(cls, session: AsyncSession):
         return (
             await session.execute(
-                f"SELECT COUNT(*) FROM {cls.__tablename__}"  # type:ignore
+                f"SELECT COUNT(*) FROM {cls.__tablename__}"  # type: ignore
             )
         ).scalar_one()
 

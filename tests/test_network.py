@@ -1,10 +1,12 @@
 import pytest
 
-from aleph.exceptions import InvalidMessageError
-from aleph.handlers.message_handler import MessageProcessingStatus, MessageHandler
 from aleph.chains.chain_service import ChainService
+from aleph.db.models import PendingMessageDb
+from aleph.exceptions import InvalidMessageError
+from aleph.handlers.message_handler import MessageHandler
 from aleph.schemas.pending_messages import parse_message
 from aleph.storage import StorageService
+from aleph.types.db_session import DbSessionFactory
 
 
 @pytest.mark.skip("TODO: NULS signature verification does not work with the fixture.")
@@ -90,7 +92,7 @@ async def test_invalid_signature_message_2(mocker):
 
 @pytest.mark.asyncio
 async def test_incoming_inline_content(
-    test_db, session_factory, test_storage_service: StorageService
+    session_factory: DbSessionFactory, test_storage_service: StorageService
 ):
     message_dict = {
         "chain": "NULS",
@@ -112,6 +114,13 @@ async def test_incoming_inline_content(
         storage_service=test_storage_service,
     )
 
-    message = parse_message(message_dict)
-    status, ops = await message_handler.incoming(message)
-    assert status == MessageProcessingStatus.MESSAGE_HANDLED
+    # Signature validation fails for this fixture
+    pending_message = PendingMessageDb.from_message_dict(
+        message_dict, check_message=False
+    )
+
+    async with session_factory() as session:
+        message = await message_handler.verify_and_fetch(
+            session=session, pending_message=pending_message
+        )
+    assert message is not None

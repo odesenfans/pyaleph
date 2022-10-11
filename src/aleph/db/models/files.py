@@ -44,7 +44,7 @@ class FileReferenceDb(Base):
     owner: str = Column(String, nullable=False)
     item_hash: str = Column(String, nullable=False, unique=True)
 
-    file = relationship(StoredFileDb, back_populates="references")
+    file: StoredFileDb = relationship(StoredFileDb, back_populates="references")
 
 
 class FilePinDb(Base):

@@ -3,15 +3,15 @@ import logging
 
 from aleph_p2p_client import AlephP2PServiceClient
 
-from aleph.handlers.message_handler import MessageHandler
 from aleph.exceptions import InvalidMessageError
+from aleph.handlers.message_handler import MessageHandler
 from aleph.network import decode_pubsub_message
 
 LOGGER = logging.getLogger("P2P.protocol")
 
 
 async def incoming_channel(
-    p2p_client: AlephP2PServiceClient, topic: str, message_processor: MessageHandler
+    p2p_client: AlephP2PServiceClient, topic: str, message_handler: MessageHandler
 ) -> None:
     LOGGER.debug("incoming channel started...")
 
@@ -42,7 +42,7 @@ async def incoming_channel(
                         continue
 
                     LOGGER.debug("New message %r" % message)
-                    await message_processor.delayed_incoming(message)
+                    await message_handler.delayed_incoming(message)
                 except Exception:
                     LOGGER.exception("Can't handle message")
 

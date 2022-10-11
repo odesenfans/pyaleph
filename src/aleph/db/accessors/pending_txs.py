@@ -2,6 +2,7 @@ from typing import AsyncIterator, Optional
 
 from aleph_message.models import Chain
 from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 
 from aleph.db.models import PendingTxDb, ChainTxDb
 from aleph.types.db_session import DbSession
@@ -12,6 +13,7 @@ async def get_pending_txs_stream(session: DbSession) -> AsyncIterator[PendingTxD
         select(PendingTxDb)
         .join(ChainTxDb, PendingTxDb.tx_hash == ChainTxDb.hash)
         .order_by(ChainTxDb.datetime.asc())
+        .options(selectinload(PendingTxDb.tx))
     )
     return (await session.stream(select_stmt)).scalars()
 

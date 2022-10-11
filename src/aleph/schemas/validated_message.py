@@ -105,7 +105,6 @@ def validate_pending_message(
         del _m_dict["retries"]
         del _m_dict["check_message"]
         del _m_dict["tx_hash"]
-        _m_dict["type"] = _m_dict.pop("message_type")
         _m_dict["time"] = _m_dict["time"].timestamp()
         return _m_dict
 

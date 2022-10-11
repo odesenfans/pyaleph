@@ -18,7 +18,7 @@ class MessageProcessingResult:
 class ContentHandler(abc.ABC):
     async def fetch_related_content(
         self, session: DbSession, message: MessageDb
-    ) -> Tuple[MessageProcessingStatus, List[DbBulkOperation]]:
+    ) -> None:
         """
         Fetch additional content from the network based on the content of a message.
 
@@ -29,10 +29,12 @@ class ContentHandler(abc.ABC):
         a message can contain additional data to fetch. Most message types should
         keep the default implementation.
         """
-        return MessageProcessingStatus.MESSAGE_HANDLED, []
+        pass
 
     @abc.abstractmethod
-    async def process(self, messages: List[MessageDb]) -> MessageProcessingStatus:
+    async def process(
+        self, session: DbSession, messages: List[MessageDb]
+    ) -> Tuple[List[MessageDb], List[MessageDb]]:
         """
         Process several messages of the same type and applies the resulting changes.
 

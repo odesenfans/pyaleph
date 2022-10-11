@@ -8,7 +8,6 @@ import pytest
 
 from aleph.chains.chain_service import ChainService
 from aleph.db.accessors.messages import get_message_by_item_hash
-from aleph.handlers.message_handler import MessageHandler
 from aleph.schemas.pending_messages import parse_message
 from aleph.storage import StorageService
 from aleph.types.db_session import DbSessionFactory
@@ -72,7 +71,7 @@ async def test_forget_multiusers_storage(
         file_content = f.read()
     await storage_engine.write(filename=file_hash, content=file_content)
 
-    message_handler = MessageHandler(
+    message_handler =MessageHandler(
         session_factory=session_factory,
         chain_service=ChainService(
             session_factory=session_factory, storage_service=test_storage_service
