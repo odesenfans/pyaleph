@@ -1,4 +1,5 @@
 import logging
+import time
 from collections import defaultdict
 from typing import Optional, Dict, Iterable, Sequence, Tuple
 
@@ -24,7 +25,9 @@ from aleph.exceptions import (
 from aleph.handlers.content.aggregate import AggregateMessageHandler
 from aleph.handlers.content.content_handler import ContentHandler
 from aleph.handlers.content.forget import ForgetMessageHandler
-from aleph.handlers.content.storage import StoreMessageHandler
+from aleph.handlers.content.post import PostMessageHandler
+from aleph.handlers.content.program import ProgramMessageHandler
+from aleph.handlers.content.store import StoreMessageHandler
 from aleph.schemas.pending_messages import BasePendingMessage
 from aleph.storage import StorageService
 from aleph.types.db_session import DbSessionFactory, DbSession
@@ -57,8 +60,8 @@ class MessageHandler:
             MessageType.forget: ForgetMessageHandler(
                 session_factory=session_factory, storage_service=storage_service
             ),
-            # MessageType.post: PostMessageHandler(session_factory=session_factory),
-            # MessageType.program: ProgramMessageHandler(session_factory=session_factory),
+            MessageType.post: PostMessageHandler(),
+            MessageType.program: ProgramMessageHandler(),
             MessageType.store: StoreMessageHandler(
                 session_factory=session_factory, storage_service=storage_service
             ),
@@ -92,7 +95,9 @@ class MessageHandler:
                     f"Invalid signature for '{pending_message.item_hash}'"
                 )
 
-    async def fetch_pending_message(self, pending_message: PendingMessageDb) -> MessageDb:
+    async def fetch_pending_message(
+        self, pending_message: PendingMessageDb
+    ) -> MessageDb:
         item_hash = pending_message.item_hash
 
         try:
@@ -210,8 +215,16 @@ class MessageHandler:
         ):
             content_handler = self.get_content_handler(message_type)
             if content_handler:
+                start_time = time.perf_counter()
                 mtype_successes, mtype_errors = await content_handler.process(
                     session=session, messages=messages_by_type[message_type]
+                )
+                end_time = time.perf_counter()
+                LOGGER.info(
+                    "Processed %d %s messages in %.4f seconds",
+                    len(messages_by_type[message_type]),
+                    message_type,
+                    end_time - start_time,
                 )
                 successes += mtype_successes
                 errors += mtype_errors

@@ -20,7 +20,6 @@ class AggregateElementDb(Base):
     __tablename__ = "aggregate_elements"
 
     item_hash: str = Column(String, primary_key=True)
-    # TODO: reactivate foreign key once aggregate handler is stateless
     # item_hash: str = Column(ForeignKey(MessageDb.item_hash), primary_key=True)
     key: str = Column(String, nullable=False)
     owner: str = Column(String, nullable=False)
@@ -28,9 +27,7 @@ class AggregateElementDb(Base):
     creation_datetime: dt.datetime = Column(TIMESTAMP(timezone=True), nullable=False)
     revises: str = Column(ForeignKey("aggregate_elements.item_hash"), nullable=True)
 
-    __table_args__ = (
-        Index("ix_time_desc", creation_datetime.desc()),
-    )
+    __table_args__ = (Index("ix_time_desc", creation_datetime.desc()),)
 
 
 class AggregateDb(Base):
@@ -49,5 +46,7 @@ class AggregateDb(Base):
     last_revision_hash: str = Column(
         ForeignKey(AggregateElementDb.item_hash), nullable=False
     )
+
+    __table_args__ = (Index("ix_aggregates_owner", owner),)
 
     last_revision: AggregateElementDb = relationship(AggregateElementDb)

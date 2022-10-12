@@ -1,16 +1,12 @@
 import itertools
-from typing import Tuple, List, Dict, Sequence, Iterable
-
-from aleph_message.models import BaseContent, AggregateContent
+from typing import Tuple, List, Dict, Iterable
 
 from aleph.db.accessors.aggregates import get_aggregate_by_key, get_aggregate_elements
-from aleph.db.bulk_operations import DbBulkOperation
 from aleph.db.models import MessageDb, AggregateElementDb, AggregateDb
 from aleph.handlers.content.content_handler import ContentHandler
 from aleph.toolkit.split import split_iterable
 from aleph.toolkit.timestamp import timestamp_to_datetime
 from aleph.types.db_session import DbSessionFactory, DbSession
-from aleph.types.message_status import MessageProcessingStatus
 
 
 def merge_aggregate_elements(elements: Iterable[AggregateElementDb]) -> Dict:

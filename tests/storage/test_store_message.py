@@ -5,7 +5,7 @@ from configmanager import Config
 from sqlalchemy import select
 
 from aleph.db.models import MessageDb, StoredFileDb
-from aleph.handlers.content.storage import StoreMessageHandler
+from aleph.handlers.content.store import StoreMessageHandler
 from aleph.schemas.message_content import ContentSource, RawContent
 from aleph.services.ipfs import IpfsService
 from aleph.storage import StorageService

@@ -31,7 +31,8 @@ def get_db_url(config: Optional[Config] = None) -> str:
 
 
 def make_engine(
-    config: Optional[Config] = None, echo: bool = False, poolclass=NullPool
+    config: Optional[Config] = None,
+    echo: bool = False,
 ) -> AsyncEngine:
     return create_async_engine(get_db_url(config=config), future=True, echo=echo)
 
