@@ -29,9 +29,9 @@ async def test_process_aggregate_first_element(
 
     item_hash = "a87004aa03f8ae63d2c4bbe84b93b9ce70ca6482ce36c82ab0b0f689fc273f34"
 
-    async with session_factory() as session:
+    with session_factory() as session:
         pending_message = (
-            await session.execute(
+            session.execute(
                 select(PendingMessageDb)
                 .where(PendingMessageDb.item_hash == item_hash)
                 .options(selectinload(PendingMessageDb.tx))
@@ -46,7 +46,7 @@ async def test_process_aggregate_first_element(
     expected_key = content["key"]
     expected_creation_datetime = timestamp_to_datetime(content["time"])
 
-    async with session_factory() as session:
+    with session_factory() as session:
         elements = list(
             await get_aggregate_elements(
                 session=session, key=expected_key, owner=pending_message.sender

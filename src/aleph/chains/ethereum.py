@@ -25,9 +25,9 @@ from aleph.utils import run_in_executor
 from .chaindata import ChainDataService
 from .connector import ChainWriter, Verifier
 from .tx_context import TxContext
-from ..db.accessors.messages import get_unconfirmed_messages
-from ..db.accessors.pending_messages import count_pending_messages
-from ..db.accessors.pending_txs import count_pending_txs
+from aleph.db.accessors.messages import get_unconfirmed_messages
+from aleph.db.accessors.pending_messages import count_pending_messages
+from aleph.db.accessors.pending_txs import count_pending_txs
 
 LOGGER = logging.getLogger("chains.ethereum")
 CHAIN_NAME = "ETH"
@@ -107,7 +107,7 @@ class EthereumConnector(Verifier, ChainWriter):
 
     async def get_last_height(self) -> int:
         """Returns the last height for which we already have the ethereum data."""
-        async with self.session_factory() as session:
+        with self.session_factory() as session:
             last_height = await get_last_height(session=session, chain=Chain.ETH)
 
         if last_height is None:
@@ -201,14 +201,14 @@ class EthereumConnector(Verifier, ChainWriter):
             # Since we got no critical exception, save last received object
             # block height to do next requests from there.
             if last_height:
-                async with self.session_factory() as session:
+                with self.session_factory() as session:
                     await upsert_chain_sync_status(
                         session=session,
                         chain=Chain.ETH,
                         height=last_height,
                         update_datetime=dt.datetime.utcnow(),
                     )
-                    await session.commit()
+                    session.commit()
 
     async def fetcher(self, config: Config):
         last_stored_height = await self.get_last_height()
@@ -224,11 +224,11 @@ class EthereumConnector(Verifier, ChainWriter):
             async for jdata, context in self._request_transactions(
                 config, web3, contract, abi, last_stored_height
             ):
-                async with self.session_factory() as session:
+                with self.session_factory() as session:
                     await self.chain_data_service.incoming_chaindata(
                         session=session, content=jdata, context=context
                     )
-                    await session.commit()
+                    session.commit()
 
     @staticmethod
     def _broadcast_content(
@@ -256,7 +256,7 @@ class EthereumConnector(Verifier, ChainWriter):
         i = 0
         gas_price = web3.eth.generateGasPrice()
         while True:
-            async with self.session_factory() as session:
+            with self.session_factory() as session:
 
                 # Wait for sync operations to complete
                 if (await count_pending_txs(session=session, chain=Chain.ETH)) or (

@@ -32,7 +32,7 @@ async def reconnect_p2p_job(
         try:
             peers = set(config.p2p.peers.value)
 
-            async with session_factory() as session:
+            with session_factory() as session:
                 peers |= set(
                     await get_all_addresses_by_peer_type(
                         session=session, peer_type=PeerType.P2P
@@ -76,7 +76,7 @@ async def tidy_http_peers_job(
         jobs = []
 
         try:
-            async with session_factory() as session:
+            with session_factory() as session:
                 peers = await get_all_addresses_by_peer_type(
                     session=session, peer_type=PeerType.HTTP
                 )

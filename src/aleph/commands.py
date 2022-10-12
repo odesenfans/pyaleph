@@ -52,9 +52,9 @@ LOGGER = logging.getLogger(__name__)
 
 
 async def create_tables(engine: AsyncEngine):
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)
+    with engine.begin() as conn:
+        Base.metadata.drop_all(conn)
+        Base.metadata.create_all(conn)
 
 
 def init_shared_stats(shared_memory_manager: SyncManager) -> Dict[str, Any]:

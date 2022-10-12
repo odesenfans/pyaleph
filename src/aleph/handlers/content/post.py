@@ -56,11 +56,10 @@ class PostMessageHandler(ContentHandler):
                 owner=content.address,
                 type=content.type,
                 ref=content.ref,
+                amends=content.ref if content.type == "amend" else None,
                 content=content.content,
                 creation_datetime=timestamp_to_datetime(content.time),
             )
-            if post.type == "amend":
-                post.amends = post.ref
             session.add(post)
 
         return messages, []

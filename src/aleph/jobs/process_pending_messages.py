@@ -80,7 +80,7 @@ async def _finalize_pending_message(
     # We need to use an upsert here because another concurrent task could
     # change the status of the message. Upserting guarantees that the message
     # status will only be changed if the message is still marked as pending.
-    await session.execute(
+    session.execute(
         make_message_status_upsert_query(
             item_hash=pending_message.item_hash,
             new_status=new_status,
@@ -89,11 +89,12 @@ async def _finalize_pending_message(
     )
     await delete_pending_message(session=session, pending_message=pending_message)
 
+
 # TODO: use update instead, upsert makes no sense for fetched messages
 async def _finalize_fetched_message(
     session: DbSession, message: MessageDb, new_status: MessageStatus
 ):
-    await session.execute(
+    session.execute(
         make_message_status_upsert_query(
             item_hash=message.item_hash,
             new_status=new_status,
@@ -229,7 +230,9 @@ class PendingMessageProcessor:
 
             del task_message_dict[message_task]
 
-    async def process_pending_messages(self, session: DbSession, config: Config, shared_stats: Dict):
+    async def process_pending_messages(
+        self, session: DbSession, config: Config, shared_stats: Dict
+    ):
         """
         Processes all the messages in the pending message queue.
         """
@@ -253,9 +256,7 @@ class PendingMessageProcessor:
         #       it's good to recycle the session object once all messages are processed
         #       because of the cache.
         # while await PendingMessage.collection.count_documents(find_params):
-        async for pending_message in await get_pending_messages_stream(
-            session=session
-        ):
+        for pending_message in await get_pending_messages_stream(session=session):
             # Check if the message is already processing
             pending_message_id = _get_pending_message_id(pending_message)
             if pending_message_id in processing_messages:
@@ -275,7 +276,7 @@ class PendingMessageProcessor:
                     shared_stats=shared_stats,
                     processing_messages=processing_messages,
                 )
-                await session.commit()
+                session.commit()
 
             message_type = pending_message.type
 
@@ -356,17 +357,17 @@ async def retry_messages_task(config: Config, shared_stats: Dict):
     )
 
     while True:
-        async with session_factory() as session:
+        with session_factory() as session:
             try:
                 await pending_message_handler.process_pending_messages(
-                session=session, config=config, shared_stats=shared_stats
+                    session=session, config=config, shared_stats=shared_stats
                 )
-                await session.commit()
+                session.commit()
 
             except Exception as e:
                 print(e)
                 LOGGER.exception("Error in pending messages retry job")
-                await session.rollback()
+                session.rollback()
 
         LOGGER.debug("Waiting 5 seconds for new pending messages...")
         await asyncio.sleep(5)

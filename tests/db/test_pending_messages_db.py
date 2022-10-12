@@ -75,11 +75,11 @@ def fixture_pending_messages():
 async def test_count_pending_messages(
     session_factory: DbSessionFactory, fixture_pending_messages: List[PendingMessageDb]
 ):
-    async with session_factory() as session:
+    with session_factory() as session:
         session.add_all(fixture_pending_messages)
-        await session.commit()
+        session.commit()
 
-    async with session_factory() as session:
+    with session_factory() as session:
         count_all = await count_pending_messages(session=session)
         assert count_all == 3
 
@@ -98,11 +98,11 @@ async def test_count_pending_messages(
 
 @pytest.mark.asyncio
 async def test_get_message_stream(session_factory: DbSessionFactory, fixture_pending_messages: List[PendingMessageDb]):
-    async with session_factory() as session:
+    with session_factory() as session:
         session.add_all(fixture_pending_messages)
-        await session.commit()
+        session.commit()
 
-    async with session_factory() as session:
+    with session_factory() as session:
         stream = await get_pending_messages_stream(session=session)
         pending_messages = [pending_message async for pending_message in stream]
 

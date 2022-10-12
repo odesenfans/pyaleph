@@ -39,7 +39,7 @@ def prepare_loop(config_values: Dict) -> Tuple[asyncio.AbstractEventLoop, Config
 
 
 async def perform_db_operations(
-    session: AsyncSession, db_operations: Iterable[DbBulkOperation]
+    session: DbSession, db_operations: Iterable[DbBulkOperation]
 ) -> None:
     # Sort the operations by collection name before grouping and executing them.
     sorted_operations = sorted(
@@ -60,7 +60,7 @@ async def perform_db_operations(
             sql_ops = [op.operation for op in operations]
 
             for sql_op in sql_ops:
-                await session.execute(sql_op)
+                session.execute(sql_op)
 
         LOGGER.warning(
             "Performed %d operations on %s in %.4f seconds",

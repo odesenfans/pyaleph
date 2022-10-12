@@ -3,7 +3,6 @@ import json
 from typing import Dict, Optional, List, Any, Mapping
 
 from aleph_message.models import Chain
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from aleph.chains.common import LOGGER
 from aleph.chains.tx_context import TxContext
@@ -18,8 +17,7 @@ from aleph.exceptions import (
 )
 from aleph.storage import StorageService
 from aleph.toolkit.timestamp import timestamp_to_datetime
-from aleph.types.db_session import DbSessionFactory
-
+from aleph.types.db_session import DbSessionFactory, DbSession
 
 INCOMING_MESSAGE_AUTHORIZED_FIELDS = [
     "item_hash",
@@ -133,13 +131,13 @@ class ChainDataService:
             if config.ipfs.enabled.value:
                 try:
                     LOGGER.info(f"chaindata {chaindata}")
-                    async with self.session_factory() as session:
+                    with self.session_factory() as session:
                         session.add(
                             FilePinDb(
                                 file_hash=chaindata["content"], tx_hash=context.tx_hash
                             )
                         )
-                        await session.commit()
+                        session.commit()
 
                     # Some IPFS fetches can take a while, hence the large timeout.
                     await asyncio.wait_for(
@@ -155,7 +153,7 @@ class ChainDataService:
 
     @staticmethod
     async def incoming_chaindata(
-        session: AsyncSession, content: Dict, context: TxContext
+        session: DbSession, content: Dict, context: TxContext
     ):
         """Incoming data from a chain.
         Content can be inline of "offchain" through an ipfs hash.

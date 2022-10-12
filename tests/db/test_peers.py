@@ -38,11 +38,11 @@ async def test_get_all_addresses_by_peer_type(session_factory: DbSessionFactory)
         last_seen=last_seen,
     )
 
-    async with session_factory() as session:
+    with session_factory() as session:
         session.add_all([http_entry, p2p_entry, ipfs_entry])
-        await session.commit()
+        session.commit()
 
-    async with session_factory() as session:
+    with session_factory() as session:
         http_entries = await get_all_addresses_by_peer_type(
             session=session, peer_type=PeerType.HTTP
         )
@@ -64,7 +64,7 @@ async def test_get_all_addresses_by_peer_type(session_factory: DbSessionFactory)
 async def test_get_all_addresses_by_peer_type_no_match(
     session_factory: DbSessionFactory, peer_type: PeerType
 ):
-    async with session_factory() as session:
+    with session_factory() as session:
         entries = await get_all_addresses_by_peer_type(
             session=session, peer_type=peer_type
         )
@@ -80,7 +80,7 @@ async def test_upsert_peer_insert(session_factory: DbSessionFactory):
     source = PeerType.IPFS
     last_seen = pytz.utc.localize(dt.datetime(2022, 10, 1))
 
-    async with session_factory() as session:
+    with session_factory() as session:
         await upsert_peer(
             session=session,
             peer_id=peer_id,
@@ -89,12 +89,12 @@ async def test_upsert_peer_insert(session_factory: DbSessionFactory):
             source=source,
             last_seen=last_seen,
         )
-        await session.commit()
+        session.commit()
 
-    async with session_factory() as session:
+    with session_factory() as session:
         peer = (
             (
-                await session.execute(
+                session.execute(
                     select(PeerDb).where(
                         (PeerDb.peer_id == peer_id) & (PeerDb.peer_type == peer_type)
                     )
@@ -119,7 +119,7 @@ async def test_upsert_peer_replace(session_factory: DbSessionFactory):
     source = PeerType.P2P
     last_seen = pytz.utc.localize(dt.datetime(2022, 10, 1))
 
-    async with session_factory() as session:
+    with session_factory() as session:
         await upsert_peer(
             session=session,
             peer_id=peer_id,
@@ -128,13 +128,13 @@ async def test_upsert_peer_replace(session_factory: DbSessionFactory):
             source=source,
             last_seen=last_seen,
         )
-        await session.commit()
+        session.commit()
 
     new_address = "http://0.0.0.0:4024"
     new_source = PeerType.IPFS
     new_last_seen = pytz.utc.localize(dt.datetime(2022, 10, 2))
 
-    async with session_factory() as session:
+    with session_factory() as session:
         await upsert_peer(
             session=session,
             peer_id=peer_id,
@@ -143,12 +143,12 @@ async def test_upsert_peer_replace(session_factory: DbSessionFactory):
             source=new_source,
             last_seen=new_last_seen,
         )
-        await session.commit()
+        session.commit()
 
-    async with session_factory() as session:
+    with session_factory() as session:
         peer = (
             (
-                await session.execute(
+                session.execute(
                     select(PeerDb).where(
                         (PeerDb.peer_id == peer_id) & (PeerDb.peer_type == peer_type)
                     )

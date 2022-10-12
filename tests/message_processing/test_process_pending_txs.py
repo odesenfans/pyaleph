@@ -54,9 +54,9 @@ async def test_process_pending_tx(
         tx=chain_tx,
     )
 
-    async with session_factory() as session:
+    with session_factory() as session:
         session.add(pending_tx)
-        await session.commit()
+        session.commit()
 
     seen_ids: List[str] = []
     db_operations = await pending_tx_processor.handle_pending_tx(
@@ -84,14 +84,14 @@ async def test_process_pending_tx(
 
     assert len(pending_msg_ops) == len(fixture_messages)
 
-    async with session_factory() as session:
+    with session_factory() as session:
         await perform_db_operations(session, db_operations)
-        await session.commit()
+        session.commit()
 
         for fixture_message in fixture_messages:
             item_hash = fixture_message["item_hash"]
             message_status_db = (
-                await session.execute(
+                session.execute(
                     select(MessageStatusDb).where(
                         MessageStatusDb.item_hash == item_hash
                     )
@@ -100,7 +100,7 @@ async def test_process_pending_tx(
             assert message_status_db.status == MessageStatus.PENDING
 
             pending_message_db = (
-                await session.execute(
+                session.execute(
                     select(PendingMessageDb).where(
                         PendingMessageDb.item_hash == item_hash
                     )

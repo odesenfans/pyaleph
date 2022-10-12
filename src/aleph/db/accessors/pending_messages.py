@@ -1,4 +1,4 @@
-from typing import Optional, AsyncIterator
+from typing import Optional, AsyncIterator, Iterable
 
 from aleph_message.models import Chain
 from sqlalchemy import select, func, update, delete
@@ -9,14 +9,15 @@ from aleph.types.db_session import DbSession
 
 
 async def get_pending_messages_stream(
-    session: DbSession,
-) -> AsyncIterator[PendingMessageDb]:
+    session: DbSession, limit: int = 10000
+) -> Iterable[PendingMessageDb]:
     select_stmt = (
         select(PendingMessageDb)
         .order_by(PendingMessageDb.retries.asc(), PendingMessageDb.time.asc())
+        .limit(limit)
         .options(selectinload(PendingMessageDb.tx))
     )
-    return (await session.stream(select_stmt)).scalars()
+    return (session.execute(select_stmt)).scalars()
 
 
 async def count_pending_messages(
@@ -35,7 +36,7 @@ async def count_pending_messages(
             ChainTxDb, PendingMessageDb.tx_hash == ChainTxDb.hash
         )
 
-    return (await session.execute(select_stmt)).scalar_one()
+    return (session.execute(select_stmt)).scalar_one()
 
 
 async def increase_pending_message_retry_count(
@@ -46,10 +47,10 @@ async def increase_pending_message_retry_count(
         .where(PendingMessageDb.item_hash == pending_message.item_hash)
         .values(retries=PendingMessageDb.retries + 1)
     )
-    await session.execute(update_stmt)
+    session.execute(update_stmt)
 
 
 async def delete_pending_message(session: DbSession, pending_message: PendingMessageDb):
-    await session.execute(
+    session.execute(
         delete(PendingMessageDb).where(PendingMessageDb.id == pending_message.id)
     )

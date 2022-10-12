@@ -57,11 +57,11 @@ def assert_messages_equal(expected: MessageDb, actual: MessageDb):
 async def test_get_message(
     session_factory: DbSessionFactory, fixture_message: MessageDb
 ):
-    async with session_factory() as session:
+    with session_factory() as session:
         session.add(fixture_message)
-        await session.commit()
+        session.commit()
 
-    async with session_factory() as session:
+    with session_factory() as session:
         fetched_message = await get_message_by_item_hash(
             session=session, item_hash=fixture_message.item_hash
         )
@@ -103,11 +103,11 @@ async def test_get_message_with_confirmations(
 
     fixture_message.confirmations = confirmations
 
-    async with session_factory() as session:
+    with session_factory() as session:
         session.add(fixture_message)
-        await session.commit()
+        session.commit()
 
-    async with session_factory() as session:
+    with session_factory() as session:
         fetched_message = await get_message_by_item_hash(
             session=session, item_hash=fixture_message.item_hash
         )
@@ -133,13 +133,13 @@ async def test_get_message_with_confirmations(
 
 @pytest.mark.asyncio
 async def test_message_exists(session_factory: DbSessionFactory, fixture_message):
-    async with session_factory() as session:
+    with session_factory() as session:
         assert not await message_exists(
             session=session, item_hash=fixture_message.item_hash
         )
 
         session.add(fixture_message)
-        await session.commit()
+        session.commit()
 
         assert await message_exists(
             session=session, item_hash=fixture_message.item_hash
@@ -162,11 +162,11 @@ async def test_upsert_query_message(session_factory: DbSessionFactory):
 async def test_get_unconfirmed_messages(
     session_factory: DbSessionFactory, fixture_message
 ):
-    async with session_factory() as session:
+    with session_factory() as session:
         session.add(fixture_message)
-        await session.commit()
+        session.commit()
 
-    async with session_factory() as session:
+    with session_factory() as session:
         unconfirmed_messages = list(await get_unconfirmed_messages(session))
 
     assert len(unconfirmed_messages) == 1
@@ -180,14 +180,14 @@ async def test_get_unconfirmed_messages(
         datetime=timestamp_to_datetime(1664999900),
         publisher="0xabadbabe",
     )
-    async with session_factory() as session:
+    with session_factory() as session:
         session.add(tx)
         session.add(
             MessageConfirmationDb(item_hash=fixture_message.item_hash, tx_hash=tx.hash)
         )
-        await session.commit()
+        session.commit()
 
-    async with session_factory() as session:
+    with session_factory() as session:
         # Check that the message is now ignored
         unconfirmed_messages = list(await get_unconfirmed_messages(session))
         assert unconfirmed_messages == []

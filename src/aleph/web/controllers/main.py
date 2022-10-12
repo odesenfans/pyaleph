@@ -17,7 +17,7 @@ async def index(request) -> Dict:
     """Index of aleph."""
     shared_stats = request.config_dict["shared_stats"]
     session_factory: DbSessionFactory = request.app["session_factory"]
-    async with session_factory() as session:
+    with session_factory() as session:
         return asdict(await get_metrics(session=session, shared_stats=shared_stats))
 
 
@@ -30,7 +30,7 @@ async def status_ws(request):
     while True:
         shared_stats = request.config_dict["shared_stats"]
 
-        async with session_factory() as session:
+        with session_factory() as session:
             status = await get_metrics(session=session, shared_stats=shared_stats)
 
         if status != previous_status:
@@ -53,7 +53,7 @@ async def metrics(request):
     """
     shared_stats = request.config_dict["shared_stats"]
     session_factory: DbSessionFactory = request.app["session_factory"]
-    async with session_factory() as session:
+    with session_factory() as session:
         return web.Response(
             text=format_dataclass_for_prometheus(
                 await get_metrics(session=session, shared_stats=shared_stats)
@@ -66,7 +66,7 @@ async def metrics_json(request):
     shared_stats = request.config_dict["shared_stats"]
     session_factory: DbSessionFactory = request.app["session_factory"]
 
-    async with session_factory() as session:
+    with session_factory() as session:
         return web.Response(
             text=(await get_metrics(session=session, shared_stats=shared_stats)).to_json(),
             content_type="application/json",

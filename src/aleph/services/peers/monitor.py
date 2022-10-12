@@ -34,7 +34,7 @@ async def handle_incoming_host(
 
         # TODO: handle interests and save it
 
-        async with session_factory() as session:
+        with session_factory() as session:
             await upsert_peer(
                 session=session,
                 peer_id=sender,
@@ -43,7 +43,7 @@ async def handle_incoming_host(
                 source=source,
                 last_seen=dt.datetime.now(),
             )
-            await session.commit()
+            session.commit()
 
     except Exception as e:
         if isinstance(e, ValueError):

@@ -15,11 +15,11 @@ from aleph.types.db_session import DbSession
 from aleph.types.sort_order import SortOrder
 from ..models import ChainTxDb
 from ..models.messages import MessageDb, MessageConfirmationDb, MessageStatusDb
-from ...types.message_status import MessageStatus
+from aleph.types.message_status import MessageStatus
 
 
 async def get_message_by_item_hash(
-    session: AsyncSession, item_hash: str
+    session: DbSession, item_hash: str
 ) -> Optional[MessageDb]:
     select_stmt = (
         select(MessageDb)
@@ -30,7 +30,7 @@ async def get_message_by_item_hash(
             )
         )
     )
-    return (await session.execute(select_stmt)).scalar()
+    return (session.execute(select_stmt)).scalar()
 
 
 async def message_exists(session: DbSession, item_hash: str) -> bool:
@@ -111,14 +111,14 @@ def make_matching_messages_query(
 
 
 async def get_matching_messages(
-    session: AsyncSession,
+    session: DbSession,
     **kwargs,  # Same as make_matching_messages_query
 ) -> Iterable[MessageDb]:
     """
     Applies the specified filters on the message table and returns matching entries.
     """
     select_stmt = make_matching_messages_query(**kwargs)
-    return (await session.execute(select_stmt)).scalars()
+    return (session.execute(select_stmt)).scalars()
 
 
 async def count_matching_messages(
@@ -127,7 +127,7 @@ async def count_matching_messages(
 ):
     # TODO implement properly
     # count_stmt = make_matching_messages_query(**kwargs).count()
-    # return (await session.execute(count_stmt)).scalar()
+    # return (session.execute(count_stmt)).scalar()
     return await MessageDb.count(session)
 
 
@@ -156,7 +156,7 @@ async def get_unconfirmed_messages(
         ~select(MessageConfirmationDb.item_hash).where(where_clause).exists()
     )
 
-    return (await session.execute(select_stmt.limit(limit))).scalars()
+    return (session.execute(select_stmt.limit(limit))).scalars()
 
 
 def make_message_upsert_query(message: MessageDb) -> Insert:
@@ -182,7 +182,7 @@ async def get_message_status(
     session: DbSession, item_hash: str
 ) -> Optional[MessageStatusDb]:
     return (
-        await session.execute(
+        session.execute(
             select(MessageStatusDb).where(MessageStatusDb.item_hash == item_hash)
         )
     ).scalar()
@@ -202,4 +202,4 @@ def make_message_status_upsert_query(
 
 async def get_distinct_channels(session: DbSession) -> Iterable[Channel]:
     select_stmt = select(MessageDb.channel).distinct().order_by(MessageDb.channel)
-    return (await session.execute(select_stmt)).scalars()
+    return (session.execute(select_stmt)).scalars()

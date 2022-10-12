@@ -34,11 +34,11 @@ async def _load_fixtures(
                 )
             )
 
-    async with session_factory() as session:
+    with session_factory() as session:
         session.add_all(messages)
         session.add_all(chain_txs)
         session.add_all(confirmations)
-        await session.commit()
+        session.commit()
 
     return messages_json
 

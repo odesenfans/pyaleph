@@ -199,7 +199,7 @@ async def view_messages_list(request):
     pagination_skip = (query_params.page - 1) * query_params.pagination
 
     session_factory: DbSessionFactory = request.app["session_factory"]
-    async with session_factory() as session:
+    with session_factory() as session:
         results = await get_matching_messages(session, **find_filters)
         messages = [
             message.to_dict()

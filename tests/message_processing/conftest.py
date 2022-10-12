@@ -37,10 +37,10 @@ async def _load_fixtures(
                 chain_txs.append(ChainTxDb.from_dict(confirmation))
                 tx_hashes.add(tx_hash)
 
-    async with session_factory() as session:
+    with session_factory() as session:
         session.add_all(pending_messages)
         session.add_all(chain_txs)
-        await session.commit()
+        session.commit()
 
     return messages_json
 

@@ -138,7 +138,7 @@ class StoreMessageHandler(ContentHandler):
             created=dt.datetime.utcnow(),
             size=size,
         )
-        await session.execute(make_upsert_stored_file_query(stored_file))
+        session.execute(make_upsert_stored_file_query(stored_file))
 
     async def _create_file_reference(self, session: DbSession, message: MessageDb):
         content = message.parsed_content

@@ -86,14 +86,14 @@ async def test_handle_new_storage_file(
     store_message_handler = StoreMessageHandler(
         session_factory=session_factory, storage_service=storage_service
     )
-    async with session_factory() as session:
+    with session_factory() as session:
         await store_message_handler.fetch_related_content(
             session=session, message=message
         )
-        await session.commit()
+        session.commit()
 
-    async with session_factory() as session:
-        stored_files = list((await session.execute(select(StoredFileDb))).scalars())
+    with session_factory() as session:
+        stored_files = list((session.execute(select(StoredFileDb))).scalars())
 
     assert len(stored_files) == 1
     stored_file: StoredFileDb = stored_files[0]
@@ -133,14 +133,14 @@ async def test_handle_new_storage_directory(
         session_factory=mocker.AsyncMock(), storage_service=storage_service
     )
 
-    async with session_factory() as session:
+    with session_factory() as session:
         await store_message_handler.fetch_related_content(
             session=session, message=message
         )
-        await session.commit()
+        session.commit()
 
-    async with session_factory() as session:
-        stored_files = list((await session.execute(select(StoredFileDb))).scalars())
+    with session_factory() as session:
+        stored_files = list((session.execute(select(StoredFileDb))).scalars())
 
     assert len(stored_files) == 1
     stored_file = stored_files[0]

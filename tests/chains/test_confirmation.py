@@ -82,7 +82,7 @@ async def test_confirm_message(
     message = parse_message(MESSAGE_DICT)
     await message_handler.process_one_message(message)
 
-    async with session_factory() as session:
+    with session_factory() as session:
         message_in_db = await get_message_by_item_hash(
             session=session, item_hash=item_hash
         )
@@ -94,13 +94,13 @@ async def test_confirm_message(
     # Now, confirm the message
 
     # Insert a transaction in the DB to validate the foreign key constraint
-    async with session_factory() as session:
+    with session_factory() as session:
         session.add(chain_tx)
-        await session.commit()
+        session.commit()
 
     await message_handler.process_one_message(message=message, chain_tx=chain_tx)
 
-    async with session_factory() as session:
+    with session_factory() as session:
         message_in_db = await get_message_by_item_hash(
             session=session, item_hash=item_hash
         )
@@ -135,14 +135,14 @@ async def test_process_confirmed_message(
     )
 
     # Insert a transaction in the DB to validate the foreign key constraint
-    async with session_factory() as session:
+    with session_factory() as session:
         session.add(chain_tx)
-        await session.commit()
+        session.commit()
 
     pending_message = PendingMessageDb.from_message_dict(MESSAGE_DICT)
     await message_handler.process_one_message(message=message, chain_tx=chain_tx)
 
-    async with session_factory() as session:
+    with session_factory() as session:
         message_in_db = await get_message_by_item_hash(
             session=session, item_hash=item_hash
         )

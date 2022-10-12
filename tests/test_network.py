@@ -119,7 +119,7 @@ async def test_incoming_inline_content(
         message_dict, check_message=False
     )
 
-    async with session_factory() as session:
+    with session_factory() as session:
         message = await message_handler.verify_and_fetch(
             session=session, pending_message=pending_message
         )

@@ -79,11 +79,11 @@ class MessageHandler:
         tx_hash: Optional[str] = None,
     ):
 
-        async with self.session_factory() as session:
+        with self.session_factory() as session:
             session.add(
                 PendingMessageDb.from_obj(message, tx_hash=tx_hash, check_message=True)
             )
-            await session.commit()
+            session.commit()
 
     async def verify_signature(self, pending_message: PendingMessageDb):
         if pending_message.check_message:
@@ -154,7 +154,7 @@ class MessageHandler:
             confirmation_upsert_query = make_confirmation_upsert_query(
                 item_hash=pending_message.item_hash, tx_hash=pending_message.tx_hash
             )
-            await session.execute(confirmation_upsert_query)
+            session.execute(confirmation_upsert_query)
 
     async def verify_and_fetch(
         self, session: DbSession, pending_message: PendingMessageDb
@@ -182,12 +182,12 @@ class MessageHandler:
 
         # All the content was fetched successfully, we can mark the message as fetched
         message_upsert_query = make_message_upsert_query(message=validated_message)
-        await session.execute(message_upsert_query)
+        session.execute(message_upsert_query)
         if pending_message.tx_hash:
             confirmation_upsert_query = make_confirmation_upsert_query(
                 item_hash=item_hash, tx_hash=pending_message.tx_hash
             )
-            await session.execute(confirmation_upsert_query)
+            session.execute(confirmation_upsert_query)
 
         return validated_message
 
@@ -233,11 +233,11 @@ class MessageHandler:
 
     async def fetch_and_process_one_message_db(self, pending_message: PendingMessageDb):
         # Fetch
-        async with self.session_factory() as session:
+        with self.session_factory() as session:
             validated_message = await self.verify_and_fetch(
                 session=session, pending_message=pending_message
             )
-            await session.commit()
+            session.commit()
 
             if validated_message is None:
                 # The pending message was a confirmation, we are done.
@@ -245,4 +245,4 @@ class MessageHandler:
 
             # Process
             await self.process(session=session, messages=[validated_message])
-            await session.commit()
+            session.commit()

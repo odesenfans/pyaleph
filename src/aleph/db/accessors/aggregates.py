@@ -22,7 +22,7 @@ async def get_aggregate_by_key(
         (AggregateDb.owner == owner) & (AggregateDb.key == key)
     )
     return (
-        await session.execute(
+        session.execute(
             select_stmt.options(selectinload(AggregateDb.last_revision))
         )
     ).scalar()
@@ -36,7 +36,7 @@ async def get_aggregate_elements(
         .where((AggregateElementDb.owner == owner) & (AggregateElementDb.key == key))
         .order_by(AggregateElementDb.creation_datetime)
     )
-    return (await session.execute(select_stmt)).scalars()
+    return (session.execute(select_stmt)).scalars()
 
 
 async def get_message_hashes_for_aggregate(
@@ -45,7 +45,7 @@ async def get_message_hashes_for_aggregate(
     select_stmt = select(AggregateElementDb.item_hash).where(
         (AggregateElementDb.key == key) & (AggregateElementDb.owner == owner)
     )
-    return (ItemHash(result) for result in (await session.execute(select_stmt)).scalars())
+    return (ItemHash(result) for result in (session.execute(select_stmt)).scalars())
 
 
 async def delete_aggregate(session: DbSession, owner: str, key: str):
@@ -56,5 +56,5 @@ async def delete_aggregate(session: DbSession, owner: str, key: str):
         (AggregateDb.key == key) & (AggregateDb.owner == owner)
     )
 
-    await session.execute(delete_aggregate_stmt)
-    await session.execute(delete_elements_stmt)
+    session.execute(delete_aggregate_stmt)
+    session.execute(delete_elements_stmt)

@@ -82,7 +82,7 @@ async def test_forget_multiusers_storage(
     message_user1 = parse_message(message_user1_dict)
     await message_handler.process_one_message(message_user1)
 
-    async with session_factory() as session:
+    with session_factory() as session:
         message_user1_db = await get_message_by_item_hash(
             session=session, item_hash=message_user1.item_hash
         )
@@ -99,7 +99,7 @@ async def test_forget_multiusers_storage(
     await message_handler.process_one_message(forget_message_user1)
 
     # Check that the message was properly forgotten
-    async with session_factory() as session:
+    with session_factory() as session:
         forgotten_message = await get_message_by_item_hash(
             session=session, item_hash=message_user1.item_hash
         )
@@ -107,7 +107,7 @@ async def test_forget_multiusers_storage(
     assert forgotten_message.forgotten_by == [forget_message_user1.item_hash]
 
     # Check that the message from user 2 is not affected
-    async with session_factory() as session:
+    with session_factory() as session:
         message_user2_db = await get_message_by_item_hash(
             session=session, item_hash=message_user2.item_hash
         )

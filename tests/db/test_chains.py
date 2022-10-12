@@ -18,11 +18,11 @@ async def test_get_last_height(session_factory: DbSessionFactory):
         last_update=pytz.utc.localize(dt.datetime(2022, 10, 1)),
     )
 
-    async with session_factory() as session:
+    with session_factory() as session:
         session.add(eth_sync_status)
-        await session.commit()
+        session.commit()
 
-    async with session_factory() as session:
+    with session_factory() as session:
         height = await get_last_height(session=session, chain=Chain.ETH)
 
     assert height == eth_sync_status.height
@@ -30,7 +30,7 @@ async def test_get_last_height(session_factory: DbSessionFactory):
 
 @pytest.mark.asyncio
 async def test_get_last_height_no_data(session_factory: DbSessionFactory):
-    async with session_factory() as session:
+    with session_factory() as session:
         height = await get_last_height(session=session, chain=Chain.NULS2)
 
     assert height is None
@@ -42,19 +42,19 @@ async def test_upsert_chain_sync_status_insert(session_factory: DbSessionFactory
     update_datetime = pytz.utc.localize(dt.datetime(2022, 11, 1))
     height = 10
 
-    async with session_factory() as session:
+    with session_factory() as session:
         await upsert_chain_sync_status(
             session=session,
             chain=chain,
             height=height,
             update_datetime=update_datetime,
         )
-        await session.commit()
+        session.commit()
 
-    async with session_factory() as session:
+    with session_factory() as session:
 
         chain_sync_status = (
-            await session.execute(
+            session.execute(
                 select(ChainSyncStatusDb).where(ChainSyncStatusDb.chain == chain)
             )
         ).scalar_one()
@@ -72,25 +72,25 @@ async def test_upsert_peer_replace(session_factory: DbSessionFactory):
         last_update=pytz.utc.localize(dt.datetime(2023, 2, 6)),
     )
 
-    async with session_factory() as session:
+    with session_factory() as session:
         session.add(existing_entry)
-        await session.commit()
+        session.commit()
 
     new_height = 1001
     new_update_datetime = pytz.utc.localize(dt.datetime(2023, 2, 7))
 
-    async with session_factory() as session:
+    with session_factory() as session:
         await upsert_chain_sync_status(
             session=session,
             chain=existing_entry.chain,
             height=new_height,
             update_datetime=new_update_datetime,
         )
-        await session.commit()
+        session.commit()
 
-    async with session_factory() as session:
+    with session_factory() as session:
         chain_sync_status = (
-            await session.execute(
+            session.execute(
                 select(ChainSyncStatusDb).where(
                     ChainSyncStatusDb.chain == existing_entry.chain
                 )

@@ -22,7 +22,7 @@ from aleph.schemas.pending_messages import (
     BasePendingMessage,
 )
 from .message_content import MessageContent
-from ..db.models import PendingMessageDb
+from aleph.db.models import PendingMessageDb
 
 
 class EngineInfo(BaseModel):

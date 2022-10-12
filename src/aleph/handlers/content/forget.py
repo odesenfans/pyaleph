@@ -147,7 +147,7 @@ class ForgetMessageHandler(ContentHandler):
         """
         logger.debug(f"Garbage collecting {storage_hash}")
 
-        async with self.session_factory() as session:
+        with self.session_factory() as session:
             if await is_pinned_file(session=session, file_hash=storage_hash):
                 logger.debug(f"Permanent pin will not be collected {storage_hash}")
                 return

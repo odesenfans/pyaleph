@@ -22,7 +22,7 @@ async def used_channels(request):
 
     session_factory: DbSessionFactory = request.app["session_factory"]
 
-    async with session_factory() as session:
+    with session_factory() as session:
         channels = get_channels(session)
 
     response = web.json_response({"channels": channels})

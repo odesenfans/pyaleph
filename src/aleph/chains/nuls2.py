@@ -28,11 +28,11 @@ from aleph.utils import run_in_executor
 from .chaindata import ChainDataService
 from .connector import Verifier, ChainWriter
 from .tx_context import TxContext
-from ..db.accessors.chains import get_last_height, upsert_chain_sync_status
-from ..db.accessors.messages import get_unconfirmed_messages
-from ..db.accessors.pending_messages import count_pending_messages
-from ..db.accessors.pending_txs import count_pending_txs
-from ..schemas.pending_messages import BasePendingMessage
+from aleph.db.accessors.chains import get_last_height, upsert_chain_sync_status
+from aleph.db.accessors.messages import get_unconfirmed_messages
+from aleph.db.accessors.pending_messages import count_pending_messages
+from aleph.db.accessors.pending_txs import count_pending_txs
+from aleph.schemas.pending_messages import BasePendingMessage
 
 LOGGER = logging.getLogger("chains.nuls2")
 CHAIN_NAME = "NULS2"
@@ -79,7 +79,7 @@ class Nuls2Connector(Verifier, ChainWriter):
 
     async def get_last_height(self) -> int:
         """Returns the last height for which we already have the nuls data."""
-        async with self.session_factory() as session:
+        with self.session_factory() as session:
             last_height = await get_last_height(session=session, chain=Chain.NULS2)
 
         if last_height is None:
@@ -120,14 +120,14 @@ class Nuls2Connector(Verifier, ChainWriter):
                 LOGGER.info("Incoming logic data is not JSON, ignoring. %r" % ldata)
 
         if last_height:
-            async with self.session_factory() as session:
+            with self.session_factory() as session:
                 await upsert_chain_sync_status(
                     session=session,
                     chain=Chain.NULS2,
                     height=last_height,
                     update_datetime=dt.datetime.utcnow(),
                 )
-                await session.commit()
+                session.commit()
 
     async def fetcher(self, config: Config):
         last_stored_height = await self.get_last_height()
@@ -139,11 +139,11 @@ class Nuls2Connector(Verifier, ChainWriter):
                 async for jdata, context in self._request_transactions(
                     config, http_session, last_stored_height + 1
                 ):
-                    async with self.session_factory() as db_session:
+                    with self.session_factory() as db_session:
                         await self.chain_data_service.incoming_chaindata(
                             session=db_session, content=jdata, context=context
                         )
-                        await db_session.commit()
+                        db_session.commit()
 
                 await asyncio.sleep(10)
 
@@ -163,7 +163,7 @@ class Nuls2Connector(Verifier, ChainWriter):
         nonce = await get_nonce(server, address, chain_id)
 
         while True:
-            async with self.session_factory() as session:
+            with self.session_factory() as session:
                 if (await count_pending_txs(session=session, chain=Chain.NULS2)) or (
                     await count_pending_messages(session=session, chain=Chain.NULS2)
                 ):

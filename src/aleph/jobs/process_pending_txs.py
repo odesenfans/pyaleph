@@ -30,7 +30,7 @@ from aleph.types.db_session import DbSessionFactory, DbSession
 from .job_utils import prepare_loop, process_job_results
 from sqlalchemy.dialects.postgresql import insert
 
-from ..types.message_status import MessageStatus
+from aleph.types.message_status import MessageStatus
 
 LOGGER = logging.getLogger("jobs.pending_txs")
 
@@ -153,8 +153,8 @@ class PendingTxProcessor:
         seen_offchain_hashes = set()
         seen_ids: List[str] = []
         LOGGER.info("handling TXs")
-        async with self.session_factory() as session:
-            async for pending_tx in await get_pending_txs_stream(session):
+        with self.session_factory() as session:
+            for pending_tx in await get_pending_txs_stream(session):
                 if pending_tx.content in seen_offchain_hashes:
                     continue
 
@@ -163,7 +163,7 @@ class PendingTxProcessor:
                         tasks, return_when=asyncio.FIRST_COMPLETED
                     )
                     await self.process_tx_job_results(session=session, tasks=done)
-                    await session.commit()
+                    session.commit()
 
                 seen_offchain_hashes.add(pending_tx.content)
                 tx_task = asyncio.create_task(
@@ -175,7 +175,7 @@ class PendingTxProcessor:
             if tasks:
                 done, _ = await asyncio.wait(tasks, return_when=asyncio.ALL_COMPLETED)
                 await self.process_tx_job_results(session=session, tasks=done)
-                await session.commit()
+                session.commit()
 
 
 async def handle_txs_task(config: Config):
