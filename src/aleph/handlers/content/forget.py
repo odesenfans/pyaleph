@@ -30,7 +30,7 @@ from aleph.storage import StorageService
 from aleph.types.db_session import DbSessionFactory, DbSession
 from aleph.types.message_status import (
     MessageProcessingStatus,
-    InvalidMessage,
+    InvalidMessageException,
     MessageUnavailable,
     MessageStatus, PermissionDenied,
 )
@@ -128,7 +128,7 @@ class ForgetMessageHandler(ContentHandler):
 
         if not content.hashes and not content.aggregates:
             # The user did not specify anything to forget.
-            raise InvalidMessage(
+            raise InvalidMessageException(
                 f"FORGET message {message_item_hash} specifies nothing to forget"
             )
 
@@ -406,7 +406,7 @@ class ForgetMessageHandler(ContentHandler):
         self, session: DbSession, messages: List[MessageDb]
     ) -> Tuple[List[MessageDb], List[MessageDb]]:
 
-        for message in messages:
-            await self._process_forget_message(session=session, message=message)
+        # for message in messages:
+        #     await self._process_forget_message(session=session, message=message)
 
         return messages, []

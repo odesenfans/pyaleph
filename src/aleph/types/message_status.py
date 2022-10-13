@@ -19,7 +19,7 @@ class MessageException(Exception):
     ...
 
 
-class InvalidMessage(MessageException):
+class InvalidMessageException(MessageException):
     """
     The message is invalid and should be rejected.
     """
@@ -27,7 +27,7 @@ class InvalidMessage(MessageException):
     ...
 
 
-class InvalidSignature(InvalidMessage):
+class InvalidSignature(InvalidMessageException):
     """
     The message is invalid, in particular because its signature does not
     match the expected value.
@@ -36,7 +36,7 @@ class InvalidSignature(InvalidMessage):
     ...
 
 
-class PermissionDenied(MessageException):
+class PermissionDenied(InvalidMessageException):
     """
     The sender does not have the permission to perform the requested operation
     on the specified object.

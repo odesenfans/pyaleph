@@ -3,7 +3,7 @@ from typing import List
 import pytest
 from aleph_message.models import ItemType, Chain, MessageType
 
-from aleph.db.accessors.pending_messages import count_pending_messages, get_pending_messages_stream
+from aleph.db.accessors.pending_messages import count_pending_messages, get_pending_messages
 from aleph.db.models import PendingMessageDb, ChainTxDb
 from aleph.types.db_session import DbSessionFactory
 import datetime as dt
@@ -103,7 +103,7 @@ async def test_get_message_stream(session_factory: DbSessionFactory, fixture_pen
         session.commit()
 
     with session_factory() as session:
-        stream = await get_pending_messages_stream(session=session)
+        stream = await get_pending_messages(session=session)
         pending_messages = [pending_message async for pending_message in stream]
 
         assert len(pending_messages) == 3

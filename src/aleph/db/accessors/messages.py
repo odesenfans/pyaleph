@@ -1,4 +1,5 @@
 import datetime as dt
+import traceback
 from typing import Optional, Sequence, Union, Iterable
 
 from aleph_message.models import ItemHash, Chain, MessageType
@@ -11,7 +12,7 @@ from sqlalchemy.sql.elements import BinaryExpression, literal
 from aleph.toolkit.timestamp import timestamp_to_datetime
 from aleph.types.channel import Channel
 from aleph.types.db_session import DbSession
-from aleph.types.message_status import MessageStatus
+from aleph.types.message_status import MessageStatus, InvalidMessageException
 from aleph.types.sort_order import SortOrder
 from ..models import ChainTxDb
 from ..models.messages import (
@@ -19,6 +20,7 @@ from ..models.messages import (
     MessageConfirmationDb,
     MessageStatusDb,
     ForgottenMessageDb,
+    RejectedMessageDb,
 )
 
 
@@ -275,3 +277,18 @@ async def append_to_forgotten_by(
         )
     )
     session.execute(update_stmt, {"forget_hash": forget_message_hash})
+
+
+async def reject_message(
+    session: DbSession, item_hash: str, exception: InvalidMessageException
+):
+    session.execute(
+        update(MessageStatusDb).values(status=MessageStatus.REJECTED)
+    ).where(MessageStatusDb.item_hash == item_hash)
+    session.execute(
+        insert(RejectedMessageDb).values(
+            item_hash=item_hash,
+            reason=str(exception),
+            traceback=traceback.format_exception(exception),
+        )
+    )

@@ -3,8 +3,9 @@ Job in charge of (re-) processing Aleph messages waiting in the pending queue.
 """
 
 import asyncio
+from collections import defaultdict
 from logging import getLogger
-from typing import Any, Dict, List, Set, Tuple, cast, Optional
+from typing import Any, Dict, List, Set, Tuple, cast, Optional, AsyncIterator, Sequence
 
 import sentry_sdk
 from aleph_message.models import MessageType
@@ -12,9 +13,9 @@ from configmanager import Config, NotFound
 from setproctitle import setproctitle
 
 from aleph.chains.chain_service import ChainService
-from aleph.db.accessors.messages import make_message_status_upsert_query
+from aleph.db.accessors.messages import make_message_status_upsert_query, reject_message
 from aleph.db.accessors.pending_messages import (
-    get_pending_messages_stream,
+    get_pending_messages,
     increase_pending_message_retry_count,
     delete_pending_message,
 )
@@ -31,8 +32,9 @@ from aleph.toolkit.split import split_iterable
 from aleph.types.db_session import DbSession, DbSessionFactory
 from aleph.types.message_status import (
     MessageUnavailable,
-    InvalidMessage,
+    InvalidMessageException,
     MessageStatus,
+    PermissionDenied,
 )
 from .job_utils import prepare_loop
 
@@ -58,7 +60,10 @@ def _init_semaphores(config: Config) -> Dict[MessageType, asyncio.BoundedSemapho
     return semaphores
 
 
-def _get_pending_message_id(pending_message: PendingMessageDb) -> Tuple:
+ProcessingMessageId = Tuple[str, str, Optional[str], Optional[str]]
+
+
+def _get_pending_message_id(pending_message: PendingMessageDb) -> ProcessingMessageId:
     source = pending_message.tx
 
     if source:
@@ -137,6 +142,24 @@ async def _mark_fetched_message_as_processed(session: DbSession, message: Messag
     )
 
 
+async def handle_fetch_error(
+    session: DbSession, pending_message: PendingMessageDb, exception: BaseException
+):
+    if isinstance(exception, InvalidMessageException):
+        LOGGER.warning(
+            "Rejecting invalid pending message: %s", pending_message.item_hash
+        )
+        await _reject_pending_message(session=session, pending_message=pending_message)
+    else:
+        if isinstance(exception, MessageUnavailable):
+            LOGGER.warning("Could not fetch message, retrying later")
+        else:
+            LOGGER.exception("Unexpected error while fetching message")
+        await increase_pending_message_retry_count(
+            session=session, pending_message=pending_message
+        )
+
+
 class PendingMessageProcessor:
     def __init__(
         self, session_factory: DbSessionFactory, message_handler: MessageHandler
@@ -169,6 +192,43 @@ class PendingMessageProcessor:
                 session=session, pending_message=pending_message
             )
 
+    async def _handle_fetch_results(
+        self,
+        session: DbSession,
+        finished_tasks: Set[asyncio.Task],
+        task_message_dict: Dict[asyncio.Task, PendingMessageDb],
+        shared_stats: Dict[str, Any],
+        processing_messages: Set[Tuple[str, str, Optional[str], Optional[str]]],
+    ) -> List[MessageDb]:
+        fetched_messages = []
+
+        for finished_task in finished_tasks:
+            pending_message = task_message_dict.pop(finished_task)
+
+            if exception := finished_task.exception():
+                await handle_fetch_error(
+                    session=session,
+                    pending_message=pending_message,
+                    exception=exception,
+                )
+            else:
+                message = finished_task.result()
+                # Confirmations return None and can be discarded here
+                if message:
+                    fetched_messages.append(message)
+                await _mark_pending_message_as_fetched(
+                    session=session, pending_message=pending_message
+                )
+
+            message_type = pending_message.type
+            shared_stats["retry_messages_job_tasks"] -= 1
+            shared_stats["message_jobs"][message_type] -= 1
+
+            pending_message_id = _get_pending_message_id(pending_message)
+            processing_messages.remove(pending_message_id)
+
+        return fetched_messages
+
     # TODO: split
     async def _process_message_job_results(
         self,
@@ -186,7 +246,7 @@ class PendingMessageProcessor:
             pending_message = task_message_dict[error]
 
             exception = cast(BaseException, error.exception())
-            if isinstance(exception, InvalidMessage):
+            if isinstance(exception, InvalidMessageException):
                 LOGGER.warning("Invalid message: %s", str(exception))
                 await _reject_pending_message(
                     session=session, pending_message=pending_message
@@ -230,6 +290,134 @@ class PendingMessageProcessor:
 
             del task_message_dict[message_task]
 
+    async def fetch_pending_messages(
+        self, session: DbSession, config: Config, shared_stats: Dict
+    ) -> AsyncIterator[Sequence[MessageDb]]:
+
+        processing_messages = set()
+
+        max_concurrent_tasks = config.aleph.jobs.pending_messages.max_concurrency.value
+        semaphores = _init_semaphores(config)
+
+        # Reset stats to avoid nonsensical values if the job restarts
+        shared_stats["retry_messages_job_tasks"] = 0
+        for message_type in MessageType:
+            shared_stats["message_jobs"][message_type] = 0
+
+        # Using a set is required as asyncio.wait takes and returns sets.
+        fetch_tasks: Set[asyncio.Task] = set()
+        task_message_dict: Dict[asyncio.Task, PendingMessageDb] = {}
+        fetched_messages = []
+
+        while True:
+            # 1. Wait for existing fetch tasks to complete
+            # 2. Add new tasks until the maximum amount is reached to maximize throughput
+            # 3. Yield fetched messages to the next pipeline step
+            if fetch_tasks:
+                finished_tasks, fetch_tasks = await asyncio.wait(
+                    fetch_tasks, return_when=asyncio.FIRST_COMPLETED
+                )
+                fetched_messages = await self._handle_fetch_results(
+                    session=session,
+                    finished_tasks=finished_tasks,
+                    task_message_dict=task_message_dict,
+                    shared_stats=shared_stats,
+                    processing_messages=processing_messages,
+                )
+                session.commit()
+
+            if len(fetch_tasks) < max_concurrent_tasks:
+                pending_messages = list(await get_pending_messages(
+                    session=session, limit=max_concurrent_tasks - len(fetch_tasks)
+                ))
+
+                s = set(pm.item_hash for pm in pending_messages)
+                LOGGER.warning("Pending: %d unique, %d total", len(s), len(pending_messages))
+                LOGGER.warning("Processing: %d", len(processing_messages))
+
+                for pending_message in pending_messages:
+                    # Check if the message is already processing
+                    pending_message_id = _get_pending_message_id(pending_message)
+                    if pending_message_id in processing_messages:
+                        # Skip the message, we're already processing it
+                        continue
+                    processing_messages.add(pending_message_id)
+
+                    message_type = pending_message.type
+
+                    shared_stats["retry_messages_job_tasks"] += 1
+                    shared_stats["message_jobs"][message_type] += 1
+
+                    message_task = asyncio.create_task(
+                        self._fetch_pending_message(
+                            session=session,
+                            pending_message=pending_message,
+                            sem=semaphores[message_type],
+                        )
+                    )
+                    fetch_tasks.add(message_task)
+                    task_message_dict[message_task] = pending_message
+
+            if fetched_messages:
+                yield fetched_messages
+                fetched_messages = []
+
+            # If we are done, wait a few seconds until retrying
+            if not fetch_tasks and not await PendingMessageDb.count(session):
+                await asyncio.sleep(5)
+
+    async def check_permissions(
+        self, session: DbSession, message_iterator: AsyncIterator[Sequence[MessageDb]]
+    ) -> AsyncIterator[Sequence[MessageDb]]:
+        async for fetched_messages in message_iterator:
+            checked_messages = []
+            for fetched_message in fetched_messages:
+                try:
+                    await self.message_handler.check_permissions(
+                        session=session, message=fetched_message
+                    )
+                    checked_messages.append(fetched_message)
+                except PermissionDenied as e:
+                    await reject_message(
+                        session=session,
+                        item_hash=fetched_message.item_hash,
+                        exception=e,
+                    )
+
+            session.commit()
+            yield checked_messages
+
+    async def process_messages(
+        self, session: DbSession, message_iterator: AsyncIterator[Sequence[MessageDb]]
+    ) -> AsyncIterator[Sequence[MessageDb]]:
+
+        messages_by_hash = defaultdict(int)
+
+        async for messages in message_iterator:
+            for message in messages:
+                messages_by_hash[message.item_hash] += 1
+                if messages_by_hash[message.item_hash] > 1:
+                    print(message.item_hash)
+
+            await self.message_handler.process(session=session, messages=messages)
+
+            session.commit()
+            yield messages
+
+    def make_pipeline(
+        self, session: DbSession, config: Config, shared_stats: Dict
+    ) -> AsyncIterator[Sequence[MessageDb]]:
+        fetch_iterator = self.fetch_pending_messages(
+            session=session, config=config, shared_stats=shared_stats
+        )
+        permission_check_iterator = self.check_permissions(
+            session=session, message_iterator=fetch_iterator
+        )
+        process_iterator = self.process_messages(
+            session=session, message_iterator=permission_check_iterator
+        )
+        return process_iterator
+
     async def process_pending_messages(
         self, session: DbSession, config: Config, shared_stats: Dict
     ):
@@ -256,7 +444,7 @@ class PendingMessageProcessor:
         #       it's good to recycle the session object once all messages are processed
         #       because of the cache.
         # while await PendingMessage.collection.count_documents(find_params):
-        for pending_message in await get_pending_messages_stream(session=session):
+        for pending_message in await get_pending_messages(session=session):
             # Check if the message is already processing
             pending_message_id = _get_pending_message_id(pending_message)
             if pending_message_id in processing_messages:
@@ -331,6 +519,52 @@ class PendingMessageProcessor:
         #     LOGGER.info(repr(result))
 
 
+async def fetch_and_process_messages_task(config: Config, shared_stats: Dict):
+    # TODO: this sleep can probably be removed
+    await asyncio.sleep(4)
+
+    engine = make_engine(config)
+    session_factory = make_session_factory(engine)
+
+    ipfs_client = make_ipfs_client(config)
+    ipfs_service = IpfsService(ipfs_client=ipfs_client)
+    storage_service = StorageService(
+        storage_engine=FileSystemStorageEngine(folder=config.storage.folder.value),
+        ipfs_service=ipfs_service,
+    )
+    chain_service = ChainService(
+        session_factory=session_factory, storage_service=storage_service
+    )
+    message_handler = MessageHandler(
+        session_factory=session_factory,
+        chain_service=chain_service,
+        storage_service=storage_service,
+    )
+    pending_message_processor = PendingMessageProcessor(
+        session_factory=session_factory, message_handler=message_handler
+    )
+
+    while True:
+        with session_factory() as session:
+            try:
+                message_processing_pipeline = pending_message_processor.make_pipeline(
+                    session=session, config=config, shared_stats=shared_stats
+                )
+                async for processed_messages in message_processing_pipeline:
+                    for processed_message in processed_messages:
+                        LOGGER.info(
+                            "Successfully processed %s", processed_message.item_hash
+                        )
+
+            except Exception as e:
+                print(e)
+                LOGGER.exception("Error in pending messages job")
+                session.rollback()
+
+        LOGGER.debug("Waiting 5 seconds for new pending messages...")
+        await asyncio.sleep(5)
+
+
 async def retry_messages_task(config: Config, shared_stats: Dict):
     """Handle message that were added to the pending queue"""
     await asyncio.sleep(4)
@@ -403,5 +637,5 @@ def pending_messages_subprocess(
     singleton.api_servers = api_servers
 
     loop.run_until_complete(
-        retry_messages_task(config=config, shared_stats=shared_stats)
+        fetch_and_process_messages_task(config=config, shared_stats=shared_stats)
     )

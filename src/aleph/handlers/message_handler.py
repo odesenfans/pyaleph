@@ -32,7 +32,7 @@ from aleph.schemas.pending_messages import BasePendingMessage
 from aleph.storage import StorageService
 from aleph.types.db_session import DbSessionFactory, DbSession
 from aleph.types.message_status import (
-    InvalidMessage,
+    InvalidMessageException,
     InvalidSignature,
     MessageUnavailable,
 )
@@ -104,7 +104,7 @@ class MessageHandler:
             content = await self.storage_service.get_message_content(pending_message)
         except InvalidContent:
             LOGGER.warning("Can't get content of message %r, won't retry." % item_hash)
-            raise InvalidMessage("Can't get content of message %s", item_hash)
+            raise InvalidMessageException("Can't get content of message %s", item_hash)
 
         except (ContentCurrentlyUnavailable, Exception) as e:
             if not isinstance(e, ContentCurrentlyUnavailable):
@@ -118,7 +118,7 @@ class MessageHandler:
                 content_size=len(content.raw_value),
             )
         except ValidationError as e:
-            raise InvalidMessage(f"Invalid message content: {e}") from e
+            raise InvalidMessageException(f"Invalid message content: {e}") from e
 
         return validated_message
 
@@ -132,8 +132,8 @@ class MessageHandler:
                 session=session, message=message
             )
         except UnknownHashError:
-            raise InvalidMessage(f"Invalid IPFS hash for message {message.item_hash}")
-        except (InvalidMessage, MessageUnavailable):
+            raise InvalidMessageException(f"Invalid IPFS hash for message {message.item_hash}")
+        except (InvalidMessageException, MessageUnavailable):
             raise
         except Exception as e:
             LOGGER.exception("Error using the message type handler")
@@ -190,6 +190,10 @@ class MessageHandler:
             session.execute(confirmation_upsert_query)
 
         return validated_message
+
+    async def check_permissions(self, session: DbSession, message: MessageDb):
+        content_handler = self.get_content_handler(message.type)
+        await content_handler.check_permissions(session=session, message=message)
 
     async def process(
         self, session: DbSession, messages: Iterable[MessageDb]

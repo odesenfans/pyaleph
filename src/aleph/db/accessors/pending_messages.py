@@ -8,7 +8,7 @@ from aleph.db.models import PendingMessageDb, ChainTxDb
 from aleph.types.db_session import DbSession
 
 
-async def get_pending_messages_stream(
+async def get_pending_messages(
     session: DbSession, limit: int = 10000
 ) -> Iterable[PendingMessageDb]:
     select_stmt = (

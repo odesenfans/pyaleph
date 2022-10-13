@@ -12,7 +12,7 @@ from aleph.db.accessors.messages import (
     forget_message,
     get_message_status,
     append_to_forgotten_by,
-    get_forgotten_message,
+    get_forgotten_message, reject_message,
 )
 from aleph.db.models import (
     MessageDb,
@@ -172,7 +172,7 @@ async def test_upsert_query_message(session_factory: DbSessionFactory):
 
 @pytest.mark.asyncio
 async def test_get_unconfirmed_messages(
-    session_factory: DbSessionFactory, fixture_message
+    session_factory: DbSessionFactory, fixture_message: MessageDb
 ):
     with session_factory() as session:
         session.add(fixture_message)
@@ -230,7 +230,7 @@ async def test_get_distinct_channels(session_factory: DbSessionFactory):
 
 
 @pytest.mark.asyncio
-async def test_forget_message(session_factory: DbSessionFactory, fixture_message):
+async def test_forget_message(session_factory: DbSessionFactory, fixture_message:MessageDb):
     with session_factory() as session:
         session.add(fixture_message)
         session.add(
@@ -299,3 +299,17 @@ async def test_forget_message(session_factory: DbSessionFactory, fixture_message
             forget_message_hash,
             new_forget_message_hash,
         ]
+
+
+async def test_reject_message(session_factory: DbSessionFactory, fixture_message: MessageDb):
+    with session_factory() as session:
+        session.add(fixture_message)
+        session.add(
+            MessageStatusDb(
+                item_hash=fixture_message.item_hash, status=MessageStatus.FETCHED
+            )
+        )
+        session.commit()
+
+    with session_factory() as session:
+        await reject_message()
