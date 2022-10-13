@@ -5,7 +5,7 @@ from typing import List, Tuple
 from aleph.db.bulk_operations import DbBulkOperation
 from aleph.db.models import MessageDb
 from aleph.types.db_session import DbSession
-from aleph.types.message_status import MessageProcessingStatus
+from aleph.types.message_status import MessageProcessingStatus, PermissionDenied
 
 
 # TODO: use this class as returned value for fetch?
@@ -43,3 +43,13 @@ class ContentHandler(abc.ABC):
         * applying DB updates.
         """
         ...
+
+    async def check_permissions(self, session: DbSession, message: MessageDb):
+        content = message.parsed_content
+
+        # Simplified for now, just reject any modification on objects not
+        # owned by the sender itself
+        if content.address != message.sender:
+            raise PermissionDenied(
+                f"{message.sender} cannot create/modify objects on behalf of {content.address}"
+            )

@@ -10,4 +10,7 @@ class ProgramMessageHandler(ContentHandler):
         self, session: DbSession, messages: List[MessageDb]
     ) -> Tuple[List[MessageDb], List[MessageDb]]:
 
+        for message in messages:
+            await self.check_permissions(session=session, message=message)
+
         return messages, []

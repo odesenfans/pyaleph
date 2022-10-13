@@ -79,21 +79,20 @@ class AggregateMessageHandler(ContentHandler):
     async def _update_aggregate(
         self, session: DbSession, key: str, owner: str, messages: Iterable[MessageDb]
     ):
-        elements = [
-            AggregateElementDb(
+        # TODO: to improve performance, only modify the aggregate once -> insert several
+        #       elements at once
+        for message in messages:
+            await self.check_permissions(session=session, message=message)
+            new_element = AggregateElementDb(
                 item_hash=message.item_hash,
                 key=key,
                 owner=owner,
                 content=message.parsed_content.content,
                 creation_datetime=timestamp_to_datetime(message.parsed_content.time),
             )
-            for message in messages
-        ]
-        # TODO: to improve performance, only modify the aggregate once -> insert several
-        #       elements at once
-
-        for element in elements:
-            await self._insert_aggregate_element(session=session, new_element=element)
+            await self._insert_aggregate_element(
+                session=session, new_element=new_element
+            )
 
     async def process(
         self, session: DbSession, messages: List[MessageDb]

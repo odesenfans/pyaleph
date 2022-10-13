@@ -7,6 +7,7 @@ from typing import Optional, List, Mapping, Tuple
 from aioipfs.api import RepoAPI
 from aioipfs.exceptions import NotPinnedError
 from aleph_message.models import ItemType, MessageType, ForgetContent
+from sqlalchemy import update
 
 from aleph.db.accessors.aggregates import (
     aggregate_exists,
@@ -15,7 +16,7 @@ from aleph.db.accessors.aggregates import (
 )
 from aleph.db.accessors.files import is_pinned_file
 from aleph.db.accessors.messages import message_exists, get_matching_messages
-from aleph.db.models import MessageDb
+from aleph.db.models import MessageDb, MessageStatusDb
 from aleph.handlers.content.content_handler import ContentHandler
 from aleph.model.messages import Message
 from aleph.schemas.validated_message import ValidatedForgetMessage
@@ -25,6 +26,7 @@ from aleph.types.message_status import (
     MessageProcessingStatus,
     InvalidMessage,
     MessageUnavailable,
+    MessageStatus,
 )
 from aleph.utils import item_type_from_hash
 
@@ -314,6 +316,23 @@ class ForgetMessageHandler(ContentHandler):
             await self.forget_if_allowed(
                 target_info=target_info, forget_message=forget_message
             )
+
+    async def check_permissions(self, session: DbSession, message: MessageDb):
+        await super().check_permissions(session=session, message=message)
+
+        # Check that the sender owns the objects it is attempting to forget
+
+    async def _forget_message(self, session: DbSession, item_hash: str):
+        session.execute(
+            update(MessageStatusDb)
+            .where((MessageStatusDb.item_hash == item_hash) & (MessageStatusDb.status == MessageStatus.PROCESSED))
+            .values(status=MessageStatus.FORGOTTEN)
+        )
+
+    async def _process_forget_message(
+        self, session: DbSession, forget_message: MessageDb
+    ):
+        await self.check_permissions(session=session, message=forget_message)
 
     async def process(
         self, session: DbSession, messages: List[MessageDb]
