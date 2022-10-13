@@ -52,13 +52,13 @@ async def test_db():
     yield db
 
 
-@pytest_asyncio.fixture
-async def session_factory(mock_config):
+@pytest.fixture
+def session_factory(mock_config):
     engine = make_engine(mock_config, echo=True)
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)
+    with engine.begin() as conn:
+        Base.metadata.drop_all(conn)
+        Base.metadata.create_all(conn)
 
     return make_session_factory(engine)
 

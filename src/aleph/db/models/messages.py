@@ -12,7 +12,7 @@ from aleph_message.models import (
     ProgramContent,
     StoreContent,
 )
-from sqlalchemy import Column, TIMESTAMP, String, Integer, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, TIMESTAMP, String, Integer, ForeignKey, UniqueConstraint, ARRAY
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy_utils.types.choice import ChoiceType
@@ -157,7 +157,7 @@ class ForgottenMessageDb(Base):
     item_type: ItemType = Column(ChoiceType(ItemType), nullable=False)
     time: dt.datetime = Column(TIMESTAMP(timezone=True), nullable=False, index=True)
     channel: Optional[Channel] = Column(String, nullable=True, index=True)
-    forgotten_by: Dict[str, Any] = Column(JSONB, nullable=False)
+    forgotten_by: List[str] = Column(ARRAY(String), nullable=False)
 
 
 class RejectedMessageDb(Base):

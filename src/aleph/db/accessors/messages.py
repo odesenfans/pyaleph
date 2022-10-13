@@ -2,20 +2,24 @@ import datetime as dt
 from typing import Optional, Sequence, Union, Iterable
 
 from aleph_message.models import ItemHash, Chain, MessageType
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update, text, delete
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql import Insert, Select
-from sqlalchemy.sql.elements import BinaryExpression
+from sqlalchemy.sql.elements import BinaryExpression, literal
 
 from aleph.toolkit.timestamp import timestamp_to_datetime
 from aleph.types.channel import Channel
 from aleph.types.db_session import DbSession
+from aleph.types.message_status import MessageStatus
 from aleph.types.sort_order import SortOrder
 from ..models import ChainTxDb
-from ..models.messages import MessageDb, MessageConfirmationDb, MessageStatusDb
-from aleph.types.message_status import MessageStatus
+from ..models.messages import (
+    MessageDb,
+    MessageConfirmationDb,
+    MessageStatusDb,
+    ForgottenMessageDb,
+)
 
 
 async def get_message_by_item_hash(
@@ -203,3 +207,71 @@ def make_message_status_upsert_query(
 async def get_distinct_channels(session: DbSession) -> Iterable[Channel]:
     select_stmt = select(MessageDb.channel).distinct().order_by(MessageDb.channel)
     return (session.execute(select_stmt)).scalars()
+
+
+async def get_forgotten_message(
+    session: DbSession, item_hash: str
+) -> Optional[ForgottenMessageDb]:
+    return session.execute(
+        select(ForgottenMessageDb).where(ForgottenMessageDb.item_hash == item_hash)
+    ).scalar()
+
+
+async def forget_message(session: DbSession, item_hash: str, forget_message_hash: str):
+    """
+    Marks a processed message as validated.
+
+    Expects the caller to perform checks to determine whether the message is
+    in the proper state.
+
+    :param session: DB session.
+    :param item_hash: Hash of the message to forget.
+    :param forget_message_hash: Hash of the forget message.
+    """
+
+    copy_row_stmt = insert(ForgottenMessageDb).from_select(
+        [
+            "item_hash",
+            "type",
+            "chain",
+            "sender",
+            "signature",
+            "item_type",
+            "time",
+            "channel",
+            "forgotten_by",
+        ],
+        select(
+            MessageDb.item_hash,
+            MessageDb.type,
+            MessageDb.chain,
+            MessageDb.sender,
+            MessageDb.signature,
+            MessageDb.item_type,
+            MessageDb.time,
+            MessageDb.channel,
+            literal(f"{{{forget_message_hash}}}"),
+        ),
+    )
+    session.execute(copy_row_stmt)
+    session.execute(
+        update(MessageStatusDb)
+        .values(status=MessageStatus.FORGOTTEN)
+        .where(MessageStatusDb.item_hash == item_hash)
+    )
+    session.execute(delete(MessageDb).where(MessageDb.item_hash == item_hash))
+
+
+async def append_to_forgotten_by(
+    session: DbSession, forgotten_message_hash: str, forget_message_hash: str
+):
+    update_stmt = (
+        update(ForgottenMessageDb)
+        .where(ForgottenMessageDb.item_hash == forgotten_message_hash)
+        .values(
+            forgotten_by=text(
+                f"array_append({ForgottenMessageDb.forgotten_by.name}, :forget_hash)"
+            )
+        )
+    )
+    session.execute(update_stmt, {"forget_hash": forget_message_hash})

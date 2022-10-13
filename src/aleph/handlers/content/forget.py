@@ -7,7 +7,7 @@ from typing import Optional, List, Mapping, Tuple
 from aioipfs.api import RepoAPI
 from aioipfs.exceptions import NotPinnedError
 from aleph_message.models import ItemType, MessageType, ForgetContent
-from sqlalchemy import update
+from sqlalchemy import update, select
 
 from aleph.db.accessors.aggregates import (
     aggregate_exists,
@@ -15,8 +15,14 @@ from aleph.db.accessors.aggregates import (
     get_message_hashes_for_aggregate,
 )
 from aleph.db.accessors.files import is_pinned_file
-from aleph.db.accessors.messages import message_exists, get_matching_messages
-from aleph.db.models import MessageDb, MessageStatusDb
+from aleph.db.accessors.messages import (
+    message_exists,
+    get_matching_messages,
+    get_message_status,
+    append_to_forgotten_by,
+    forget_message, get_message_by_item_hash,
+)
+from aleph.db.models import MessageDb, MessageStatusDb, AggregateElementDb
 from aleph.handlers.content.content_handler import ContentHandler
 from aleph.model.messages import Message
 from aleph.schemas.validated_message import ValidatedForgetMessage
@@ -26,7 +32,7 @@ from aleph.types.message_status import (
     MessageProcessingStatus,
     InvalidMessage,
     MessageUnavailable,
-    MessageStatus,
+    MessageStatus, PermissionDenied,
 )
 from aleph.utils import item_type_from_hash
 
@@ -325,16 +331,82 @@ class ForgetMessageHandler(ContentHandler):
     async def _forget_message(self, session: DbSession, item_hash: str):
         session.execute(
             update(MessageStatusDb)
-            .where((MessageStatusDb.item_hash == item_hash) & (MessageStatusDb.status == MessageStatus.PROCESSED))
+            .where(
+                (MessageStatusDb.item_hash == item_hash)
+                & (MessageStatusDb.status == MessageStatus.PROCESSED)
+            )
             .values(status=MessageStatus.FORGOTTEN)
         )
 
-    async def _process_forget_message(
-        self, session: DbSession, forget_message: MessageDb
+    async def _forget_if_allowed(
+        self, session: DbSession, item_hash: str, forgotten_by: MessageDb
     ):
-        await self.check_permissions(session=session, message=forget_message)
+        message_status = await get_message_status(session=session, item_hash=item_hash)
+
+        if message_status.status == MessageStatus.REJECTED:
+            logger.info("Message %s was rejected, nothing to do.", item_hash)
+        if message_status.status == MessageStatus.FORGOTTEN:
+            logger.info("Message %s is already forgotten, nothing to do.", item_hash)
+            await append_to_forgotten_by(
+                session=session,
+                forgotten_message_hash=item_hash,
+                forget_message_hash=forgotten_by.item_hash,
+            )
+            return
+
+        if message_status.status != MessageStatus.PROCESSED:
+            logger.error(
+                "FORGET message %s targets message %s which is not processed yet. This should not happen.",
+                forgotten_by.item_hash,
+                item_hash,
+            )
+            raise MessageUnavailable(
+                "Trying to process a FORGET message with target messages not processed!"
+            )
+
+        message = await get_message_by_item_hash(session=session, item_hash=item_hash)
+        if not message:
+            raise MessageUnavailable(f"Message {item_hash} not found")
+
+        if message.type == MessageType.forget:
+            raise PermissionDenied("Cannot forget a FORGET message")
+
+
+        await forget_message(
+            session=session,
+            item_hash=item_hash,
+            forget_message_hash=forgotten_by.item_hash,
+        )
+
+    async def _process_forget_message(self, session: DbSession, message: MessageDb):
+        await self.check_permissions(session=session, message=message)
+
+        content = message.parsed_content
+        assert isinstance(content, ForgetContent)
+
+        aggregate_messages_to_forget = []
+        for aggregate in content.aggregates:
+            aggregate_messages_to_forget.extend(
+                session.execute(
+                    select(AggregateElementDb.item_hash).where(
+                        (AggregateElementDb.key == aggregate)
+                        & (AggregateElementDb.owner == content.address)
+                    )
+                ).scalars()
+            )
+
+        messages_to_forget = content.hashes + aggregate_messages_to_forget
+
+        for item_hash in messages_to_forget:
+            await self._forget_if_allowed(
+                session=session, item_hash=item_hash, forget_message=message
+            )
 
     async def process(
         self, session: DbSession, messages: List[MessageDb]
     ) -> Tuple[List[MessageDb], List[MessageDb]]:
-        return [], []
+
+        for message in messages:
+            await self._process_forget_message(session=session, message=message)
+
+        return messages, []

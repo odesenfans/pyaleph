@@ -3,16 +3,28 @@ import datetime as dt
 import pytest
 import pytz
 from aleph_message.models import Chain, MessageType, ItemType
+from sqlalchemy import select
 
 from aleph.db.accessors.messages import (
     get_message_by_item_hash,
     get_unconfirmed_messages,
     message_exists,
+    forget_message,
+    get_message_status,
+    append_to_forgotten_by,
+    get_forgotten_message,
 )
-from aleph.db.models import MessageDb, MessageConfirmationDb, ChainTxDb
+from aleph.db.models import (
+    MessageDb,
+    MessageConfirmationDb,
+    ChainTxDb,
+    MessageStatusDb,
+    ForgottenMessageDb,
+)
 from aleph.toolkit.timestamp import timestamp_to_datetime
 from aleph.types.channel import Channel
 from aleph.types.db_session import DbSessionFactory
+from aleph.types.message_status import MessageStatus
 
 
 @pytest.fixture
@@ -215,3 +227,75 @@ async def test_get_unconfirmed_messages(
 @pytest.mark.asyncio
 async def test_get_distinct_channels(session_factory: DbSessionFactory):
     assert False
+
+
+@pytest.mark.asyncio
+async def test_forget_message(session_factory: DbSessionFactory, fixture_message):
+    with session_factory() as session:
+        session.add(fixture_message)
+        session.add(
+            MessageStatusDb(
+                item_hash=fixture_message.item_hash, status=MessageStatus.PROCESSED
+            )
+        )
+        session.commit()
+
+    forget_message_hash = (
+        "d06251c954d4c75476c749e80b8f2a4962d20282b28b3e237e30b0a76157df2d"
+    )
+
+    with session_factory() as session:
+        await forget_message(
+            session=session,
+            item_hash=fixture_message.item_hash,
+            forget_message_hash=forget_message_hash,
+        )
+        session.commit()
+
+        message_status = await get_message_status(
+            session=session, item_hash=fixture_message.item_hash
+        )
+        assert message_status.status == MessageStatus.FORGOTTEN
+
+        # Assert that the message is not present in messages anymore
+        message = await get_message_by_item_hash(
+            session=session, item_hash=fixture_message.item_hash
+        )
+        assert message is None
+
+        # Assert that the metadata was inserted properly in forgotten_messages
+        forgotten_message = await get_forgotten_message(
+            session=session, item_hash=fixture_message.item_hash
+        )
+        assert forgotten_message
+
+        assert forgotten_message.item_hash == fixture_message.item_hash
+        assert forgotten_message.type == fixture_message.type
+        assert forgotten_message.chain == fixture_message.chain
+        assert forgotten_message.sender == fixture_message.sender
+        assert forgotten_message.signature == fixture_message.signature
+        assert forgotten_message.item_type == fixture_message.item_type
+        assert forgotten_message.time == fixture_message.time
+        assert forgotten_message.channel == fixture_message.channel
+        assert forgotten_message.forgotten_by == [forget_message_hash]
+
+        # Now, add a hash to forgotten_by
+        new_forget_message_hash = (
+            "2aa1f44199181110e0c6b79ccc5e40ceaf20eac791dcfcd1b4f8f2f32b2d8502"
+        )
+
+        await append_to_forgotten_by(
+            session=session,
+            forgotten_message_hash=fixture_message.item_hash,
+            forget_message_hash=new_forget_message_hash,
+        )
+        session.commit()
+
+        forgotten_message = await get_forgotten_message(
+            session=session, item_hash=fixture_message.item_hash
+        )
+        assert forgotten_message
+        assert forgotten_message.forgotten_by == [
+            forget_message_hash,
+            new_forget_message_hash,
+        ]
