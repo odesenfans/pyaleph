@@ -14,7 +14,7 @@ from aleph.types.channel import Channel
 from aleph.types.db_session import DbSession
 from aleph.types.message_status import MessageStatus, InvalidMessageException
 from aleph.types.sort_order import SortOrder
-from ..models import ChainTxDb
+from ..models import ChainTxDb, PendingMessageDb
 from ..models.messages import (
     MessageDb,
     MessageConfirmationDb,
@@ -283,12 +283,48 @@ async def reject_message(
     session: DbSession, item_hash: str, exception: InvalidMessageException
 ):
     session.execute(
-        update(MessageStatusDb).values(status=MessageStatus.REJECTED)
-    ).where(MessageStatusDb.item_hash == item_hash)
+        update(MessageStatusDb)
+        .values(status=MessageStatus.REJECTED)
+        .where(MessageStatusDb.item_hash == item_hash)
+    )
     session.execute(
         insert(RejectedMessageDb).values(
             item_hash=item_hash,
             reason=str(exception),
-            traceback=traceback.format_exception(exception),
+            traceback="\n".join(
+                traceback.format_exception(InvalidMessageException, exception, None)
+            ),
         )
+    )
+
+
+async def reject_pending_message(
+    session: DbSession,
+    pending_message: PendingMessageDb,
+    exception: InvalidMessageException,
+):
+    item_hash = pending_message.item_hash
+    message_status = await get_message_status(session=session, item_hash=item_hash)
+
+    # Nothing to do, the message may already be processed and someone is sending
+    # invalid copies for some reason
+    if message_status.status != MessageStatus.PENDING:
+        return
+
+    session.execute(
+        update(MessageStatusDb)
+        .values(status=MessageStatus.REJECTED)
+        .where(MessageStatusDb.item_hash == item_hash)
+    )
+    session.execute(
+        insert(RejectedMessageDb).values(
+            item_hash=item_hash,
+            reason=str(exception),
+            traceback="\n".join(
+                traceback.format_exception(InvalidMessageException, exception, None)
+            ),
+        )
+    )
+    session.execute(
+        delete(PendingMessageDb).where(PendingMessageDb.id == pending_message.id)
     )

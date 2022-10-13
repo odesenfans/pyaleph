@@ -4,7 +4,7 @@ from typing import Dict, List, Coroutine
 
 from aleph.jobs.process_pending_messages import (
     pending_messages_subprocess,
-    retry_messages_task,
+    fetch_and_process_messages_task,
 )
 from aleph.jobs.process_pending_txs import pending_txs_subprocess, handle_txs_task
 from aleph.jobs.reconnect_ipfs import reconnect_ipfs_job
@@ -42,7 +42,7 @@ def start_jobs(
         p1.start()
         p2.start()
     else:
-        tasks.append(retry_messages_task(config=config, shared_stats=shared_stats))
+        tasks.append(fetch_and_process_messages_task(config=config, shared_stats=shared_stats))
         tasks.append(handle_txs_task(config))
 
     if config.ipfs.enabled.value:

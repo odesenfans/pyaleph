@@ -12,7 +12,8 @@ from aleph.db.accessors.messages import (
     forget_message,
     get_message_status,
     append_to_forgotten_by,
-    get_forgotten_message, reject_message,
+    get_forgotten_message,
+    reject_message,
 )
 from aleph.db.models import (
     MessageDb,
@@ -24,7 +25,7 @@ from aleph.db.models import (
 from aleph.toolkit.timestamp import timestamp_to_datetime
 from aleph.types.channel import Channel
 from aleph.types.db_session import DbSessionFactory
-from aleph.types.message_status import MessageStatus
+from aleph.types.message_status import MessageStatus, InvalidSignature
 
 
 @pytest.fixture
@@ -230,7 +231,9 @@ async def test_get_distinct_channels(session_factory: DbSessionFactory):
 
 
 @pytest.mark.asyncio
-async def test_forget_message(session_factory: DbSessionFactory, fixture_message:MessageDb):
+async def test_forget_message(
+    session_factory: DbSessionFactory, fixture_message: MessageDb
+):
     with session_factory() as session:
         session.add(fixture_message)
         session.add(
@@ -300,8 +303,10 @@ async def test_forget_message(session_factory: DbSessionFactory, fixture_message
             new_forget_message_hash,
         ]
 
-
-async def test_reject_message(session_factory: DbSessionFactory, fixture_message: MessageDb):
+@pytest.mark.asyncio
+async def test_reject_message(
+    session_factory: DbSessionFactory, fixture_message: MessageDb
+):
     with session_factory() as session:
         session.add(fixture_message)
         session.add(
@@ -312,4 +317,9 @@ async def test_reject_message(session_factory: DbSessionFactory, fixture_message
         session.commit()
 
     with session_factory() as session:
-        await reject_message()
+        await reject_message(
+            session=session,
+            item_hash=fixture_message.item_hash,
+            exception=InvalidSignature("Signature does not match"),
+        )
+        session.commit()

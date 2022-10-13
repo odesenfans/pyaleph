@@ -1,4 +1,4 @@
-from typing import Optional, AsyncIterator, Iterable
+from typing import Optional, Iterable
 
 from aleph_message.models import Chain
 from sqlalchemy import select, func, update, delete
