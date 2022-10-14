@@ -11,6 +11,7 @@ import sentry_sdk
 from aleph_message.models import MessageType
 from configmanager import Config, NotFound
 from setproctitle import setproctitle
+from sqlalchemy import update
 
 from aleph.chains.chain_service import ChainService
 from aleph.db.accessors.messages import (
@@ -402,9 +403,18 @@ async def fetch_and_process_messages_task(config: Config, shared_stats: Dict):
                 )
                 async for processed_messages in message_processing_pipeline:
                     for processed_message in processed_messages:
+                        # TODO: move to accessor
+                        session.execute(
+                            update(MessageStatusDb)
+                            .values(status=MessageStatus.PROCESSED)
+                            .where(
+                                MessageStatusDb.item_hash == processed_message.item_hash
+                            )
+                        )
                         LOGGER.info(
                             "Successfully processed %s", processed_message.item_hash
                         )
+                    session.commit()
 
             except Exception as e:
                 print(e)

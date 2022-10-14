@@ -1,4 +1,4 @@
-from typing import Optional, Iterable, List
+from typing import Optional, Iterable, List, Any, Dict, Tuple, Sequence
 
 from aleph_message.models import ItemHash
 from sqlalchemy import select, text, delete
@@ -15,6 +15,22 @@ async def aggregate_exists(session: DbSession, key: str, owner: str) -> bool:
     )
 
 
+async def get_aggregates_by_owner(
+    session: DbSession, owner: str, keys: Optional[Sequence[str]] = None
+) -> Iterable[Tuple[str, Dict[str, Any]]]:
+
+    where_clause = AggregateDb.owner == owner
+    if keys:
+        where_clause = where_clause & AggregateDb.key.in_(keys)
+
+    select_stmt = (
+        select(AggregateDb.key, AggregateDb.content)
+        .where(where_clause)
+        .order_by(AggregateDb.key)
+    )
+    return session.execute(select_stmt).all()
+
+
 async def get_aggregate_by_key(
     session: DbSession, owner: str, key: str
 ) -> Optional[AggregateDb]:
@@ -22,9 +38,7 @@ async def get_aggregate_by_key(
         (AggregateDb.owner == owner) & (AggregateDb.key == key)
     )
     return (
-        session.execute(
-            select_stmt.options(selectinload(AggregateDb.last_revision))
-        )
+        session.execute(select_stmt.options(selectinload(AggregateDb.last_revision)))
     ).scalar()
 
 
