@@ -1,7 +1,7 @@
 from typing import Optional, Iterable, List, Any, Dict, Tuple, Sequence
 
 from aleph_message.models import ItemHash
-from sqlalchemy import select, text, delete
+from sqlalchemy import select, text, delete, update
 from sqlalchemy.orm import selectinload
 
 from aleph.db.models import AggregateDb, AggregateElementDb
@@ -72,3 +72,40 @@ async def delete_aggregate(session: DbSession, owner: str, key: str):
 
     session.execute(delete_aggregate_stmt)
     session.execute(delete_elements_stmt)
+
+
+def merge_aggregate_elements(elements: Iterable[AggregateElementDb]) -> Dict:
+    content = {}
+    for element in elements:
+        content.update(element.content)
+    return content
+
+
+async def refresh_aggregate(session: DbSession, owner: str, key: str):
+    elements = list(
+        session.execute(
+            select(AggregateElementDb)
+            .where(
+                (AggregateElementDb.key == key) & (AggregateElementDb.owner == owner)
+            )
+            .order_by(AggregateElementDb.creation_datetime)
+        ).scalars()
+    )
+    content = merge_aggregate_elements(elements)
+
+    session.execute(
+        update(AggregateDb)
+        .where((AggregateElementDb.key == key) & (AggregateElementDb.owner == owner))
+        .values(
+            content=content,
+            creation_datetime=elements[0].creation_datetime,
+            last_revision_hash=elements[-1].item_hash,
+        )
+    )
+
+
+async def delete_aggregate_element(session: DbSession, item_hash: str):
+    delete_element_stmt = delete(AggregateElementDb).where(
+        AggregateElementDb.item_hash == item_hash
+    )
+    session.execute(delete_element_stmt)

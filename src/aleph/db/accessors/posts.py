@@ -2,7 +2,7 @@ import datetime as dt
 from typing import Optional, Protocol, Dict, Any, Sequence, Union, Iterable, List
 
 from aleph_message.models import ItemHash
-from sqlalchemy import func, select, literal_column, TIMESTAMP, String
+from sqlalchemy import func, select, literal_column, TIMESTAMP, String, delete
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql import Select
@@ -169,3 +169,7 @@ async def get_matching_posts(
 ) -> List[MergedPost]:
     select_stmt = make_matching_posts_query(**kwargs)
     return session.execute(select_stmt).all()
+
+
+async def delete_post(session: DbSession, item_hash: str):
+    session.execute(delete(PostDb).where(PostDb.item_hash == item_hash))

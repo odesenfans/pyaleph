@@ -48,7 +48,6 @@ class PostMessageHandler(ContentHandler):
     ) -> Tuple[List[MessageDb], List[MessageDb]]:
 
         for message in messages:
-            await self.check_permissions(session=session, message=message)
             content = message.parsed_content
             assert isinstance(content, PostContent)
 

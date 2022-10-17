@@ -17,7 +17,7 @@ import aioipfs
 from aleph_message.models import ItemType, StoreContent
 
 from aleph.config import get_config
-from aleph.db.accessors.files import make_upsert_stored_file_query
+from aleph.db.accessors.files import make_upsert_stored_file_query, insert_file_reference
 from aleph.db.models import MessageDb, StoredFileDb, FileReferenceDb
 from aleph.exceptions import AlephStorageException, UnknownHashError
 from aleph.handlers.content.content_handler import ContentHandler
@@ -128,7 +128,9 @@ class StoreMessageHandler(ContentHandler):
                     store_value=True,
                 )
             except AlephStorageException:
-                raise MessageUnavailable("Could not retrieve file from storage at this time")
+                raise MessageUnavailable(
+                    "Could not retrieve file from storage at this time"
+                )
 
             size = len(file_content)
 
@@ -144,19 +146,17 @@ class StoreMessageHandler(ContentHandler):
         content = message.parsed_content
         assert isinstance(content, StoreContent)
 
-        session.add(
-            FileReferenceDb(
-                file_hash=content.item_hash,
-                owner=content.address,
-                item_hash=message.item_hash,
-            )
+        await insert_file_reference(
+            session=session,
+            file_hash=content.item_hash,
+            owner=content.address,
+            item_hash=message.item_hash,
         )
 
     async def process(
         self, session: DbSession, messages: List[MessageDb]
     ) -> Tuple[List[MessageDb], List[MessageDb]]:
         for message in messages:
-            await self.check_permissions(session=session, message=message)
             await self._create_file_reference(session=session, message=message)
 
         return messages, []

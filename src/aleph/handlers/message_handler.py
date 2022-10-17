@@ -68,10 +68,8 @@ class MessageHandler:
         }
 
     # TODO typing: make this function generic on message type
-    def get_content_handler(
-        self, message_type: MessageType
-    ) -> Optional[ContentHandler]:
-        return self.content_handlers.get(message_type)
+    def get_content_handler(self, message_type: MessageType) -> ContentHandler:
+        return self.content_handlers[message_type]
 
     async def delayed_incoming(
         self,
@@ -124,15 +122,15 @@ class MessageHandler:
 
     async def fetch_related_content(self, session: DbSession, message: MessageDb):
         content_handler = self.get_content_handler(message.type)
-        if content_handler is None:
-            return
 
         try:
             await content_handler.fetch_related_content(
                 session=session, message=message
             )
         except UnknownHashError:
-            raise InvalidMessageException(f"Invalid IPFS hash for message {message.item_hash}")
+            raise InvalidMessageException(
+                f"Invalid IPFS hash for message {message.item_hash}"
+            )
         except (InvalidMessageException, MessageUnavailable):
             raise
         except Exception as e:
@@ -218,20 +216,19 @@ class MessageHandler:
             MessageType.forget,
         ):
             content_handler = self.get_content_handler(message_type)
-            if content_handler:
-                start_time = time.perf_counter()
-                mtype_successes, mtype_errors = await content_handler.process(
-                    session=session, messages=messages_by_type[message_type]
-                )
-                end_time = time.perf_counter()
-                LOGGER.info(
-                    "Processed %d %s messages in %.4f seconds",
-                    len(messages_by_type[message_type]),
-                    message_type,
-                    end_time - start_time,
-                )
-                successes += mtype_successes
-                errors += mtype_errors
+            start_time = time.perf_counter()
+            mtype_successes, mtype_errors = await content_handler.process(
+                session=session, messages=messages_by_type[message_type]
+            )
+            end_time = time.perf_counter()
+            LOGGER.info(
+                "Processed %d %s messages in %.4f seconds",
+                len(messages_by_type[message_type]),
+                message_type,
+                end_time - start_time,
+            )
+            successes += mtype_successes
+            errors += mtype_errors
 
         return successes, errors
 

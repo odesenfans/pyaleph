@@ -22,14 +22,14 @@ import sentry_sdk
 from aleph_message.models import MessageType
 from configmanager import Config
 from setproctitle import setproctitle
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.engine import Engine
 
 import aleph.config
 from aleph import model
 from aleph.chains.chain_service import ChainService
 from aleph.cli.args import parse_args
-from aleph.db.models.base import Base
 from aleph.db.connection import make_engine, make_session_factory
+from aleph.db.models.base import Base
 from aleph.exceptions import InvalidConfigException, KeyNotFoundException
 from aleph.jobs import start_jobs
 from aleph.jobs.job_utils import prepare_loop
@@ -51,7 +51,7 @@ __license__ = "mit"
 LOGGER = logging.getLogger(__name__)
 
 
-async def create_tables(engine: AsyncEngine):
+async def create_tables(engine: Engine):
     with engine.begin() as conn:
         Base.metadata.drop_all(conn)
         Base.metadata.create_all(conn)
