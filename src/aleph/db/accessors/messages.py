@@ -104,6 +104,20 @@ def make_matching_messages_query(
     return select_stmt
 
 
+async def count_matching_messages(
+        session: DbSession, page: int = 1, pagination: int = 0, **kwargs
+) -> int:
+    # Note that we deliberately ignore the pagination parameters so that users can pass
+    # the same parameters as get_matching_messages and get the total number of messages,
+    # not just the number on a page.
+    if kwargs:
+        select_stmt = make_matching_messages_query(**kwargs, page=1, pagination=0)
+        select_count_stmt = select(func.count()).select_from(select_stmt)
+        return session.execute(select_count_stmt).scalar_one()
+
+    return await MessageDb.count(session=session)
+
+
 async def get_matching_messages(
     session: DbSession,
     **kwargs,  # Same as make_matching_messages_query
@@ -113,16 +127,6 @@ async def get_matching_messages(
     """
     select_stmt = make_matching_messages_query(**kwargs)
     return (session.execute(select_stmt)).scalars()
-
-
-async def count_matching_messages(
-    session: DbSession,
-    **kwargs,  # Same as make_matching_messages_query
-):
-    # TODO implement properly
-    # count_stmt = make_matching_messages_query(**kwargs).count()
-    # return (session.execute(count_stmt)).scalar()
-    return await MessageDb.count(session)
 
 
 # TODO: declare a type that will match the result (something like UnconfirmedMessageDb)

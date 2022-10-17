@@ -6,7 +6,12 @@ import pytz
 from aleph_message.models import ItemHash
 from more_itertools import one
 
-from aleph.db.accessors.posts import get_post, MergedPost, get_matching_posts
+from aleph.db.accessors.posts import (
+    get_post,
+    MergedPost,
+    get_matching_posts,
+    count_matching_posts,
+)
 from aleph.db.models.posts import PostDb
 from aleph.types.db_session import DbSessionFactory
 from aleph.types.sort_order import SortOrder
@@ -187,6 +192,8 @@ async def test_get_matching_posts(
         # Get all posts, no filter
         matching_posts = await get_matching_posts(session=session)
         assert len(matching_posts) == 2
+        nb_posts = await count_matching_posts(session=session)
+        assert nb_posts == 2
 
         # Get by hash
         matching_hash_posts = await get_matching_posts(
@@ -198,6 +205,10 @@ async def test_get_matching_posts(
             original=original_post,
             last_amend=first_amend_post,
         )
+        nb_matching_hash_posts = await count_matching_posts(
+            session=session, hashes=[original_post.item_hash]
+        )
+        assert nb_matching_hash_posts == 1
 
         # Get by owner address
         matching_address_posts = await get_matching_posts(
@@ -207,6 +218,10 @@ async def test_get_matching_posts(
         assert_posts_equal(
             merged_post=one(matching_address_posts), original=post_from_second_user
         )
+        nb_matching_address_posts = await count_matching_posts(
+            session=session, addresses=[post_from_second_user.owner]
+        )
+        assert nb_matching_address_posts == 1
 
         # Get by channel
         matching_channel_posts = await get_matching_posts(
@@ -216,6 +231,10 @@ async def test_get_matching_posts(
         assert_posts_equal(
             merged_post=one(matching_channel_posts), original=post_from_second_user
         )
+        nb_matching_channel_posts = await count_matching_posts(
+            session=session, channels=[post_from_second_user.channel]
+        )
+        assert nb_matching_channel_posts == 1
 
 
 @pytest.mark.asyncio
@@ -275,14 +294,22 @@ async def test_get_matching_posts_sort_order(
         )
         assert asc_posts
         assert_posts_equal(merged_post=asc_posts[0], original=post_from_second_user)
-        assert_posts_equal(merged_post=asc_posts[1], original=original_post, last_amend=first_amend_post)
+        assert_posts_equal(
+            merged_post=asc_posts[1],
+            original=original_post,
+            last_amend=first_amend_post,
+        )
 
         # Descending order first
         asc_posts = await get_matching_posts(
             session=session, sort_order=SortOrder.DESCENDING
         )
         assert asc_posts
-        assert_posts_equal(merged_post=asc_posts[0], original=original_post, last_amend=first_amend_post)
+        assert_posts_equal(
+            merged_post=asc_posts[0],
+            original=original_post,
+            last_amend=first_amend_post,
+        )
         assert_posts_equal(merged_post=asc_posts[1], original=post_from_second_user)
 
 

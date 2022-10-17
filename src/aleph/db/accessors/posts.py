@@ -1,5 +1,5 @@
 import datetime as dt
-from typing import Optional, Protocol, Dict, Any, Sequence, Union
+from typing import Optional, Protocol, Dict, Any, Sequence, Union, Iterable, List
 
 from aleph_message.models import ItemHash
 from sqlalchemy import func, select, literal_column, TIMESTAMP, String
@@ -144,14 +144,28 @@ def make_matching_posts_query(
     if page:
         select_stmt = select_stmt.offset((page - 1) * pagination)
 
-    print(select_stmt.compile(compile_kwargs={"literal_binds": True}))
     return select_stmt
+
+
+async def count_matching_posts(
+    session: DbSession, page: int = 1, pagination: int = 0, **kwargs
+) -> int:
+    # Note that we deliberately ignore the pagination parameters so that users can pass
+    # the same parameters as get_matching_posts and get the total number of posts,
+    # not just the number on a page.
+    if kwargs:
+        select_stmt = make_matching_posts_query(**kwargs, page=1, pagination=0)
+    else:
+        select_stmt = make_select_merged_post_stmt()
+
+    select_count_stmt = select(func.count()).select_from(select_stmt)
+    return session.execute(select_count_stmt).scalar_one()
 
 
 async def get_matching_posts(
     session: DbSession,
     # Same as make_matching_posts_query
     **kwargs,
-):
+) -> List[MergedPost]:
     select_stmt = make_matching_posts_query(**kwargs)
     return session.execute(select_stmt).all()

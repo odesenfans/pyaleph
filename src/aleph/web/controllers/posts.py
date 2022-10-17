@@ -4,7 +4,7 @@ from aiohttp import web
 from aleph_message.models import ItemHash
 from pydantic import BaseModel, Field, root_validator, validator, ValidationError
 
-from aleph.db.accessors.posts import get_matching_posts, MergedPost
+from aleph.db.accessors.posts import get_matching_posts, MergedPost, count_matching_posts
 from aleph.db.models.posts import PostDb
 from aleph.types.db_session import DbSessionFactory
 from aleph.web.controllers.utils import (
@@ -116,7 +116,7 @@ async def view_posts_list(request):
     session_factory: DbSessionFactory = request.app["session_factory"]
     with session_factory() as session:
         # TODO: should return the count of matching posts
-        total_posts = await PostDb.count(session=session)
+        total_posts = await count_matching_posts(session=session, **find_filters)
         results = await get_matching_posts(session=session, **find_filters)
         posts = [
             merged_post_to_dict(post)

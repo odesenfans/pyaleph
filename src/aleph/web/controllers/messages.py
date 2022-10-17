@@ -7,6 +7,7 @@ from aleph_message.models import MessageType, ItemHash, Chain
 from pydantic import BaseModel, Field, validator, ValidationError, root_validator
 
 from aleph.db.accessors.messages import get_matching_messages, count_matching_messages
+from aleph.db.models import MessageDb
 from aleph.types.db_session import DbSessionFactory
 from aleph.types.sort_order import SortOrder
 from aleph.web.controllers.utils import (
@@ -209,10 +210,7 @@ async def view_messages_list(request):
         context = {"messages": messages}
 
         if pagination_per_page is not None:
-            if find_filters:
-                total_msgs = await count_matching_messages(session, **find_filters)
-            else:
-                total_msgs = await count_matching_messages(session)
+            total_msgs = await count_matching_messages(session, **find_filters)
 
             query_string = request.query_string
             pagination = Pagination(
