@@ -9,12 +9,12 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.sql import Insert, Select
 from sqlalchemy.sql.elements import BinaryExpression, literal
 
-from aleph.toolkit.timestamp import timestamp_to_datetime
+from aleph.toolkit.timestamp import coerce_to_datetime
 from aleph.types.channel import Channel
 from aleph.types.db_session import DbSession
 from aleph.types.message_status import MessageStatus, InvalidMessageException
 from aleph.types.sort_order import SortOrder
-from ..models import ChainTxDb, PendingMessageDb
+from ..models.chains import ChainTxDb
 from ..models.messages import (
     MessageDb,
     MessageConfirmationDb,
@@ -22,6 +22,7 @@ from ..models.messages import (
     ForgottenMessageDb,
     RejectedMessageDb,
 )
+from ..models.pending_messages import PendingMessageDb
 
 
 async def get_message_by_item_hash(
@@ -44,19 +45,6 @@ async def message_exists(session: DbSession, item_hash: str) -> bool:
         session=session,
         where=MessageDb.item_hash == item_hash,
     )
-
-
-def coerce_to_datetime(
-    datetime_or_timestamp: Optional[Union[float, dt.datetime]]
-) -> Optional[dt.datetime]:
-    # None for datetimes or 0 for timestamps results in returning None
-    if datetime_or_timestamp is None or not datetime_or_timestamp:
-        return None
-
-    if isinstance(datetime_or_timestamp, dt.datetime):
-        return datetime_or_timestamp
-
-    return timestamp_to_datetime(datetime_or_timestamp)
 
 
 def make_matching_messages_query(
@@ -308,8 +296,9 @@ async def reject_pending_message(
 
     # Nothing to do, the message may already be processed and someone is sending
     # invalid copies for some reason
-    if message_status.status != MessageStatus.PENDING:
-        return
+    if message_status:
+        if message_status.status != MessageStatus.PENDING:
+            return
 
     session.execute(
         update(MessageStatusDb)

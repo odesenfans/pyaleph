@@ -1,8 +1,11 @@
-from .base import Base
+import datetime as dt
+from typing import Any, Optional
+
 from sqlalchemy import Column, String, TIMESTAMP, ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB
-from typing import Any, Optional
-import datetime as dt
+
+from aleph.types.channel import Channel
+from .base import Base
 
 
 class PostDb(Base):
@@ -15,5 +18,6 @@ class PostDb(Base):
     amends: Optional[str] = Column(
         ForeignKey("posts.item_hash"), nullable=True, index=True
     )
+    channel: Channel = Column(String, nullable=True)
     content: Any = Column(JSONB, nullable=False)
     creation_datetime: dt.datetime = Column(TIMESTAMP(timezone=True), nullable=False)

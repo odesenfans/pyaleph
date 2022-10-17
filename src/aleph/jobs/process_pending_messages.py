@@ -238,7 +238,7 @@ class PendingMessageProcessor:
         return fetched_messages
 
     async def fetch_pending_messages(
-        self, session: DbSession, config: Config, shared_stats: Dict
+        self, session: DbSession, config: Config, shared_stats: Dict, loop: bool = True
     ) -> AsyncIterator[Sequence[MessageDb]]:
 
         processing_messages = set()
@@ -313,9 +313,13 @@ class PendingMessageProcessor:
                 yield fetched_messages
                 fetched_messages = []
 
-            # If we are done, wait a few seconds until retrying
-            if not fetch_tasks and not await PendingMessageDb.count(session):
-                await asyncio.sleep(5)
+            if not await PendingMessageDb.count(session):
+                # If not in loop mode, stop if there are no more pending messages
+                if not loop:
+                    break
+                # If we are done, wait a few seconds until retrying
+                if not fetch_tasks:
+                    await asyncio.sleep(5)
 
     async def check_permissions(
         self, session: DbSession, message_iterator: AsyncIterator[Sequence[MessageDb]]
@@ -351,15 +355,22 @@ class PendingMessageProcessor:
                     print(message.item_hash)
 
             await self.message_handler.process(session=session, messages=messages)
+            for message in messages:
+                # TODO: move to accessor
+                session.execute(
+                    update(MessageStatusDb)
+                    .values(status=MessageStatus.PROCESSED)
+                    .where(MessageStatusDb.item_hash == message.item_hash)
+                )
 
             session.commit()
             yield messages
 
     def make_pipeline(
-        self, session: DbSession, config: Config, shared_stats: Dict
+        self, session: DbSession, config: Config, shared_stats: Dict, loop: bool = True
     ) -> AsyncIterator[Sequence[MessageDb]]:
         fetch_iterator = self.fetch_pending_messages(
-            session=session, config=config, shared_stats=shared_stats
+            session=session, config=config, shared_stats=shared_stats, loop=loop
         )
         permission_check_iterator = self.check_permissions(
             session=session, message_iterator=fetch_iterator
@@ -403,18 +414,9 @@ async def fetch_and_process_messages_task(config: Config, shared_stats: Dict):
                 )
                 async for processed_messages in message_processing_pipeline:
                     for processed_message in processed_messages:
-                        # TODO: move to accessor
-                        session.execute(
-                            update(MessageStatusDb)
-                            .values(status=MessageStatus.PROCESSED)
-                            .where(
-                                MessageStatusDb.item_hash == processed_message.item_hash
-                            )
-                        )
                         LOGGER.info(
                             "Successfully processed %s", processed_message.item_hash
                         )
-                    session.commit()
 
             except Exception as e:
                 print(e)

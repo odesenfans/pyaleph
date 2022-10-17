@@ -58,6 +58,7 @@ class PostMessageHandler(ContentHandler):
                 type=content.type,
                 ref=content.ref,
                 amends=content.ref if content.type == "amend" else None,
+                channel=message.channel,
                 content=content.content,
                 creation_datetime=timestamp_to_datetime(content.time),
             )

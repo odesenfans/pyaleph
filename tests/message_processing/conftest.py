@@ -5,8 +5,13 @@ from typing import Any, Dict, Sequence
 import pytest
 import pytest_asyncio
 
+from aleph.chains.chain_service import ChainService
 from aleph.db.models import ChainTxDb, PendingMessageDb
+from aleph.handlers.message_handler import MessageHandler
+from aleph.jobs.process_pending_messages import PendingMessageProcessor
+from aleph.storage import StorageService
 from aleph.types.db_session import DbSessionFactory
+from in_memory_storage_engine import InMemoryStorageEngine
 from .load_fixtures import load_fixture_messages
 
 
@@ -50,3 +55,30 @@ async def fixture_aggregate_messages(
     session_factory: DbSessionFactory,
 ) -> Sequence[Dict[str, Any]]:
     return await _load_fixtures(session_factory, "test-data-aggregates.json")
+
+
+@pytest_asyncio.fixture
+async def fixture_post_messages(
+    session_factory: DbSessionFactory,
+) -> Sequence[Dict[str, Any]]:
+    return await _load_fixtures(session_factory, "test-data-posts.json")
+
+
+@pytest.fixture
+def message_processor(mocker, session_factory: DbSessionFactory):
+    storage_engine = InMemoryStorageEngine(files={})
+    storage_service = StorageService(
+        storage_engine=storage_engine, ipfs_service=mocker.AsyncMock()
+    )
+    chain_service = ChainService(
+        session_factory=session_factory, storage_service=storage_service
+    )
+    message_handler = MessageHandler(
+        session_factory=session_factory,
+        chain_service=chain_service,
+        storage_service=storage_service,
+    )
+    message_processor = PendingMessageProcessor(
+        session_factory=session_factory, message_handler=message_handler
+    )
+    return message_processor
