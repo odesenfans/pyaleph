@@ -105,7 +105,7 @@ def make_matching_messages_query(
 
 
 async def count_matching_messages(
-        session: DbSession, page: int = 1, pagination: int = 0, **kwargs
+    session: DbSession, page: int = 1, pagination: int = 0, **kwargs
 ) -> int:
     # Note that we deliberately ignore the pagination parameters so that users can pass
     # the same parameters as get_matching_messages and get the total number of messages,
@@ -321,3 +321,26 @@ async def reject_pending_message(
     session.execute(
         delete(PendingMessageDb).where(PendingMessageDb.id == pending_message.id)
     )
+
+
+async def get_programs_triggered_by_messages(session: DbSession, sort_order: SortOrder):
+    time_column = MessageDb.time
+    order_by_column = (
+        time_column.desc() if sort_order == SortOrder.DESCENDING else time_column.asc()
+    )
+
+    message_selector_expr = MessageDb.content["on", "message"]
+
+    select_stmt = (
+        select(
+            MessageDb.item_hash,
+            message_selector_expr.label("message_subscriptions"),
+        )
+        .where(
+            (MessageDb.type == MessageType.program)
+            & (message_selector_expr.is_not(None))
+        )
+        .order_by(order_by_column)
+    )
+
+    return session.execute(select_stmt).all()

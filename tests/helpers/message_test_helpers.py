@@ -4,9 +4,6 @@ from typing import Dict, List, Optional, Union
 from aleph_message.models import ItemType, MessageConfirmation
 
 from aleph.db.models import MessageDb, PendingMessageDb
-from aleph.schemas.message_content import MessageContent, ContentSource
-from aleph.schemas.pending_messages import parse_message
-from aleph.schemas.validated_message import validate_pending_message
 
 
 def make_validated_message_from_dict(
