@@ -72,7 +72,9 @@
       {
         "chain": "ETH",
         "height": 14205580,
-        "hash": "0x234b3cb25e893780c4cf50ec82c4ae9a61d61b766a367b559ae8192463e84a1b"
+        "hash": "0x234b3cb25e893780c4cf50ec82c4ae9a61d61b766a367b559ae8192463e84a1b",
+        "time": 1644857371.174842,
+        "publisher": "0xabadbabe"
       }
     ],
     "confirmed": true,

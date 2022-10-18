@@ -2,6 +2,7 @@ from typing import Optional, Iterable, List, Any, Dict, Tuple, Sequence
 
 from aleph_message.models import ItemHash
 from sqlalchemy import select, text, delete, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import selectinload
 
 from aleph.db.models import AggregateDb, AggregateElementDb
@@ -28,7 +29,7 @@ async def get_aggregates_by_owner(
         .where(where_clause)
         .order_by(AggregateDb.key)
     )
-    return session.execute(select_stmt).all()   # type: ignore
+    return session.execute(select_stmt).all()  # type: ignore
 
 
 async def get_aggregate_by_key(
@@ -93,15 +94,23 @@ async def refresh_aggregate(session: DbSession, owner: str, key: str):
     )
     content = merge_aggregate_elements(elements)
 
-    session.execute(
-        update(AggregateDb)
-        .where((AggregateElementDb.key == key) & (AggregateElementDb.owner == owner))
-        .values(
-            content=content,
-            creation_datetime=elements[0].creation_datetime,
-            last_revision_hash=elements[-1].item_hash,
-        )
+    insert_stmt = insert(AggregateDb).values(
+        key=key,
+        owner=owner,
+        content=content,
+        creation_datetime=elements[0].creation_datetime,
+        last_revision_hash=elements[-1].item_hash,
     )
+    upsert_aggregate_stmt = insert_stmt.on_conflict_do_update(
+        constraint="aggregates_pkey",
+        set_={
+            "content": insert_stmt.excluded.content,
+            "creation_datetime": insert_stmt.excluded.creation_datetime,
+            "last_revision_hash": insert_stmt.excluded.last_revision_hash,
+        },
+    )
+
+    session.execute(upsert_aggregate_stmt)
 
 
 async def delete_aggregate_element(session: DbSession, item_hash: str):

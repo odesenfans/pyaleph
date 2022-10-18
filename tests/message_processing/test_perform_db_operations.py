@@ -182,25 +182,25 @@ async def test_db_operations_insert_and_delete(
                     [msg["item_hash"] for msg in fixture_messages]
                 )
             )
-        )
+        ).scalars()
 
-    assert tx_end_count - tx_start_count == -1
-    assert msg_end_count - msg_start_count == len(fixture_messages)
+        assert tx_end_count - tx_start_count == -1
+        assert msg_end_count - msg_start_count == len(fixture_messages)
 
-    # Check each message
-    fixture_messages_by_hash = {msg["item_hash"]: msg for msg in fixture_messages}
-    for pending_message in messages_db.scalars():
-        expected_message = fixture_messages_by_hash[pending_message.item_hash]
-        assert pending_message.item_hash == expected_message["item_hash"]
-        assert pending_message.type == expected_message["type"]
-        assert pending_message.chain == expected_message["chain"]
-        assert pending_message.sender == expected_message["sender"]
-        assert pending_message.signature == expected_message["signature"]
-        assert pending_message.item_type == expected_message["item_type"]
-        assert pending_message.item_content == expected_message["item_content"]
-        assert pending_message.channel == expected_message["channel"]
-        assert pending_message.time.timestamp() == expected_message["time"]
+        # Check each message
+        fixture_messages_by_hash = {msg["item_hash"]: msg for msg in fixture_messages}
+        for pending_message in messages_db:
+            expected_message = fixture_messages_by_hash[pending_message.item_hash]
+            assert pending_message.item_hash == expected_message["item_hash"]
+            assert pending_message.type == expected_message["type"]
+            assert pending_message.chain == expected_message["chain"]
+            assert pending_message.sender == expected_message["sender"]
+            assert pending_message.signature == expected_message["signature"]
+            assert pending_message.item_type == expected_message["item_type"]
+            assert pending_message.item_content == expected_message["item_content"]
+            assert pending_message.channel == expected_message["channel"]
+            assert pending_message.time.timestamp() == expected_message["time"]
 
-        assert pending_message.retries == 0
-        assert pending_message.check_message
-        assert pending_message.tx_hash is None
+            assert pending_message.retries == 0
+            assert pending_message.check_message
+            assert pending_message.tx_hash is None
