@@ -258,6 +258,7 @@ async def test_forget_message(
         message_status = await get_message_status(
             session=session, item_hash=fixture_message.item_hash
         )
+        assert message_status
         assert message_status.status == MessageStatus.FORGOTTEN
 
         # Assert that the message is not present in messages anymore

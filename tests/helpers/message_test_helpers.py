@@ -1,13 +1,17 @@
+import itertools
 import json
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Any, Mapping, Sequence, Iterable
 
 from aleph_message.models import ItemType, MessageConfirmation
+from configmanager import Config
 
 from aleph.db.models import MessageDb, PendingMessageDb
+from aleph.jobs.process_pending_messages import PendingMessageProcessor
+from aleph.types.db_session import DbSession
 
 
 def make_validated_message_from_dict(
-    message_dict: Dict,
+    message_dict: Mapping[str, Any],
     raw_content: Optional[Union[str, bytes]] = None,
     confirmations: Optional[List[MessageConfirmation]] = None,
 ) -> MessageDb:
@@ -31,3 +35,23 @@ def make_validated_message_from_dict(
         content_dict=json.loads(raw_content),
         content_size=len(raw_content),
     )
+
+
+async def process_pending_messages(
+    message_processor: PendingMessageProcessor,
+    pending_messages: Sequence[PendingMessageDb],
+    session: DbSession,
+    config: Config,
+) -> Iterable[MessageDb]:
+
+    session.add_all(pending_messages)
+    session.commit()
+
+    pipeline = message_processor.make_pipeline(
+        session=session,
+        config=config,
+        shared_stats={"message_jobs": {}},
+        loop=False,
+    )
+
+    return itertools.chain.from_iterable([messages async for messages in pipeline])

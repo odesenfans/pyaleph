@@ -40,7 +40,7 @@ class FileReferenceDb(Base):
     id: int = Column(BigInteger, primary_key=True)
 
     # TODO: should point to ID instead
-    file_hash: int = Column(ForeignKey(StoredFileDb.hash), nullable=False, index=True)
+    file_hash: str = Column(ForeignKey(StoredFileDb.hash), nullable=False, index=True)
     owner: str = Column(String, nullable=False)
     item_hash: str = Column(String, nullable=False, unique=True)
 

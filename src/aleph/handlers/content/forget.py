@@ -20,7 +20,12 @@ from aleph.db.accessors.aggregates import (
     delete_aggregate_element,
     refresh_aggregate,
 )
-from aleph.db.accessors.files import is_pinned_file, file_reference_exists
+from aleph.db.accessors.files import (
+    is_pinned_file,
+    file_reference_exists,
+    delete_file_reference,
+    delete_file as delete_file_db,
+)
 from aleph.db.accessors.messages import (
     message_exists,
     get_message_status,
@@ -104,6 +109,15 @@ class ForgetMessageHandler(ContentHandler):
         logger.debug("Deleting post %s...", post_message.item_hash)
         await delete_post(session=session, item_hash=post_message.item_hash)
 
+    async def delete_store(self, session: DbSession, store_message: MessageDb):
+        store_content = cast(StoreContent, store_message.parsed_content)
+        await delete_file_reference(session=session, item_hash=store_message.item_hash)
+        await self.garbage_collect(
+            session=session,
+            storage_hash=store_content.item_hash,
+            storage_type=store_content.item_type,
+        )
+
     async def garbage_collect(
         self, session: DbSession, storage_hash: str, storage_type: ItemType
     ):
@@ -129,6 +143,8 @@ class ForgetMessageHandler(ContentHandler):
                 f"Inconsistent ItemType {storage_type} != {storage_detected} "
                 f"for hash '{storage_hash}'"
             )
+
+        await delete_file_db(session=session, file_hash=storage_hash)
 
         if storage_type == ItemType.ipfs:
             logger.debug(f"Removing from IPFS: {storage_hash}")
@@ -230,12 +246,7 @@ class ForgetMessageHandler(ContentHandler):
         elif message.type == MessageType.post:
             await self.delete_post(session=session, post_message=message)
         elif message.type == MessageType.store:
-            store_content = cast(StoreContent, message.parsed_content)
-            await self.garbage_collect(
-                session=session,
-                storage_hash=store_content.item_hash,
-                storage_type=store_content.item_type,
-            )
+            await self.delete_store(session=session, store_message=message)
 
     async def _forget_message(
         self, session: DbSession, message: MessageDb, forgotten_by: MessageDb
@@ -249,13 +260,14 @@ class ForgetMessageHandler(ContentHandler):
 
         await self._forget_by_message_type(session=session, message=message)
 
-    @staticmethod
     async def _forget_item_hash(
-        session: DbSession, item_hash: str, forgotten_by: MessageDb
+        self, session: DbSession, item_hash: str, forgotten_by: MessageDb
     ):
         message_status = await get_message_status(session=session, item_hash=item_hash)
         if not message_status:
-            raise MessageUnavailable(f"Target message {item_hash} is not known by this node.")
+            raise MessageUnavailable(
+                f"Target message {item_hash} is not known by this node."
+            )
 
         if message_status.status == MessageStatus.REJECTED:
             logger.info("Message %s was rejected, nothing to do.", item_hash)
@@ -288,10 +300,10 @@ class ForgetMessageHandler(ContentHandler):
             # of the database.
             raise PermissionDenied("Cannot forget a FORGET message")
 
-        await forget_message(
+        await self._forget_message(
             session=session,
-            item_hash=item_hash,
-            forget_message_hash=forgotten_by.item_hash,
+            message=message,
+            forgotten_by=forgotten_by,
         )
 
     async def _process_forget_message(self, session: DbSession, message: MessageDb):

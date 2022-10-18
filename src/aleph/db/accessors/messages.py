@@ -244,7 +244,7 @@ async def forget_message(session: DbSession, item_hash: str, forget_message_hash
             MessageDb.time,
             MessageDb.channel,
             literal(f"{{{forget_message_hash}}}"),
-        ),
+        ).where(MessageDb.item_hash == item_hash),
     )
     session.execute(copy_row_stmt)
     session.execute(

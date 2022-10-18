@@ -244,6 +244,6 @@ class MessageHandler:
                 # The pending message was a confirmation, we are done.
                 return
 
-            # Process
+            await self.check_permissions(session=session, message=validated_message)
             await self.process(session=session, messages=[validated_message])
             session.commit()

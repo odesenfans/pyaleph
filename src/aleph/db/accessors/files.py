@@ -53,3 +53,8 @@ async def count_file_references(session: DbSession, file_hash: str):
 async def delete_file_reference(session: DbSession, item_hash: str):
     delete_stmt = delete(FileReferenceDb).where(FileReferenceDb.item_hash == item_hash)
     session.execute(delete_stmt)
+
+
+async def delete_file(session: DbSession, file_hash: str):
+    delete_stmt = delete(StoredFileDb).where(StoredFileDb.hash == file_hash)
+    session.execute(delete_stmt)

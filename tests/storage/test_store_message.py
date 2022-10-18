@@ -1,4 +1,5 @@
 import json
+from typing import Mapping, Any
 
 import pytest
 from configmanager import Config
@@ -16,7 +17,7 @@ from message_test_helpers import make_validated_message_from_dict
 
 @pytest.fixture
 def fixture_message_file() -> MessageDb:
-    message_dict = {
+    message_dict: Mapping[str, Any] = {
         "chain": "ETH",
         "item_hash": "7e4f914865028356704919810073ec5690ecc4bb0ee3bd6bdb24829fd532398f",
         "sender": "0x1772213F07b98eBf3e85CCf88Ac29482ff97d9B1",
@@ -35,7 +36,7 @@ def fixture_message_file() -> MessageDb:
 
 @pytest.fixture
 def fixture_message_directory() -> MessageDb:
-    message_dict = {
+    message_dict: Mapping[str, Any] = {
         "chain": "ETH",
         "item_hash": "b3d17833bcefb7a6eb2d9fa7c77cca3eed3a3fa901a904d35c529a71be25fc6d",
         "sender": "0xdeadbeef",

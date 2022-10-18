@@ -13,6 +13,7 @@ from aleph.db.accessors.posts import (
     count_matching_posts,
 )
 from aleph.db.models.posts import PostDb
+from aleph.types.channel import Channel
 from aleph.types.db_session import DbSessionFactory
 from aleph.types.sort_order import SortOrder
 
@@ -28,7 +29,7 @@ def original_post() -> PostDb:
         type="my-post-type",
         ref=None,
         amends=None,
-        channel="MY-CHANNEL",
+        channel=Channel("MY-CHANNEL"),
         content={"body": "Hello, world!"},
         creation_datetime=pytz.utc.localize(dt.datetime(2022, 11, 11, 11, 11, 11)),
     )
@@ -78,7 +79,7 @@ def post_from_second_user() -> PostDb:
         type="great-posts",
         ref=None,
         amends=None,
-        channel="ALEPH-POSTS",
+        channel=Channel("ALEPH-POSTS"),
         content={"body": "You're my favorite customer"},
         creation_datetime=pytz.utc.localize(dt.datetime(2022, 10, 12)),
     )
@@ -314,7 +315,7 @@ async def test_get_matching_posts_sort_order(
 
 
 @pytest.mark.asyncio
-async def test_get_matching_posts_sort_order(
+async def test_get_matching_posts_no_data(
     session_factory: DbSessionFactory,
 ):
     """

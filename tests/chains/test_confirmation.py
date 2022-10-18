@@ -60,18 +60,17 @@ async def test_confirm_message(
     Tests the flow of confirmation for real-time messages.
     1. We process the message unconfirmed, as if it came through the P2P
        network
-    2. We process the message again, this time as it it was fetched from
+    2. We process the message again, this time as if it was fetched from
        on-chain data.
 
     We then check that the message was correctly updated in the messages
-    collection. We also check the capped messages collection used for
-    the websockets.
+    table.
     """
 
     item_hash = MESSAGE_DICT["item_hash"]
     content = json.loads(MESSAGE_DICT["item_content"])
 
-    message_handler =MessageHandler(
+    message_handler = MessageHandler(
         session_factory=session_factory,
         chain_service=ChainService(
             session_factory=session_factory, storage_service=test_storage_service
@@ -79,8 +78,8 @@ async def test_confirm_message(
         storage_service=test_storage_service,
     )
 
-    message = parse_message(MESSAGE_DICT)
-    await message_handler.process_one_message(message)
+    pending_message = PendingMessageDb.from_message_dict(MESSAGE_DICT)
+    await message_handler.fetch_and_process_one_message_db(pending_message)
 
     with session_factory() as session:
         message_in_db = await get_message_by_item_hash(
@@ -98,7 +97,12 @@ async def test_confirm_message(
         session.add(chain_tx)
         session.commit()
 
-    await message_handler.process_one_message(message=message, chain_tx=chain_tx)
+    pending_message.tx = chain_tx
+    pending_message.tx_hash = chain_tx.hash
+
+    await message_handler.fetch_and_process_one_message_db(
+        pending_message=pending_message
+    )
 
     with session_factory() as session:
         message_in_db = await get_message_by_item_hash(
@@ -126,7 +130,7 @@ async def test_process_confirmed_message(
 
     item_hash = MESSAGE_DICT["item_hash"]
 
-    message_handler =MessageHandler(
+    message_handler = MessageHandler(
         session_factory=session_factory,
         chain_service=ChainService(
             session_factory=session_factory, storage_service=test_storage_service
@@ -140,7 +144,11 @@ async def test_process_confirmed_message(
         session.commit()
 
     pending_message = PendingMessageDb.from_message_dict(MESSAGE_DICT)
-    await message_handler.process_one_message(message=message, chain_tx=chain_tx)
+    pending_message.tx_hash = chain_tx.hash
+    pending_message.tx = chain_tx
+    await message_handler.fetch_and_process_one_message_db(
+        pending_message=pending_message
+    )
 
     with session_factory() as session:
         message_in_db = await get_message_by_item_hash(

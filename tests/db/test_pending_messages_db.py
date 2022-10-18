@@ -3,7 +3,10 @@ from typing import List
 import pytest
 from aleph_message.models import ItemType, Chain, MessageType
 
-from aleph.db.accessors.pending_messages import count_pending_messages, get_pending_messages
+from aleph.db.accessors.pending_messages import (
+    count_pending_messages,
+    get_pending_messages,
+)
 from aleph.db.models import PendingMessageDb, ChainTxDb
 from aleph.types.db_session import DbSessionFactory
 import datetime as dt
@@ -97,14 +100,15 @@ async def test_count_pending_messages(
 
 
 @pytest.mark.asyncio
-async def test_get_message_stream(session_factory: DbSessionFactory, fixture_pending_messages: List[PendingMessageDb]):
+async def test_get_pending_messages(
+    session_factory: DbSessionFactory, fixture_pending_messages: List[PendingMessageDb]
+):
     with session_factory() as session:
         session.add_all(fixture_pending_messages)
         session.commit()
 
     with session_factory() as session:
-        stream = await get_pending_messages(session=session)
-        pending_messages = [pending_message async for pending_message in stream]
+        pending_messages = list(await get_pending_messages(session=session))
 
         assert len(pending_messages) == 3
         # Check the order of messages
