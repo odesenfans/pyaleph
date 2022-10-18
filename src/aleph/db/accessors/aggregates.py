@@ -28,7 +28,7 @@ async def get_aggregates_by_owner(
         .where(where_clause)
         .order_by(AggregateDb.key)
     )
-    return session.execute(select_stmt).all()
+    return session.execute(select_stmt).all()   # type: ignore
 
 
 async def get_aggregate_by_key(

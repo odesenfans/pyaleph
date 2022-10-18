@@ -157,7 +157,7 @@ class ForgottenMessageDb(Base):
     item_type: ItemType = Column(ChoiceType(ItemType), nullable=False)
     time: dt.datetime = Column(TIMESTAMP(timezone=True), nullable=False, index=True)
     channel: Optional[Channel] = Column(String, nullable=True, index=True)
-    forgotten_by: List[str] = Column(ARRAY(String), nullable=False)
+    forgotten_by: List[str] = Column(ARRAY(String), nullable=False)     # type: ignore
 
 
 class RejectedMessageDb(Base):

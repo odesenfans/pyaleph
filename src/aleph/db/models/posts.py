@@ -18,6 +18,6 @@ class PostDb(Base):
     amends: Optional[str] = Column(
         ForeignKey("posts.item_hash"), nullable=True, index=True
     )
-    channel: Channel = Column(String, nullable=True)
+    channel: Optional[Channel] = Column(String, nullable=True)
     content: Any = Column(JSONB, nullable=False)
     creation_datetime: dt.datetime = Column(TIMESTAMP(timezone=True), nullable=False)

@@ -43,6 +43,13 @@ async def file_reference_exists(session: DbSession, file_hash: str):
     )
 
 
+async def count_file_references(session: DbSession, file_hash: str):
+    select_count_stmt = select(func.count()).select_from(
+        select(FileReferenceDb).where(FileReferenceDb.file_hash == file_hash)
+    )
+    return session.execute(select_count_stmt).scalar_one()
+
+
 async def delete_file_reference(session: DbSession, item_hash: str):
     delete_stmt = delete(FileReferenceDb).where(FileReferenceDb.item_hash == item_hash)
     session.execute(delete_stmt)

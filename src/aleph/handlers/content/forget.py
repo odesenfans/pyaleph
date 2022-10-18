@@ -72,7 +72,7 @@ class ForgetMessageHandler(ContentHandler):
             )
 
         for item_hash in content.hashes:
-            if not message_exists(session=session, item_hash=item_hash):
+            if not await message_exists(session=session, item_hash=item_hash):
                 raise MessageUnavailable(
                     f"A target of FORGET message {message_item_hash} "
                     f"is not yet available: {item_hash}"
@@ -159,11 +159,12 @@ class ForgetMessageHandler(ContentHandler):
     ) -> Sequence[ItemHash]:
         content = cast(ForgetContent, forget_message.parsed_content)
 
-        aggregate_messages_to_forget = []
+        aggregate_messages_to_forget: List[ItemHash] = []
         for aggregate in content.aggregates:
             # TODO: write accessor
             aggregate_messages_to_forget.extend(
-                session.execute(
+                ItemHash(value)
+                for value in session.execute(
                     select(AggregateElementDb.item_hash).where(
                         (AggregateElementDb.key == aggregate)
                         & (AggregateElementDb.owner == content.address)
@@ -181,9 +182,32 @@ class ForgetMessageHandler(ContentHandler):
             session=session, forget_message=message
         )
         for target_hash in target_hashes:
+            target_status = await get_message_status(
+                session=session, item_hash=target_hash
+            )
+            if not target_status:
+                raise MessageUnavailable(
+                    f"Target message {target_hash} is not known by this node."
+                )
+
+            if target_status.status in (
+                MessageStatus.FORGOTTEN,
+                MessageStatus.REJECTED,
+            ):
+                continue
+
+            if target_status.status != MessageStatus.PROCESSED:
+                raise MessageUnavailable(
+                    f"Target message {target_hash} is not yet processed."
+                )
+
             target_message = await get_message_by_item_hash(
                 session=session, item_hash=target_hash
             )
+            if not target_message:
+                raise MessageUnavailable(
+                    f"Target message {target_hash} is marked as processed but does not exist."
+                )
             if target_message.type == MessageType.forget:
                 raise PermissionDenied(
                     f"FORGET message {target_hash} may not be forgotten by {message.item_hash}"
@@ -230,6 +254,8 @@ class ForgetMessageHandler(ContentHandler):
         session: DbSession, item_hash: str, forgotten_by: MessageDb
     ):
         message_status = await get_message_status(session=session, item_hash=item_hash)
+        if not message_status:
+            raise MessageUnavailable(f"Target message {item_hash} is not known by this node.")
 
         if message_status.status == MessageStatus.REJECTED:
             logger.info("Message %s was rejected, nothing to do.", item_hash)

@@ -64,7 +64,7 @@ def _init_semaphores(config: Config) -> Dict[MessageType, asyncio.BoundedSemapho
     return semaphores
 
 
-ProcessingMessageId = Tuple[str, str, Optional[str], Optional[str]]
+ProcessingMessageId = Tuple[str, str, Optional[str], Optional[int]]
 
 
 def _get_pending_message_id(pending_message: PendingMessageDb) -> ProcessingMessageId:
@@ -206,7 +206,7 @@ class PendingMessageProcessor:
         finished_tasks: Set[asyncio.Task],
         task_message_dict: Dict[asyncio.Task, PendingMessageDb],
         shared_stats: Dict[str, Any],
-        processing_messages: Set[Tuple[str, str, Optional[str], Optional[str]]],
+        processing_messages: Set[ProcessingMessageId],
     ) -> List[MessageDb]:
         fetched_messages = []
 
@@ -241,7 +241,7 @@ class PendingMessageProcessor:
         self, session: DbSession, config: Config, shared_stats: Dict, loop: bool = True
     ) -> AsyncIterator[Sequence[MessageDb]]:
 
-        processing_messages = set()
+        processing_messages: Set[ProcessingMessageId] = set()
 
         max_concurrent_tasks = config.aleph.jobs.pending_messages.max_concurrency.value
         semaphores = _init_semaphores(config)
@@ -346,14 +346,7 @@ class PendingMessageProcessor:
         self, session: DbSession, message_iterator: AsyncIterator[Sequence[MessageDb]]
     ) -> AsyncIterator[Sequence[MessageDb]]:
 
-        messages_by_hash = defaultdict(int)
-
         async for messages in message_iterator:
-            for message in messages:
-                messages_by_hash[message.item_hash] += 1
-                if messages_by_hash[message.item_hash] > 1:
-                    print(message.item_hash)
-
             await self.message_handler.process(session=session, messages=messages)
             for message in messages:
                 # TODO: move to accessor

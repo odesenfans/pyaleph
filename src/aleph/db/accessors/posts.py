@@ -1,5 +1,5 @@
 import datetime as dt
-from typing import Optional, Protocol, Dict, Any, Sequence, Union, Iterable, List
+from typing import Optional, Protocol, Dict, Any, Sequence, Union, Iterable, List, cast
 
 from aleph_message.models import ItemHash
 from sqlalchemy import func, select, literal_column, TIMESTAMP, String, delete
@@ -168,7 +168,7 @@ async def get_matching_posts(
     **kwargs,
 ) -> List[MergedPost]:
     select_stmt = make_matching_posts_query(**kwargs)
-    return session.execute(select_stmt).all()
+    return cast(List[MergedPost], session.execute(select_stmt).all())
 
 
 async def delete_post(session: DbSession, item_hash: str):

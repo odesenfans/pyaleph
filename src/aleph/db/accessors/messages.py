@@ -186,9 +186,8 @@ async def get_message_status(
     ).scalar()
 
 
-def make_message_status_upsert_query(
-    item_hash: str, new_status: MessageStatus, where: BinaryExpression
-):
+# TODO typing: Find a correct type for `where`
+def make_message_status_upsert_query(item_hash: str, new_status: MessageStatus, where):
     return (
         insert(MessageStatusDb)
         .values(item_hash=item_hash, status=new_status)
