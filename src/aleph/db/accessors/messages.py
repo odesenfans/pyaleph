@@ -283,7 +283,7 @@ async def reject_message(
             item_hash=item_hash,
             reason=str(exception),
             traceback="\n".join(
-                traceback.format_exception(InvalidMessageException, exception, None)
+                traceback.format_exception(InvalidMessageException, exception, exception.__traceback__)
             ),
         )
     )

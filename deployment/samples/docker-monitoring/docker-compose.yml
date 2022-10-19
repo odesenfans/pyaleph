@@ -1,6 +1,7 @@
 version: '2.2'
 
 volumes:
+  pyaleph-local-storage:
   pyaleph-ipfs:
   pyaleph-mongodb:
   pyaleph-caddy-data:
@@ -9,16 +10,18 @@ volumes:
 services:
   pyaleph:
     restart: always
-    image: alephim/pyaleph-node:v0.3.3
-    command: --config /opt/pyaleph/config.yml --key-dir /opt/pyaleph/keys -vv
+    image: alephim/pyaleph-node:v0.4.2
+    command: --config /opt/pyaleph/config.yml --key-dir /opt/pyaleph/keys -v
     ports:
       - "127.0.0.1:8000:8000/tcp"
       - "4024:4024/tcp"
     volumes:
       - ./config.yml:/opt/pyaleph/config.yml
       - ./keys:/opt/pyaleph/keys
+      - pyaleph-local-storage:/opt/pyaleph/data
     depends_on:
       - mongodb
+      - postgres
       - ipfs
       - p2p-service
     networks:
@@ -48,14 +51,28 @@ services:
       - "--private-key-file"
       - "/etc/p2p-service/node-secret.pkcs8.der"
 
+  postgres:
+    restart: always
+    image: postgres:14.5
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pyaleph-postgres:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: aleph
+      POSTGRES_PASSWORD: decentralize-everything
+      POSTGRES_DB: aleph
+    networks:
+      - pyaleph
+
   rabbitmq:
     restart: always
     image: rabbitmq:3.10.7-management
     networks:
       - pyaleph
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_USER: aleph-p2p
+      RABBITMQ_DEFAULT_PASS: change-me!
     ports:
       - "127.0.0.1:5672:5672"
       - "127.0.0.1:15672:15672"
