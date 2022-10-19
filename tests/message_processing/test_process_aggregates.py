@@ -91,6 +91,5 @@ async def test_process_aggregates(
             loop=False,
         )
         messages = [message async for message in pipeline]
-        print(messages)
 
     # TODO: improve this test

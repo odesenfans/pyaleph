@@ -17,12 +17,12 @@ from aleph_message.models import (
 )
 from pydantic import BaseModel, Field
 
+from aleph.db.models import PendingMessageDb
 from aleph.schemas.base_messages import AlephBaseMessage, ContentType, MType
 from aleph.schemas.pending_messages import (
     BasePendingMessage,
 )
 from .message_content import MessageContent
-from aleph.db.models import PendingMessageDb
 
 
 class EngineInfo(BaseModel):

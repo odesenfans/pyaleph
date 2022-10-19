@@ -1,90 +1,104 @@
 import itertools
-from typing import Tuple, List, Dict, Iterable
+import logging
+from typing import Tuple, List, cast, Sequence
 
-from aleph.db.accessors.aggregates import get_aggregate_by_key, get_aggregate_elements, merge_aggregate_elements
-from aleph.db.models import MessageDb, AggregateElementDb, AggregateDb
+from aleph_message.models import AggregateContent
+
+from aleph.db.accessors.aggregates import (
+    get_aggregate_by_key,
+    merge_aggregate_elements,
+    insert_aggregate,
+    insert_aggregate_element,
+    refresh_aggregate,
+)
+from aleph.db.models import MessageDb, AggregateElementDb
 from aleph.handlers.content.content_handler import ContentHandler
-from aleph.toolkit.split import split_iterable
 from aleph.toolkit.timestamp import timestamp_to_datetime
 from aleph.types.db_session import DbSessionFactory, DbSession
+
+LOGGER = logging.getLogger(__name__)
 
 
 class AggregateMessageHandler(ContentHandler):
     def __init__(self, session_factory: DbSessionFactory):
         self.session_factory = session_factory
 
-    @staticmethod
-    def _make_aggregate_from_elements(
-        elements: Iterable[AggregateElementDb],
-    ) -> Dict:
-        content = {}
-        for element in elements:
-            content.update(element.content)
-        return content
-
-    async def _insert_aggregate_element(
-        self, session: DbSession, new_element: AggregateElementDb
-    ):
-        aggregate = await get_aggregate_by_key(
-            session=session, owner=new_element.owner, key=new_element.key
-        )
-
-        if not aggregate:
-            session.add(
-                AggregateDb(
-                    key=new_element.key,
-                    owner=new_element.owner,
-                    content=new_element.content,
-                    creation_datetime=new_element.creation_datetime,
-                    last_revision=new_element,
-                )
-            )
-
-        else:
-            if (
-                aggregate.last_revision.creation_datetime
-                < new_element.creation_datetime
-            ):
-                # Insertion in order, just update the content
-                aggregate.content.update(new_element.content)
-                aggregate.last_revision = new_element
-
-            else:
-                # Out of order, we need to reprocess the aggregate
-                older_elements, newer_elements = split_iterable(
-                    await get_aggregate_elements(
-                        session=session, owner=new_element.owner, key=new_element.key
-                    ),
-                    cond=lambda element: element.creation_datetime
-                    <= new_element.creation_datetime,
-                )
-
-                elements = older_elements + [new_element] + newer_elements
-                aggregate.content = merge_aggregate_elements(elements)
-
-        session.add(new_element)
-
     async def fetch_related_content(
         self, session: DbSession, message: MessageDb
     ) -> None:
         return
 
+    async def _insert_aggregate_element(self, session: DbSession, message: MessageDb):
+        content = cast(AggregateContent, message.parsed_content)
+        aggregate_element = AggregateElementDb(
+            item_hash=message.item_hash,
+            key=content.key,
+            owner=content.address,
+            content=content.content,
+            creation_datetime=timestamp_to_datetime(message.parsed_content.time),
+        )
+
+        await insert_aggregate_element(
+            session=session,
+            item_hash=aggregate_element.item_hash,
+            key=aggregate_element.key,
+            owner=aggregate_element.owner,
+            content=aggregate_element.content,
+            creation_datetime=aggregate_element.creation_datetime,
+        )
+
+        return aggregate_element
+
+    @staticmethod
     async def _update_aggregate(
-        self, session: DbSession, key: str, owner: str, messages: Iterable[MessageDb]
+        session: DbSession,
+        key: str,
+        owner: str,
+        elements: Sequence[AggregateElementDb],
     ):
-        # TODO: to improve performance, only modify the aggregate once -> insert several
-        #       elements at once
-        for message in messages:
-            new_element = AggregateElementDb(
-                item_hash=message.item_hash,
+        """
+        Creates/updates an aggregate with new elements.
+
+        :param session: DB session.
+        :param key: Aggregate key.
+        :param owner: Aggregate owner.
+        :param elements: New elements to insert, ordered by their creation_datetime field.
+        :return:
+        """
+        aggregate = await get_aggregate_by_key(session=session, owner=owner, key=key)
+
+        if not aggregate:
+            LOGGER.info("%s/%s does not exist, creating it", key, owner)
+
+            content = merge_aggregate_elements(elements)
+            await insert_aggregate(
+                session=session,
                 key=key,
                 owner=owner,
-                content=message.parsed_content.content,
-                creation_datetime=timestamp_to_datetime(message.parsed_content.time),
+                content=content,
+                creation_datetime=elements[0].creation_datetime,
+                last_revision_hash=elements[-1].item_hash,
             )
-            await self._insert_aggregate_element(
-                session=session, new_element=new_element
-            )
+            return
+
+        LOGGER.info("%s/%s already exists, updating it", key, owner)
+
+        # Best case scenario: the elements we are adding are all posterior to the last
+        # update, we can just merge the content of aggregate and the new elements.
+        if aggregate.last_revision.creation_datetime < elements[0].creation_datetime:
+
+            new_content = merge_aggregate_elements(elements)
+            aggregate.content.update(new_content)
+            aggregate.last_revision_hash = elements[-1].item_hash
+
+        # Out of order insertions. Here, we need to get all the elements in the database
+        # and recompute the aggregate entirely.
+        else:
+            LOGGER.info("%s/%s: out of order refresh", key, owner)
+            # Expect the new elements to already be added to the current session.
+            # We flush it to make them accessible from the current transaction.
+            session.flush()
+            await refresh_aggregate(session=session, owner=owner, key=key)
 
     async def process(
         self, session: DbSession, messages: List[MessageDb]
@@ -98,8 +112,14 @@ class AggregateMessageHandler(ContentHandler):
             sorted_messages,
             key=lambda m: (m.parsed_content.key, m.parsed_content.address),
         ):
+            messages_by_aggregate = list(messages_by_aggregate)
+            aggregate_elements = [
+                await self._insert_aggregate_element(session=session, message=message)
+                for message in messages_by_aggregate
+            ]
+
             await self._update_aggregate(
-                session=session, key=key, owner=owner, messages=messages_by_aggregate
+                session=session, key=key, owner=owner, elements=aggregate_elements
             )
 
         return messages, []

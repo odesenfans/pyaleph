@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from aleph.db.models import AggregateDb, AggregateElementDb
 from aleph.types.db_session import DbSession
+import datetime as dt
 
 
 async def aggregate_exists(session: DbSession, key: str, owner: str) -> bool:
@@ -54,6 +55,62 @@ async def get_aggregate_elements(
     return (session.execute(select_stmt)).scalars()
 
 
+async def insert_aggregate(
+    session: DbSession,
+    key: str,
+    owner: str,
+    content: Dict[str, Any],
+    creation_datetime: dt.datetime,
+    last_revision_hash: str,
+):
+    insert_stmt = insert(AggregateDb).values(
+        key=key,
+        owner=owner,
+        content=content,
+        creation_datetime=creation_datetime,
+        last_revision_hash=last_revision_hash,
+    )
+    session.execute(insert_stmt)
+
+
+async def update_aggregate(
+    session: DbSession,
+    key: str,
+    owner: str,
+    content: Dict[str, Any],
+    creation_datetime: dt.datetime,
+    last_revision_hash: str,
+):
+    update_stmt = (
+        update(AggregateDb)
+        .values(
+            content=content,
+            creation_datetime=creation_datetime,
+            last_revision_hash=last_revision_hash,
+        )
+        .where((AggregateDb.key == key) & (AggregateDb.owner == owner))
+    )
+    session.execute(update_stmt)
+
+
+async def insert_aggregate_element(
+    session: DbSession,
+    item_hash: str,
+    key: str,
+    owner: str,
+    content: Dict[str, Any],
+    creation_datetime: dt.datetime,
+):
+    insert_stmt = insert(AggregateElementDb).values(
+        item_hash=item_hash,
+        key=key,
+        owner=owner,
+        content=content,
+        creation_datetime=creation_datetime,
+    )
+    session.execute(insert_stmt)
+
+
 async def get_message_hashes_for_aggregate(
     session: DbSession, owner: str, key: str
 ) -> Iterable[ItemHash]:
@@ -77,8 +134,14 @@ async def delete_aggregate(session: DbSession, owner: str, key: str):
 
 def merge_aggregate_elements(elements: Iterable[AggregateElementDb]) -> Dict:
     content = {}
-    for element in elements:
-        content.update(element.content)
+    try:
+        for element in elements:
+            content.update(element.content)
+    except ValueError:
+        print("merge:", elements)
+        print([el.item_hash for el in elements])
+        print([el.content for el in elements])
+        raise
     return content
 
 

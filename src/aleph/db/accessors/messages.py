@@ -7,7 +7,7 @@ from sqlalchemy import func, select, update, text, delete
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql import Insert, Select
-from sqlalchemy.sql.elements import BinaryExpression, literal
+from sqlalchemy.sql.elements import literal
 
 from aleph.toolkit.timestamp import coerce_to_datetime
 from aleph.types.channel import Channel

@@ -1,17 +1,18 @@
 import datetime as dt
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Dict, List, Optional, Type, Union
 
 from aleph_message.models import (
     Chain,
     MessageType,
     ItemType,
     BaseContent,
-    AggregateContent,
+    # AggregateContent,
     ForgetContent,
     PostContent,
     ProgramContent,
-    StoreContent,
+    StoreContent, AggregateContentKey,
 )
+from pydantic import Field, Extra
 from sqlalchemy import Column, TIMESTAMP, String, Integer, ForeignKey, UniqueConstraint, ARRAY
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
@@ -23,6 +24,19 @@ from aleph.types.message_status import MessageStatus
 from .base import Base
 from .chains import ChainTxDb
 from .pending_messages import PendingMessageDb
+
+
+# TODO: remove once aleph-message is updated
+class AggregateContent(BaseContent):
+    """Content of an AGGREGATE message"""
+
+    key: Union[str, AggregateContentKey] = Field(
+        description="The aggregate key can be either a string of a dict containing the key in field 'name'"
+    )
+    content: Dict = Field(description="The content of an aggregate must be a dict")
+
+    class Config:
+        extra = Extra.forbid
 
 
 CONTENT_TYPE_MAP: Dict[MessageType, Type[BaseContent]] = {
