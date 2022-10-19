@@ -1,9 +1,10 @@
 version: '2.2'
 
 volumes:
-  pyaleph-local-storage:
   pyaleph-ipfs:
+  pyaleph-local-storage:
   pyaleph-mongodb:
+  pyaleph-postgres:
   pyaleph-caddy-data:
   pyaleph-caddy-config:
 

@@ -2,7 +2,9 @@ version: '2.2'
 
 volumes:
   pyaleph-ipfs:
+  pyaleph-local-storage:
   pyaleph-mongodb:
+  pyaleph-postgres:
 
 services:
   pyaleph:
@@ -15,6 +17,8 @@ services:
     volumes:
       - ./config.yml:/opt/pyaleph/config.yml
       - ./keys:/opt/pyaleph/keys
+      - pyaleph-local-storage:/opt/pyaleph/data
+
     depends_on:
       - mongodb
       - postgres
