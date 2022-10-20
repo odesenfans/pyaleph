@@ -23,14 +23,12 @@ import sentry_sdk
 from aleph_message.models import MessageType
 from configmanager import Config
 from setproctitle import setproctitle
-from sqlalchemy.engine import Engine
 
 import aleph.config
 from aleph import model
 from aleph.chains.chain_service import ChainService
 from aleph.cli.args import parse_args
-from aleph.db.connection import make_engine, make_session_factory
-from aleph.db.models.base import Base
+from aleph.db.connection import make_engine, make_session_factory, make_db_url
 from aleph.exceptions import InvalidConfigException, KeyNotFoundException
 from aleph.jobs import start_jobs
 from aleph.jobs.job_utils import prepare_loop
@@ -52,8 +50,9 @@ __license__ = "mit"
 LOGGER = logging.getLogger(__name__)
 
 
-def run_db_migrations():
-    alembic.config.main(argv=["upgrade", "head"])
+def run_db_migrations(config: Config):
+    db_url = make_db_url(driver="psycopg2", config=config)
+    alembic.config.main(argv=["-x", f"db_url={db_url}", "upgrade", "head"])
 
 
 def init_shared_stats(shared_memory_manager: SyncManager) -> Dict[str, Any]:
@@ -221,9 +220,9 @@ async def main(args):
     session_factory = make_session_factory(engine)
     model.init_db(config, ensure_indexes=True)
 
-    run_db_migrations()
+    run_db_migrations(config)
     LOGGER.info("Database initialized.")
-
+    return
     ipfs_service = IpfsService(ipfs_client=make_ipfs_client(config))
     storage_service = StorageService(
         storage_engine=FileSystemStorageEngine(folder=config.storage.folder.value),
