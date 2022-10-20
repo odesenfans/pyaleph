@@ -53,10 +53,9 @@ LOGGER = logging.getLogger(__name__)
 def run_db_migrations(config: Config):
     db_url = make_db_url(driver="psycopg2", config=config)
     alembic_cfg = alembic.config.Config("alembic.ini")
+    alembic_cfg.attributes['configure_logger'] = False
     logging.getLogger('alembic').setLevel(logging.CRITICAL)
     alembic.command.upgrade(alembic_cfg, "head", tag=db_url)
-
-    # alembic.config.main(argv=["-x", f"db_url={db_url}", "upgrade", "head"])
 
 
 def init_shared_stats(shared_memory_manager: SyncManager) -> Dict[str, Any]:
@@ -219,7 +218,7 @@ async def main(args):
     config_values = config.dump_values()
 
     LOGGER.info("Initializing database...")
-    # run_db_migrations(config)
+    run_db_migrations(config)
     LOGGER.info("Database initialized.")
 
     engine = make_engine(config, echo=args.loglevel == logging.DEBUG)

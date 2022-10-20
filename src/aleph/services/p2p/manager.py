@@ -1,4 +1,5 @@
 import logging
+import time
 from typing import Coroutine, List
 
 from aleph_p2p_client import AlephP2PServiceClient
@@ -43,9 +44,14 @@ async def initialize_host(
         ),
     ]
     if listen:
+        start_time = time.perf_counter()
         peer_id = (await p2p_client.identify()).peer_id
+        LOGGER.info("Got identify info in %.3f seconds", time.perf_counter() - start_time)
         LOGGER.info("Listening on " + f"{transport_opt}/p2p/{peer_id}")
+
+        start_time = time.perf_counter()
         ip = await get_IP()
+        LOGGER.info("Got IP info in %.3f seconds", time.perf_counter() - start_time)
         public_address = f"/ip4/{ip}/tcp/{port}/p2p/{peer_id}"
         http_port = config.p2p.http_port.value
         public_adresses.append(public_address)
