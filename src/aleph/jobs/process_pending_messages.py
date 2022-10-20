@@ -162,7 +162,9 @@ async def handle_fetch_error(
         if isinstance(exception, MessageUnavailable):
             LOGGER.warning("Could not fetch message, retrying later")
         else:
-            LOGGER.exception("Unexpected error while fetching message")
+            LOGGER.exception(
+                "Unexpected error while fetching message", exc_info=exception
+            )
         await increase_pending_message_retry_count(
             session=session, pending_message=pending_message
         )
