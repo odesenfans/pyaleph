@@ -20,9 +20,6 @@ def make_db_url(driver: str, config: Optional[Config] = None) -> str:
     :returns: The database connection string.
     """
 
-    if config is None:
-        config = get_config()
-
     host = config.postgres.host.value
     port = config.postgres.port.value
     user = config.postgres.user.value
@@ -33,7 +30,14 @@ def make_db_url(driver: str, config: Optional[Config] = None) -> str:
 
 
 def make_engine(config: Optional[Config] = None, echo: bool = False) -> Engine:
-    return create_engine(make_db_url(driver="psycopg2", config=config), echo=echo, pool_size=50)
+    if config is None:
+        config = get_config()
+
+    return create_engine(
+        make_db_url(driver="psycopg2", config=config),
+        echo=echo,
+        pool_size=config.postgres.pool_size.value,
+    )
 
 
 def make_async_engine(

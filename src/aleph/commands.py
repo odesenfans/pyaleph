@@ -222,7 +222,7 @@ async def main(args):
 
     run_db_migrations(config)
     LOGGER.info("Database initialized.")
-    return
+
     ipfs_service = IpfsService(ipfs_client=make_ipfs_client(config))
     storage_service = StorageService(
         storage_engine=FileSystemStorageEngine(folder=config.storage.folder.value),

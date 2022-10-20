@@ -81,6 +81,7 @@ def get_defaults():
             "database": "aleph",
             "user": "aleph",
             "password": "decentralize-everything",
+            "pool_size": 50,
         },
         "mail": {
             "email_sender": "aleph@localhost.localdomain",
