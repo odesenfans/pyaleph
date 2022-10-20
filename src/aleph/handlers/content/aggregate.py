@@ -10,8 +10,9 @@ from aleph.db.accessors.aggregates import (
     insert_aggregate,
     insert_aggregate_element,
     refresh_aggregate,
+    update_aggregate,
 )
-from aleph.db.models import MessageDb, AggregateElementDb
+from aleph.db.models import MessageDb, AggregateElementDb, AggregateDb
 from aleph.handlers.content.content_handler import ContentHandler
 from aleph.toolkit.timestamp import timestamp_to_datetime
 from aleph.types.db_session import DbSessionFactory, DbSession
@@ -26,9 +27,11 @@ class AggregateMessageHandler(ContentHandler):
     async def fetch_related_content(
         self, session: DbSession, message: MessageDb
     ) -> None:
+        # Nothing to do, aggregates are independent of one another
         return
 
-    async def _insert_aggregate_element(self, session: DbSession, message: MessageDb):
+    @staticmethod
+    async def _insert_aggregate_element(session: DbSession, message: MessageDb):
         content = cast(AggregateContent, message.parsed_content)
         aggregate_element = AggregateElementDb(
             item_hash=message.item_hash,
@@ -50,7 +53,43 @@ class AggregateMessageHandler(ContentHandler):
         return aggregate_element
 
     @staticmethod
+    async def _append_to_aggregate(
+        session: DbSession,
+        aggregate: AggregateDb,
+        elements: Sequence[AggregateElementDb],
+    ):
+        new_content = merge_aggregate_elements(elements)
+        aggregate.content.update(new_content)
+
+        await update_aggregate(
+            session=session,
+            key=aggregate.key,
+            owner=aggregate.owner,
+            content=aggregate.content,
+            last_revision_hash=elements[-1].item_hash,
+            creation_datetime=aggregate.creation_datetime,
+        )
+
+    @staticmethod
+    async def _prepend_to_aggregate(
+        session: DbSession,
+        aggregate: AggregateDb,
+        elements: Sequence[AggregateElementDb],
+    ):
+        new_content = merge_aggregate_elements(elements)
+        new_content.update(aggregate.content)
+
+        await update_aggregate(
+            session=session,
+            key=aggregate.key,
+            owner=aggregate.owner,
+            content=new_content,
+            last_revision_hash=aggregate.last_revision_hash,
+            creation_datetime=elements[0].creation_datetime,
+        )
+
     async def _update_aggregate(
+        self,
         session: DbSession,
         key: str,
         owner: str,
@@ -86,19 +125,26 @@ class AggregateMessageHandler(ContentHandler):
         # Best case scenario: the elements we are adding are all posterior to the last
         # update, we can just merge the content of aggregate and the new elements.
         if aggregate.last_revision.creation_datetime < elements[0].creation_datetime:
+            await self._append_to_aggregate(
+                session=session, aggregate=aggregate, elements=elements
+            )
+            return
 
-            new_content = merge_aggregate_elements(elements)
-            aggregate.content.update(new_content)
-            aggregate.last_revision_hash = elements[-1].item_hash
+        # Similar case, all the new elements are anterior to the aggregate.
+        if aggregate.creation_datetime > elements[-1].creation_datetime:
+            await self._prepend_to_aggregate(
+                session=session, aggregate=aggregate, elements=elements
+            )
+            return
 
         # Out of order insertions. Here, we need to get all the elements in the database
-        # and recompute the aggregate entirely.
-        else:
-            LOGGER.info("%s/%s: out of order refresh", key, owner)
-            # Expect the new elements to already be added to the current session.
-            # We flush it to make them accessible from the current transaction.
-            session.flush()
-            await refresh_aggregate(session=session, owner=owner, key=key)
+        # and recompute the aggregate entirely. This operation may be quite costly for
+        # large aggregates, so we do it as a last resort.
+        LOGGER.info("%s/%s: out of order refresh", key, owner)
+        # Expect the new elements to already be added to the current session.
+        # We flush it to make them accessible from the current transaction.
+        session.flush()
+        await refresh_aggregate(session=session, owner=owner, key=key)
 
     async def process(
         self, session: DbSession, messages: List[MessageDb]
