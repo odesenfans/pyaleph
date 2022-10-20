@@ -179,7 +179,6 @@ class PendingMessageProcessor:
 
     async def _fetch_pending_message(
         self,
-        session: DbSession,
         pending_message: PendingMessageDb,
         sem: asyncio.Semaphore,
     ) -> Optional[MessageDb]:
@@ -196,11 +195,13 @@ class PendingMessageProcessor:
         :param sem: The semaphore that limits the number of concurrent operations.
         :return:
         """
-
-        async with sem:
-            return await self.message_handler.verify_and_fetch(
-                session=session, pending_message=pending_message
-            )
+        with self.session_factory() as session:
+            async with sem:
+                message = await self.message_handler.verify_and_fetch(
+                    session=session, pending_message=pending_message
+                )
+            session.commit()
+        return message
 
     async def _handle_fetch_results(
         self,
@@ -303,7 +304,6 @@ class PendingMessageProcessor:
 
                     message_task = asyncio.create_task(
                         self._fetch_pending_message(
-                            session=session,
                             pending_message=pending_message,
                             sem=semaphores[message_type],
                         )

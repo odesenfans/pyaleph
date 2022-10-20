@@ -33,7 +33,7 @@ def get_db_url(driver: str, config: Optional[Config] = None) -> str:
 
 
 def make_engine(config: Optional[Config] = None, echo: bool = False) -> Engine:
-    return create_engine(get_db_url(driver="psycopg2", config=config), echo=echo)
+    return create_engine(get_db_url(driver="psycopg2", config=config), echo=echo, pool_size=50)
 
 
 def make_async_engine(
