@@ -11,6 +11,15 @@ async def is_pinned_file(session: DbSession, file_hash: str) -> bool:
     )
 
 
+async def upsert_file_pin(session: DbSession, file_hash: str, tx_hash: str):
+    upsert_stmt = (
+        insert(FilePinDb)
+        .values(file_hash=file_hash, tx_hash=tx_hash)
+        .on_conflict_do_nothing()
+    )
+    session.execute(upsert_stmt)
+
+
 def make_upsert_stored_file_query(file: StoredFileDb):
     return (
         insert(StoredFileDb)

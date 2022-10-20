@@ -1,12 +1,13 @@
 import asyncio
 import json
-from typing import Dict, Optional, List, Any, Mapping
+from typing import Dict, Optional, List, Any, Mapping, Set
 
 from aleph_message.models import Chain
 
 from aleph.chains.common import LOGGER
 from aleph.chains.tx_context import TxContext
 from aleph.config import get_config
+from aleph.db.accessors.files import upsert_file_pin
 from aleph.db.models import ChainTxDb, MessageDb
 from aleph.db.models.files import FilePinDb
 from aleph.db.models.pending_txs import ChainSyncProtocol, PendingTxDb
@@ -84,7 +85,7 @@ class ChainDataService:
             return content
 
     async def get_chaindata_messages(
-        self, chaindata: Dict, context: TxContext, seen_ids: Optional[List[str]] = None
+        self, chaindata: Dict, context: TxContext, seen_ids: Optional[Set[str]] = None
     ):
         config = get_config()
 
@@ -106,7 +107,7 @@ class ChainDataService:
                     return None
                 else:
                     LOGGER.debug("Adding to seen_ids")
-                    seen_ids.append(chaindata["content"])
+                    seen_ids.add(chaindata["content"])
             try:
                 content = await self.storage_service.get_json(
                     chaindata["content"], timeout=60
@@ -132,6 +133,13 @@ class ChainDataService:
                 try:
                     LOGGER.info(f"chaindata {chaindata}")
                     with self.session_factory() as session:
+                        # Some chain data files are duplicated, and can be treated in parallel,
+                        # hence the upsert.
+                        await upsert_file_pin(
+                            session=session,
+                            file_hash=chaindata["content"],
+                            tx_hash=context.tx_hash,
+                        )
                         session.add(
                             FilePinDb(
                                 file_hash=chaindata["content"], tx_hash=context.tx_hash
@@ -152,9 +160,7 @@ class ChainDataService:
             raise InvalidContent(error_msg)
 
     @staticmethod
-    async def incoming_chaindata(
-        session: DbSession, content: Dict, context: TxContext
-    ):
+    async def incoming_chaindata(session: DbSession, content: Dict, context: TxContext):
         """Incoming data from a chain.
         Content can be inline of "offchain" through an ipfs hash.
         For now we only add it to the database, it will be processed later.

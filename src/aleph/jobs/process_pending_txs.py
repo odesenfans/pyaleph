@@ -46,7 +46,7 @@ class PendingTxProcessor:
         )
 
     async def handle_pending_tx(
-        self, pending_tx: PendingTxDb, seen_ids: Optional[List[str]] = None
+        self, pending_tx: PendingTxDb, seen_ids: Optional[Set[str]] = None
     ) -> List[DbBulkOperation]:
 
         db_operations: List[DbBulkOperation] = []

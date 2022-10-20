@@ -25,7 +25,6 @@ class AggregateElementDb(Base):
     owner: str = Column(String, nullable=False)
     content: Any = Column(JSONB, nullable=False)
     creation_datetime: dt.datetime = Column(TIMESTAMP(timezone=True), nullable=False)
-    revises: str = Column(ForeignKey("aggregate_elements.item_hash"), nullable=True)
 
     __table_args__ = (Index("ix_time_desc", creation_datetime.desc()),)
 

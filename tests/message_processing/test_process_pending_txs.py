@@ -1,12 +1,12 @@
 import datetime as dt
 from collections import defaultdict
-from typing import Dict, List
+from typing import Dict, List, Set
 
 import pytest
 import pytz
 from aleph_message.models import Chain
 from sqlalchemy import select
-from sqlalchemy.sql import Delete, Insert
+from sqlalchemy.sql import Delete
 
 from aleph.db.models import PendingMessageDb, MessageStatusDb
 from aleph.db.models.chains import ChainTxDb
@@ -58,7 +58,7 @@ async def test_process_pending_tx(
         session.add(pending_tx)
         session.commit()
 
-    seen_ids: List[str] = []
+    seen_ids: Set[str] = set()
     db_operations = await pending_tx_processor.handle_pending_tx(
         pending_tx=pending_tx, seen_ids=seen_ids
     )
