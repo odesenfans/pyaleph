@@ -7,11 +7,9 @@ from typing import Iterable, Tuple
 from typing import cast
 
 from configmanager import Config
-from sqlalchemy.ext.asyncio import AsyncSession
 
 import aleph.config
 from aleph.db.bulk_operations import DbBulkOperation
-from aleph.model import init_db_globals
 from aleph.toolkit.split import split_iterable
 from aleph.toolkit.timer import Timer
 from aleph.types.db_session import DbSession
@@ -34,7 +32,6 @@ def prepare_loop(config_values: Dict) -> Tuple[asyncio.AbstractEventLoop, Config
     config = aleph.config.app_config
     config.load_values(config_values)
 
-    init_db_globals(config)
     return loop, config
 
 

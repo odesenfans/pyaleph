@@ -3,9 +3,8 @@ from typing import List, Optional, Any, Dict, Tuple
 from aiohttp import web
 from pydantic import BaseModel, validator, ValidationError
 
-from aleph.model.messages import get_computed_address_aggregates
+from aleph.db.accessors.aggregates import get_aggregates_by_owner
 from .utils import LIST_FIELD_SEPARATOR
-from ...db.accessors.aggregates import get_aggregates_by_owner
 
 DEFAULT_LIMIT = 1000
 

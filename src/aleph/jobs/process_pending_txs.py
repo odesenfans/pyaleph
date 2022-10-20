@@ -151,7 +151,7 @@ class PendingTxProcessor:
         tasks: Set[asyncio.Task] = set()
 
         seen_offchain_hashes = set()
-        seen_ids: List[str] = []
+        seen_ids: Set[str] = set()
         LOGGER.info("handling TXs")
         with self.session_factory() as session:
             for pending_tx in await get_pending_txs_stream(session):

@@ -19,13 +19,13 @@ from multiprocessing.managers import SyncManager
 from typing import Any, Coroutine, Dict, List, Optional
 
 import alembic.config
+import alembic.command
 import sentry_sdk
 from aleph_message.models import MessageType
 from configmanager import Config
 from setproctitle import setproctitle
 
 import aleph.config
-from aleph import model
 from aleph.chains.chain_service import ChainService
 from aleph.cli.args import parse_args
 from aleph.db.connection import make_engine, make_session_factory, make_db_url
@@ -52,7 +52,11 @@ LOGGER = logging.getLogger(__name__)
 
 def run_db_migrations(config: Config):
     db_url = make_db_url(driver="psycopg2", config=config)
-    alembic.config.main(argv=["-x", f"db_url={db_url}", "upgrade", "head"])
+    alembic_cfg = alembic.config.Config("alembic.ini")
+    logging.getLogger('alembic').setLevel(logging.CRITICAL)
+    alembic.command.upgrade(alembic_cfg, "head", tag=db_url)
+
+    # alembic.config.main(argv=["-x", f"db_url={db_url}", "upgrade", "head"])
 
 
 def init_shared_stats(shared_memory_manager: SyncManager) -> Dict[str, Any]:
@@ -80,7 +84,6 @@ async def run_server(
 ):
     # These imports will run in different processes
     from aiohttp import web
-    from aleph.web.controllers.listener import broadcast
 
     LOGGER.debug("Setup of runner")
     p2p_client = await init_p2p_client(config, service_name=f"api-server-{port}")
@@ -105,13 +108,13 @@ async def run_server(
     runner = web.AppRunner(app)
     await runner.setup()
 
-    LOGGER.debug("Starting site")
+    LOGGER.info("Starting API server on port %d...", port)
     site = web.TCPSite(runner, host, port)
     await site.start()
 
-    LOGGER.debug("Running broadcast server")
-    await broadcast()
-    LOGGER.debug("Finished broadcast server")
+    # Wait forever
+    while True:
+        await asyncio.sleep(3600)
 
 
 def run_server_coroutine(
@@ -215,13 +218,15 @@ async def main(args):
 
     config_values = config.dump_values()
 
-    LOGGER.debug("Initializing database")
+    LOGGER.info("Initializing database...")
+    # run_db_migrations(config)
+    LOGGER.info("Database initialized.")
+
     engine = make_engine(config, echo=args.loglevel == logging.DEBUG)
     session_factory = make_session_factory(engine)
-    model.init_db(config, ensure_indexes=True)
 
-    run_db_migrations(config)
-    LOGGER.info("Database initialized.")
+    # TODO: find a way to prevent alembic from messing up the logging config
+    setup_logging(args.loglevel)
 
     ipfs_service = IpfsService(ipfs_client=make_ipfs_client(config))
     storage_service = StorageService(

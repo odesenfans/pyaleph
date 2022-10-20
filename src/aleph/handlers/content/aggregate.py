@@ -158,7 +158,6 @@ class AggregateMessageHandler(ContentHandler):
             sorted_messages,
             key=lambda m: (m.parsed_content.key, m.parsed_content.address),
         ):
-            messages_by_aggregate = list(messages_by_aggregate)
             aggregate_elements = [
                 await self._insert_aggregate_element(session=session, message=message)
                 for message in messages_by_aggregate

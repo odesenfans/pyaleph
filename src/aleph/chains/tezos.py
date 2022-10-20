@@ -73,7 +73,7 @@ def micheline_verification_buffer(
 def get_tezos_verification_buffer(
     message: PendingMessageDb, signature_type: TezosSignatureType, dapp_url: str
 ) -> bytes:
-    verification_buffer = get_verification_buffer(message)
+    verification_buffer = get_verification_buffer(message)  # type: ignore
 
     if signature_type == TezosSignatureType.RAW:
         return verification_buffer
@@ -123,7 +123,7 @@ class TezosConnector(Verifier):
             )
 
         verification_buffer = get_tezos_verification_buffer(
-            message, signature_type, dapp_url
+            message, signature_type, dapp_url   # type: ignore
         )
 
         # Check the signature

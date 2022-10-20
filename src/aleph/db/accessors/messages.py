@@ -129,6 +129,19 @@ async def get_matching_messages(
     return (session.execute(select_stmt)).scalars()
 
 
+async def get_message_stats_by_sender(
+    session: DbSession,
+    addresses: Optional[Sequence[str]] = None,
+):
+    select_stmt = select(
+        MessageDb.sender, MessageDb.type, func.count().label("nb_messages")
+    ).group_by(MessageDb.sender, MessageDb.type)
+    if addresses:
+        select_stmt = select_stmt.where(MessageDb.sender.in_(addresses))
+
+    return session.execute(select_stmt).all()
+
+
 # TODO: declare a type that will match the result (something like UnconfirmedMessageDb)
 #       and translate the time field to epoch.
 async def get_unconfirmed_messages(
@@ -283,7 +296,9 @@ async def reject_message(
             item_hash=item_hash,
             reason=str(exception),
             traceback="\n".join(
-                traceback.format_exception(InvalidMessageException, exception, exception.__traceback__)
+                traceback.format_exception(
+                    InvalidMessageException, exception, exception.__traceback__
+                )
             ),
         )
     )

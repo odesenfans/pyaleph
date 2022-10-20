@@ -12,7 +12,7 @@ from aleph.types.db_session import DbSessionFactory, AsyncDbSessionFactory
 from aleph.config import get_config
 
 
-def make_db_url(driver: str, config: Optional[Config] = None) -> str:
+def make_db_url(driver: str, config: Config) -> str:
     """
     Returns the database connection string from configuration values.
 
@@ -35,7 +35,7 @@ def make_engine(config: Optional[Config] = None, echo: bool = False) -> Engine:
 
     return create_engine(
         make_db_url(driver="psycopg2", config=config),
-        echo=echo,
+        echo=False,
         pool_size=config.postgres.pool_size.value,
     )
 

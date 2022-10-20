@@ -10,10 +10,8 @@ import pytest_asyncio
 from configmanager import Config
 
 import aleph.config
-from aleph.config import get_defaults
 from aleph.db.connection import make_engine, make_session_factory
 from aleph.db.models.base import Base
-from aleph.model import init_db
 from aleph.services.ipfs import IpfsService
 from aleph.services.ipfs.common import make_ipfs_client
 from aleph.services.storage.fileystem_engine import FileSystemStorageEngine
@@ -33,23 +31,6 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "helpers"))
 def drop_db(db_name: str, config: Config):
     client = pymongo.MongoClient(config.mongodb.uri.value)
     client.drop_database(db_name)
-
-
-@pytest_asyncio.fixture
-async def test_db():
-    """
-    Initializes and cleans a MongoDB database dedicated to automated tests.
-    """
-
-    config = Config(schema=get_defaults())
-    config.mongodb.database.value = TEST_DB
-
-    drop_db(TEST_DB, config)
-    init_db(config, ensure_indexes=True)
-
-    from aleph.model import db
-
-    yield db
 
 
 @pytest.fixture
