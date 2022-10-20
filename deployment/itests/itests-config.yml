@@ -1,0 +1,16 @@
+ethereum:
+  enabled: false
+
+aleph:
+  queue_topic: ALEPH-ITESTS-MESSAGES
+
+p2p:
+  alive_topic: ALEPH-ITESTS-ALIVE
+  topics:
+    - ALEPH-ITESTS-ALIVE
+    - ALEPH-ITESTS-MESSAGES
+  peers: []
+
+ipfs:
+  alive_topic: ALEPH-IPFS-ITESTS-ALIVE
+  peers: []
