@@ -67,7 +67,7 @@ RUN /opt/venv/bin/pip install --no-cache-dir -r /opt/build/requirements.txt
 RUN rm /opt/build/requirements.txt
 
 # === Install the CCN itself ===
-COPY deployment/migrations /opt/pyaleph/migrations
+COPY deployment/migrations /opt/pyaleph/deployment/migrations
 COPY setup.py /opt/pyaleph/
 COPY src /opt/pyaleph/src
 # Git data is used to determine the version of the CCN

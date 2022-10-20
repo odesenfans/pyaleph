@@ -18,6 +18,7 @@ from multiprocessing import Manager, Process, set_start_method
 from multiprocessing.managers import SyncManager
 from typing import Any, Coroutine, Dict, List, Optional
 
+import alembic.config
 import sentry_sdk
 from aleph_message.models import MessageType
 from configmanager import Config
@@ -51,10 +52,8 @@ __license__ = "mit"
 LOGGER = logging.getLogger(__name__)
 
 
-async def create_tables(engine: Engine):
-    with engine.begin() as conn:
-        Base.metadata.drop_all(conn)
-        Base.metadata.create_all(conn)
+def run_db_migrations():
+    alembic.config.main(argv=["upgrade", "head"])
 
 
 def init_shared_stats(shared_memory_manager: SyncManager) -> Dict[str, Any]:
@@ -220,8 +219,9 @@ async def main(args):
     LOGGER.debug("Initializing database")
     engine = make_engine(config, echo=args.loglevel == logging.DEBUG)
     session_factory = make_session_factory(engine)
-    await create_tables(engine)
     model.init_db(config, ensure_indexes=True)
+
+    run_db_migrations()
     LOGGER.info("Database initialized.")
 
     ipfs_service = IpfsService(ipfs_client=make_ipfs_client(config))
