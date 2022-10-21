@@ -302,6 +302,7 @@ async def reject_message(
             ),
         )
     )
+    session.execute(delete(MessageDb).where(MessageDb.item_hash == item_hash))
 
 
 async def reject_pending_message(

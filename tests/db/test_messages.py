@@ -324,3 +324,5 @@ async def test_reject_message(
             exception=InvalidSignature("Signature does not match"),
         )
         session.commit()
+
+    # TODO: assert message is deleted

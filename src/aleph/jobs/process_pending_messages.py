@@ -246,6 +246,8 @@ class PendingMessageProcessor:
         self, session: DbSession, config: Config, shared_stats: Dict, loop: bool = True
     ) -> AsyncIterator[Sequence[MessageDb]]:
 
+        LOGGER.info("starting fetch job")
+
         processing_messages: Set[ProcessingMessageId] = set()
 
         max_concurrent_tasks = config.aleph.jobs.pending_messages.max_concurrency.value
@@ -323,6 +325,7 @@ class PendingMessageProcessor:
                     break
                 # If we are done, wait a few seconds until retrying
                 if not fetch_tasks:
+                    LOGGER.info("waiting 5 seconds for new pending messages")
                     await asyncio.sleep(5)
 
     async def check_permissions(
