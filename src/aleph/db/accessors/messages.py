@@ -312,10 +312,15 @@ async def reject_pending_message(
     item_hash = pending_message.item_hash
     message_status = await get_message_status(session=session, item_hash=item_hash)
 
-    # Nothing to do, the message may already be processed and someone is sending
-    # invalid copies for some reason
+    delete_pending_message_stmt = delete(PendingMessageDb).where(
+        PendingMessageDb.id == pending_message.id
+    )
+
+    # The message may already be processed and someone is sending invalid copies.
+    # Just drop the pending message.
     if message_status:
-        if message_status.status != MessageStatus.PENDING:
+        if message_status.status not in (MessageStatus.PENDING, MessageStatus.REJECTED):
+            session.execute(delete_pending_message_stmt)
             return
 
     session.execute(
@@ -338,9 +343,7 @@ async def reject_pending_message(
         },
     )
     session.execute(upsert_rejected_message_stmt)
-    session.execute(
-        delete(PendingMessageDb).where(PendingMessageDb.id == pending_message.id)
-    )
+    session.execute(delete_pending_message_stmt)
 
 
 async def get_programs_triggered_by_messages(session: DbSession, sort_order: SortOrder):

@@ -153,7 +153,9 @@ async def handle_fetch_error(
 ):
     if isinstance(exception, InvalidMessageException):
         LOGGER.warning(
-            "Rejecting invalid pending message: %s", pending_message.item_hash
+            "Rejecting invalid pending message: %s: %s",
+            pending_message.item_hash,
+            str(exception),
         )
         await reject_pending_message(
             session=session, pending_message=pending_message, exception=exception
