@@ -323,15 +323,21 @@ async def reject_pending_message(
         .values(status=MessageStatus.REJECTED)
         .where(MessageStatusDb.item_hash == item_hash)
     )
-    session.execute(
-        insert(RejectedMessageDb).values(
-            item_hash=item_hash,
-            reason=str(exception),
-            traceback="\n".join(
-                traceback.format_exception(InvalidMessageException, exception, None)
-            ),
-        )
+    insert_rejected_message_stmt = insert(RejectedMessageDb).values(
+        item_hash=item_hash,
+        reason=str(exception),
+        traceback="\n".join(
+            traceback.format_exception(InvalidMessageException, exception, None)
+        ),
     )
+    upsert_rejected_message_stmt = insert_rejected_message_stmt.on_conflict_do_update(
+        constraint="rejected_messages_pkey",
+        set_={
+            "reason": insert_rejected_message_stmt.excluded.reason,
+            "traceback": insert_rejected_message_stmt.excluded.traceback,
+        },
+    )
+    session.execute(upsert_rejected_message_stmt)
     session.execute(
         delete(PendingMessageDb).where(PendingMessageDb.id == pending_message.id)
     )
