@@ -140,11 +140,6 @@ class ChainDataService:
                             file_hash=chaindata["content"],
                             tx_hash=context.tx_hash,
                         )
-                        session.add(
-                            FilePinDb(
-                                file_hash=chaindata["content"], tx_hash=context.tx_hash
-                            )
-                        )
                         session.commit()
 
                     # Some IPFS fetches can take a while, hence the large timeout.
