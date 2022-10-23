@@ -1,22 +1,33 @@
 from typing import Optional, Iterable
 
-from aleph_message.models import Chain
+from aleph_message.models import Chain, MessageType
 from sqlalchemy import select, func, update, delete
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, aliased
 
 from aleph.db.models import PendingMessageDb, ChainTxDb
 from aleph.types.db_session import DbSession
 
 
 async def get_pending_messages(
-    session: DbSession, limit: int = 10000
+    session: DbSession,
+    limit: int = 10000,
+    offset: int = 0,
+    skip_store: bool = False,
 ) -> Iterable[PendingMessageDb]:
     select_stmt = (
         select(PendingMessageDb)
         .order_by(PendingMessageDb.retries.asc(), PendingMessageDb.time.asc())
-        .limit(limit)
+        .offset(offset)
         .options(selectinload(PendingMessageDb.tx))
     )
+    if skip_store:
+        subquery = aliased(PendingMessageDb, select_stmt.subquery())
+        select_stmt = (
+            select(subquery)
+            .where(subquery.type != MessageType.store)
+        )
+
+    select_stmt = select_stmt.limit(limit)
     return (session.execute(select_stmt)).scalars()
 
 

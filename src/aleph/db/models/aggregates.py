@@ -1,7 +1,7 @@
 import datetime as dt
 from typing import Any
 
-from sqlalchemy import Column, ForeignKey, Index, String, TIMESTAMP, UniqueConstraint
+from sqlalchemy import Boolean, Column, ForeignKey, Index, String, TIMESTAMP
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
@@ -20,13 +20,15 @@ class AggregateElementDb(Base):
     __tablename__ = "aggregate_elements"
 
     item_hash: str = Column(String, primary_key=True)
-    # item_hash: str = Column(ForeignKey(MessageDb.item_hash), primary_key=True)
     key: str = Column(String, nullable=False)
     owner: str = Column(String, nullable=False)
     content: Any = Column(JSONB, nullable=False)
     creation_datetime: dt.datetime = Column(TIMESTAMP(timezone=True), nullable=False)
 
-    __table_args__ = (Index("ix_time_desc", creation_datetime.desc()),)
+    __table_args__ = (
+        Index("ix_time_desc", creation_datetime.desc()),
+        Index("ix_key_owner", key, owner),
+    )
 
 
 class AggregateDb(Base):
@@ -45,6 +47,7 @@ class AggregateDb(Base):
     last_revision_hash: str = Column(
         ForeignKey(AggregateElementDb.item_hash), nullable=False
     )
+    dirty = Column(Boolean, nullable=False)
 
     __table_args__ = (Index("ix_aggregates_owner", owner),)
 

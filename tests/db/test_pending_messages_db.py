@@ -113,3 +113,10 @@ async def test_get_pending_messages(
         assert len(pending_messages) == 3
         # Check the order of messages
         assert [m.id for m in pending_messages] == [404, 42, 27]
+
+        # Skip store
+        pending_messages = list(
+            await get_pending_messages(session=session, skip_store=True)
+        )
+        assert len(pending_messages) == 2
+        assert [m.id for m in pending_messages] == [404, 27]

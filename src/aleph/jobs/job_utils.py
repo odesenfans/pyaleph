@@ -12,7 +12,11 @@ import aleph.config
 from aleph.db.bulk_operations import DbBulkOperation
 from aleph.toolkit.split import split_iterable
 from aleph.toolkit.timer import Timer
-from aleph.types.db_session import DbSession
+from aleph.types.actions.action import ActionStatus
+from aleph.types.actions.db_action import DeletePendingTx, InsertPendingMessage
+from aleph.types.actions.db_executor import DbExecutor
+from aleph.types.actions.executor import execute_actions
+from aleph.types.db_session import DbSession, DbSessionFactory
 
 LOGGER = logging.getLogger(__name__)
 
@@ -68,7 +72,7 @@ async def perform_db_operations(
 
 
 async def process_job_results(
-    session: DbSession,
+    session_factory: DbSessionFactory,
     tasks: Iterable[asyncio.Task],  # TODO: switch to a generic type when moving to 3.9+
     on_error: Callable[[BaseException], None],
 ):
@@ -92,6 +96,14 @@ async def process_job_results(
         exception = cast(BaseException, error.exception())
         on_error(exception)
 
-    db_operations = (op for success in successes for op in success.result())
+    db_operations = [op for success in successes for op in success.result()]
 
-    await perform_db_operations(session=session, db_operations=db_operations)
+    db_executor = DbExecutor(session_factory=session_factory)
+    await execute_actions(
+        actions=db_operations,
+        executors={InsertPendingMessage: db_executor, DeletePendingTx: db_executor},
+    )
+
+    for operation in db_operations:
+        if operation.status == ActionStatus.FAILED:
+            LOGGER.exception("Failed to execute action: %s", str(operation.status))

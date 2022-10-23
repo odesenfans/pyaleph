@@ -10,7 +10,7 @@ from aleph.db.accessors.aggregates import (
     insert_aggregate,
     insert_aggregate_element,
     refresh_aggregate,
-    update_aggregate,
+    update_aggregate, count_aggregate_elements, mark_aggregate_as_dirty,
 )
 from aleph.db.models import MessageDb, AggregateElementDb, AggregateDb
 from aleph.handlers.content.content_handler import ContentHandler
@@ -104,6 +104,8 @@ class AggregateMessageHandler(ContentHandler):
         :param elements: New elements to insert, ordered by their creation_datetime field.
         :return:
         """
+        dirty_threshold = 5000
+
         aggregate = await get_aggregate_by_key(session=session, owner=owner, key=key)
 
         if not aggregate:
@@ -120,7 +122,11 @@ class AggregateMessageHandler(ContentHandler):
             )
             return
 
-        LOGGER.info("%s/%s already exists, updating it", key, owner)
+        if aggregate.dirty:
+            LOGGER.info("%s/%s is dirty, skipping update", owner, key)
+            return
+
+        LOGGER.info("%s/%s already exists, updating it", owner, key)
 
         # Best case scenario: the elements we are adding are all posterior to the last
         # update, we can just merge the content of aggregate and the new elements.
@@ -137,10 +143,15 @@ class AggregateMessageHandler(ContentHandler):
             )
             return
 
+        LOGGER.info("%s/%s: out of order refresh", owner, key)
+        if await count_aggregate_elements(session=session, owner=owner, key=key) > dirty_threshold:
+            LOGGER.info("%s/%s: too many elements, marking as dirty")
+            await mark_aggregate_as_dirty(session=session, owner=owner, key=key)
+            return
+
         # Out of order insertions. Here, we need to get all the elements in the database
         # and recompute the aggregate entirely. This operation may be quite costly for
         # large aggregates, so we do it as a last resort.
-        LOGGER.info("%s/%s: out of order refresh", key, owner)
         # Expect the new elements to already be added to the current session.
         # We flush it to make them accessible from the current transaction.
         session.flush()

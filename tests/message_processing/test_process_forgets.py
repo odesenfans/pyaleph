@@ -1,6 +1,3 @@
-import itertools
-from typing import Mapping
-
 import pytest
 from aleph_message.models import Chain, MessageType, ItemType
 from configmanager import Config
@@ -17,6 +14,7 @@ from aleph.db.models import (
     MessageStatusDb,
     FileReferenceDb,
 )
+from aleph.handlers.content.forget import ForgetMessageHandler
 from aleph.jobs.process_pending_messages import PendingMessageProcessor
 from aleph.toolkit.timestamp import timestamp_to_datetime
 from aleph.types.channel import Channel
@@ -24,11 +22,8 @@ from aleph.types.db_session import DbSessionFactory
 from aleph.types.file_type import FileType
 from aleph.types.message_status import MessageStatus
 from message_test_helpers import (
-    make_validated_message_from_dict,
     process_pending_messages,
 )
-
-from aleph.handlers.content.forget import ForgetMessageHandler
 
 
 @pytest.fixture

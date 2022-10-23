@@ -8,8 +8,6 @@ from pydantic import ValidationError
 
 from aleph.chains.chain_service import ChainService
 from aleph.db.accessors.messages import (
-    make_message_upsert_query,
-    make_confirmation_upsert_query,
     get_message_by_item_hash,
 )
 from aleph.db.models import (
@@ -30,6 +28,9 @@ from aleph.handlers.content.program import ProgramMessageHandler
 from aleph.handlers.content.store import StoreMessageHandler
 from aleph.schemas.pending_messages import BasePendingMessage
 from aleph.storage import StorageService
+from aleph.types.actions.db_action import UpsertMessage, ConfirmMessage, MessageDbAction
+from aleph.types.actions.db_executor import DbExecutor
+from aleph.types.actions.executor import execute_actions
 from aleph.types.db_session import DbSessionFactory, DbSession
 from aleph.types.message_status import (
     InvalidMessageException,
@@ -141,36 +142,32 @@ class MessageHandler:
 
     @staticmethod
     async def confirm_existing_message(
-        session: DbSession,
         existing_message: MessageDb,
         pending_message: PendingMessageDb,
-    ):
+    ) -> MessageDbAction:
         if pending_message.signature != existing_message.signature:
             raise InvalidSignature(f"Invalid signature for {pending_message.item_hash}")
 
-        if pending_message.tx_hash:
-            confirmation_upsert_query = make_confirmation_upsert_query(
-                item_hash=pending_message.item_hash, tx_hash=pending_message.tx_hash
-            )
-            session.execute(confirmation_upsert_query)
+        return ConfirmMessage(pending_message=pending_message)
 
     async def verify_and_fetch(
         self, session: DbSession, pending_message: PendingMessageDb
-    ) -> Optional[MessageDb]:
+    ) -> Tuple[Optional[MessageDb], Sequence[MessageDbAction]]:
         item_hash = pending_message.item_hash
 
         existing_message = await get_message_by_item_hash(
             session=session, item_hash=item_hash
         )
+        actions = []
 
         if existing_message:
             # The message already exists and is validated. The current message is a confirmation.
-            await self.confirm_existing_message(
-                session=session,
+            confirm_action = await self.confirm_existing_message(
                 pending_message=pending_message,
                 existing_message=existing_message,
             )
-            return None
+            actions.append(confirm_action)
+            return None, actions
 
         await self.verify_signature(pending_message=pending_message)
         validated_message = await self.fetch_pending_message(
@@ -179,15 +176,11 @@ class MessageHandler:
         await self.fetch_related_content(session=session, message=validated_message)
 
         # All the content was fetched successfully, we can mark the message as fetched
-        message_upsert_query = make_message_upsert_query(message=validated_message)
-        session.execute(message_upsert_query)
-        if pending_message.tx_hash:
-            confirmation_upsert_query = make_confirmation_upsert_query(
-                item_hash=item_hash, tx_hash=pending_message.tx_hash
-            )
-            session.execute(confirmation_upsert_query)
+        actions.append(
+            UpsertMessage(message=validated_message, pending_message=pending_message)
+        )
 
-        return validated_message
+        return validated_message, actions
 
     async def check_permissions(self, session: DbSession, message: MessageDb):
         content_handler = self.get_content_handler(message.type)
@@ -235,10 +228,13 @@ class MessageHandler:
     async def fetch_and_process_one_message_db(self, pending_message: PendingMessageDb):
         # Fetch
         with self.session_factory() as session:
-            validated_message = await self.verify_and_fetch(
+            validated_message, actions = await self.verify_and_fetch(
                 session=session, pending_message=pending_message
             )
             session.commit()
+            await execute_actions(
+                actions=actions, executors=DbExecutor(self.session_factory)
+            )
 
             if validated_message is None:
                 # The pending message was a confirmation, we are done.

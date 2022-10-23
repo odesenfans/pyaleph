@@ -1,10 +1,15 @@
+import logging
 from typing import List, Optional, Any, Dict, Tuple
 
 from aiohttp import web
 from pydantic import BaseModel, validator, ValidationError
+from sqlalchemy import select
 
-from aleph.db.accessors.aggregates import get_aggregates_by_owner
+from aleph.db.accessors.aggregates import get_aggregates_by_owner, refresh_aggregate
+from aleph.db.models import AggregateDb
 from .utils import LIST_FIELD_SEPARATOR
+
+LOGGER = logging.getLogger(__name__)
 
 DEFAULT_LIMIT = 1000
 
@@ -40,6 +45,16 @@ async def address_aggregate(request):
     session_factory = request.app["session_factory"]
 
     with session_factory() as session:
+        dirty_aggregates = session.execute(
+            select(AggregateDb.key).where(
+                (AggregateDb.owner == address) & AggregateDb.dirty
+            )
+        ).scalars()
+        for key in dirty_aggregates:
+            LOGGER.info("Refreshing dirty aggregate %s/%s", address, key)
+            await refresh_aggregate(session=session, owner=address, key=key)
+            session.commit()
+
         aggregates: List[Tuple[str, Dict[str, Any]]] = list(
             await get_aggregates_by_owner(
                 session=session, owner=address, keys=query_params.keys

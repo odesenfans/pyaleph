@@ -48,7 +48,6 @@ async def process_pending_messages(
     session.commit()
 
     pipeline = message_processor.make_pipeline(
-        session=session,
         config=config,
         shared_stats={"message_jobs": {}},
         loop=False,

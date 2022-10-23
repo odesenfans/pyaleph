@@ -17,16 +17,15 @@ async def test_process_post_and_amend(
     message_processor: PendingMessageProcessor,
     fixture_post_messages: List[Dict],
 ):
-    with session_factory() as session:
-        pipeline = message_processor.make_pipeline(
-            session=session,
-            config=mock_config,
-            shared_stats={"message_jobs": {}},
-            loop=False,
-        )
-        # Exhaust the iterator
-        _ = [message async for message in pipeline]
+    pipeline = message_processor.make_pipeline(
+        config=mock_config,
+        shared_stats={"message_jobs": {}},
+        loop=False,
+    )
+    # Exhaust the iterator
+    _ = [message async for message in pipeline]
 
+    with session_factory() as session:
         # We should now have one post
         original_item_hash = "9f02e3b5efdbdc0b487359117ae3af40db654892487feae452689a0b84dc1025"
         amend_item_hash = "93776ad67063b955869a7fa705ea2987add39486e1ed5951e9842291cf0f566c"

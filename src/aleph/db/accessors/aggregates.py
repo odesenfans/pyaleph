@@ -1,7 +1,7 @@
 from typing import Optional, Iterable, List, Any, Dict, Tuple, Sequence
 
 from aleph_message.models import ItemHash
-from sqlalchemy import select, text, delete, update
+from sqlalchemy import select, text, delete, update, func
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import selectinload
 
@@ -69,6 +69,7 @@ async def insert_aggregate(
         content=content,
         creation_datetime=creation_datetime,
         last_revision_hash=last_revision_hash,
+        dirty=False,
     )
     session.execute(insert_stmt)
 
@@ -132,17 +133,27 @@ async def delete_aggregate(session: DbSession, owner: str, key: str):
     session.execute(delete_elements_stmt)
 
 
+async def count_aggregate_elements(session: DbSession, owner: str, key: str) -> int:
+    select_stmt = select(AggregateElementDb).where(
+        (AggregateElementDb.key == key) & (AggregateElementDb.owner == owner)
+    )
+    return session.execute(select(func.count()).select_from(select_stmt)).scalar_one()
+
+
 def merge_aggregate_elements(elements: Iterable[AggregateElementDb]) -> Dict:
     content = {}
-    try:
-        for element in elements:
-            content.update(element.content)
-    except ValueError:
-        print("merge:", elements)
-        print([el.item_hash for el in elements])
-        print([el.content for el in elements])
-        raise
+    for element in elements:
+        content.update(element.content)
     return content
+
+
+async def mark_aggregate_as_dirty(session: DbSession, owner: str, key: str):
+    update_stmt = (
+        update(AggregateDb)
+        .values(dirty=True)
+        .where((AggregateDb.key == key) & (AggregateDb.owner == owner))
+    )
+    session.execute(update_stmt)
 
 
 async def refresh_aggregate(session: DbSession, owner: str, key: str):
@@ -163,6 +174,7 @@ async def refresh_aggregate(session: DbSession, owner: str, key: str):
         content=content,
         creation_datetime=elements[0].creation_datetime,
         last_revision_hash=elements[-1].item_hash,
+        dirty=False,
     )
     upsert_aggregate_stmt = insert_stmt.on_conflict_do_update(
         constraint="aggregates_pkey",
@@ -170,6 +182,7 @@ async def refresh_aggregate(session: DbSession, owner: str, key: str):
             "content": insert_stmt.excluded.content,
             "creation_datetime": insert_stmt.excluded.creation_datetime,
             "last_revision_hash": insert_stmt.excluded.last_revision_hash,
+            "dirty": insert_stmt.excluded.dirty,
         },
     )
 

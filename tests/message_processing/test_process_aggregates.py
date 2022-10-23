@@ -87,14 +87,12 @@ async def test_process_aggregates(
     message_processor: PendingMessageProcessor,
     fixture_aggregate_messages: List[Dict],
 ):
-    with session_factory() as session:
-        pipeline = message_processor.make_pipeline(
-            session=session,
-            config=mock_config,
-            shared_stats={"message_jobs": {}},
-            loop=False,
-        )
-        messages = [message async for message in pipeline]
+    pipeline = message_processor.make_pipeline(
+        config=mock_config,
+        shared_stats={"message_jobs": {}},
+        loop=False,
+    )
+    messages = [message async for message in pipeline]
 
     # TODO: improve this test
 
@@ -172,8 +170,8 @@ async def test_process_aggregates_in_order(
         )
 
         # Sanity check
-        assert update.item_hash == aggregate_updates[0].item_hash
-        assert original.item_hash == aggregate_updates[1].item_hash
+        assert original.item_hash == aggregate_updates[0].item_hash
+        assert update.item_hash == aggregate_updates[1].item_hash
 
         content = original.parsed_content
         assert isinstance(content, AggregateContent)
