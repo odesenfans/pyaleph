@@ -10,7 +10,9 @@ from aleph.db.accessors.aggregates import (
     insert_aggregate,
     insert_aggregate_element,
     refresh_aggregate,
-    update_aggregate, count_aggregate_elements, mark_aggregate_as_dirty,
+    update_aggregate,
+    count_aggregate_elements,
+    mark_aggregate_as_dirty,
 )
 from aleph.db.models import MessageDb, AggregateElementDb, AggregateDb
 from aleph.handlers.content.content_handler import ContentHandler
@@ -59,13 +61,12 @@ class AggregateMessageHandler(ContentHandler):
         elements: Sequence[AggregateElementDb],
     ):
         new_content = merge_aggregate_elements(elements)
-        aggregate.content.update(new_content)
 
         await update_aggregate(
             session=session,
             key=aggregate.key,
             owner=aggregate.owner,
-            content=aggregate.content,
+            content=new_content,
             last_revision_hash=elements[-1].item_hash,
             creation_datetime=aggregate.creation_datetime,
         )
@@ -77,7 +78,6 @@ class AggregateMessageHandler(ContentHandler):
         elements: Sequence[AggregateElementDb],
     ):
         new_content = merge_aggregate_elements(elements)
-        new_content.update(aggregate.content)
 
         await update_aggregate(
             session=session,
@@ -86,6 +86,7 @@ class AggregateMessageHandler(ContentHandler):
             content=new_content,
             last_revision_hash=aggregate.last_revision_hash,
             creation_datetime=elements[0].creation_datetime,
+            prepend=True,
         )
 
     async def _update_aggregate(
@@ -106,9 +107,11 @@ class AggregateMessageHandler(ContentHandler):
         """
         dirty_threshold = 5000
 
-        aggregate = await get_aggregate_by_key(session=session, owner=owner, key=key)
+        aggregate_metadata = await get_aggregate_by_key(
+            session=session, owner=owner, key=key, with_content=False
+        )
 
-        if not aggregate:
+        if not aggregate_metadata:
             LOGGER.info("%s/%s does not exist, creating it", key, owner)
 
             content = merge_aggregate_elements(elements)
@@ -122,7 +125,7 @@ class AggregateMessageHandler(ContentHandler):
             )
             return
 
-        if aggregate.dirty:
+        if aggregate_metadata.dirty:
             LOGGER.info("%s/%s is dirty, skipping update", owner, key)
             return
 
@@ -130,21 +133,24 @@ class AggregateMessageHandler(ContentHandler):
 
         # Best case scenario: the elements we are adding are all posterior to the last
         # update, we can just merge the content of aggregate and the new elements.
-        if aggregate.last_revision.creation_datetime < elements[0].creation_datetime:
+        if aggregate_metadata.last_revision.creation_datetime < elements[0].creation_datetime:
             await self._append_to_aggregate(
-                session=session, aggregate=aggregate, elements=elements
+                session=session, aggregate=aggregate_metadata, elements=elements
             )
             return
 
         # Similar case, all the new elements are anterior to the aggregate.
-        if aggregate.creation_datetime > elements[-1].creation_datetime:
+        if aggregate_metadata.creation_datetime > elements[-1].creation_datetime:
             await self._prepend_to_aggregate(
-                session=session, aggregate=aggregate, elements=elements
+                session=session, aggregate=aggregate_metadata, elements=elements
             )
             return
 
         LOGGER.info("%s/%s: out of order refresh", owner, key)
-        if await count_aggregate_elements(session=session, owner=owner, key=key) > dirty_threshold:
+        if (
+            await count_aggregate_elements(session=session, owner=owner, key=key)
+            > dirty_threshold
+        ):
             LOGGER.info("%s/%s: too many elements, marking as dirty")
             await mark_aggregate_as_dirty(session=session, owner=owner, key=key)
             return

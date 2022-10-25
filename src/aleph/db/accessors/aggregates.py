@@ -1,13 +1,13 @@
-from typing import Optional, Iterable, List, Any, Dict, Tuple, Sequence
+import datetime as dt
+from typing import Optional, Iterable, Any, Dict, Tuple, Sequence
 
 from aleph_message.models import ItemHash
-from sqlalchemy import select, text, delete, update, func
-from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.orm import selectinload
+from sqlalchemy import cast as sqla_cast, select, delete, update, func, text
+from sqlalchemy.dialects.postgresql import insert, JSONB
+from sqlalchemy.orm import selectinload, load_only, defer
 
 from aleph.db.models import AggregateDb, AggregateElementDb
 from aleph.types.db_session import DbSession
-import datetime as dt
 
 
 async def aggregate_exists(session: DbSession, key: str, owner: str) -> bool:
@@ -34,13 +34,27 @@ async def get_aggregates_by_owner(
 
 
 async def get_aggregate_by_key(
-    session: DbSession, owner: str, key: str
+    session: DbSession,
+    owner: str,
+    key: str,
+    with_content: bool = True,
 ) -> Optional[AggregateDb]:
+
+    options = []
+
+    if not with_content:
+        options.append(defer(AggregateDb.content))
+
     select_stmt = select(AggregateDb).where(
         (AggregateDb.owner == owner) & (AggregateDb.key == key)
     )
     return (
-        session.execute(select_stmt.options(selectinload(AggregateDb.last_revision)))
+        session.execute(
+            select_stmt.options(
+                *options,
+                selectinload(AggregateDb.last_revision),
+            )
+        )
     ).scalar()
 
 
@@ -81,11 +95,16 @@ async def update_aggregate(
     content: Dict[str, Any],
     creation_datetime: dt.datetime,
     last_revision_hash: str,
+    prepend: bool = False,
 ):
+    merged_content = (
+        content + AggregateDb.content if prepend else AggregateDb.content + content
+    )
+
     update_stmt = (
         update(AggregateDb)
         .values(
-            content=content,
+            content=merged_content,
             creation_datetime=creation_datetime,
             last_revision_hash=last_revision_hash,
         )

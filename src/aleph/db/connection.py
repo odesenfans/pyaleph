@@ -35,7 +35,7 @@ def make_engine(config: Optional[Config] = None, echo: bool = False) -> Engine:
 
     return create_engine(
         make_db_url(driver="psycopg2", config=config),
-        echo=False,
+        echo=echo,
         pool_size=config.postgres.pool_size.value,
     )
 

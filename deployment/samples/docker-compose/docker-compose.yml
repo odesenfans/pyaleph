@@ -17,7 +17,7 @@ services:
     volumes:
       - ./config.yml:/opt/pyaleph/config.yml
       - ./keys:/opt/pyaleph/keys
-      - pyaleph-local-storage:/opt/pyaleph/data
+      - pyaleph-local-storage:/var/lib/pyaleph
 
     depends_on:
       - mongodb

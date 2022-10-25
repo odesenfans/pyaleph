@@ -106,7 +106,7 @@ def aggregate_updates() -> Sequence[PendingMessageDb]:
         signature="0x7eee4cfc03b963ec51f04f60f6f7d58b0f24e0309d209feecb55af9e411ed1c01cfb547bb13539e91308b044c3661d93ddf272426542bc1a47722614cb0cd3621c",
         item_type=ItemType.inline,
         type=MessageType.aggregate,
-        item_content='{"address":"0x720F319A9c3226dCDd7D8C49163D79EDa1084E98","time":1644857371.391834,"key":"test_reference","content":{"a":1,"b":2}}',
+        item_content='{"address":"0x720F319A9c3226dCDd7D8C49163D79EDa1084E98","time":1644857371.391834,"key":"test_reference","content":{"a":1,"c":2}}',
         channel=Channel("INTEGRATION_TESTS"),
         time=timestamp_to_datetime(1644859283.101),
         check_message=True,
@@ -180,7 +180,7 @@ async def test_process_aggregates_in_order(
         )
         assert aggregate
 
-        assert aggregate.content == {"a": 1, "b": 2, "c": 3, "d": 4}
+        assert aggregate.content == {"a": 1, "c": 3, "d": 4}
 
 
 @pytest.mark.asyncio
@@ -205,4 +205,4 @@ async def test_process_aggregates_reverse_order(
         )
         assert aggregate
 
-        assert aggregate.content == {"a": 1, "b": 2, "c": 3, "d": 4}
+        assert aggregate.content == {"a": 1, "c": 3, "d": 4}
