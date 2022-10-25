@@ -119,13 +119,15 @@ async def _test_refresh_aggregate(
 
     with session_factory() as session:
         await refresh_aggregate(
-            session=session, owner=aggregate.owner, key=aggregate.key
+            session=session, owner=expected_aggregate.owner, key=expected_aggregate.key
         )
         session.commit()
 
         aggregate_db = await get_aggregate_by_key(
-            session=session, owner=aggregate.owner, key=aggregate.key
+            session=session, owner=expected_aggregate.owner, key=expected_aggregate.key
         )
+
+    assert aggregate_db
 
     assert aggregate_db.owner == expected_aggregate.owner
     assert aggregate_db.key == expected_aggregate.key
@@ -150,21 +152,7 @@ async def test_refresh_aggregate_insert(
 
 
 @pytest.mark.asyncio
-async def test_refresh_aggregate_update_no_op(
-    session_factory: DbSessionFactory,
-    aggregate_fixtures: Tuple[AggregateDb, Sequence[AggregateElementDb]],
-):
-    aggregate, elements = aggregate_fixtures
-    await _test_refresh_aggregate(
-        session_factory=session_factory,
-        aggregate=aggregate,
-        expected_aggregate=aggregate,
-        elements=elements,
-    )
-
-
-@pytest.mark.asyncio
-async def test_refresh_aggregate_update_no_op(
+async def test_refresh_aggregate_update(
     session_factory: DbSessionFactory,
     aggregate_fixtures: Tuple[AggregateDb, Sequence[AggregateElementDb]],
 ):
@@ -181,5 +169,19 @@ async def test_refresh_aggregate_update_no_op(
         session_factory=session_factory,
         aggregate=aggregate,
         expected_aggregate=updated_aggregate,
+        elements=elements,
+    )
+
+
+@pytest.mark.asyncio
+async def test_refresh_aggregate_update_no_op(
+    session_factory: DbSessionFactory,
+    aggregate_fixtures: Tuple[AggregateDb, Sequence[AggregateElementDb]],
+):
+    aggregate, elements = aggregate_fixtures
+    await _test_refresh_aggregate(
+        session_factory=session_factory,
+        aggregate=aggregate,
+        expected_aggregate=aggregate,
         elements=elements,
     )

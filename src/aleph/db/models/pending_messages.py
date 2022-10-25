@@ -40,8 +40,9 @@ class PendingMessageDb(Base):
     time: dt.datetime = Column(TIMESTAMP(timezone=True), nullable=False)
     channel: Optional[Channel] = Column(String, nullable=True)
 
-    check_message = Column(Boolean, nullable=False)
-    retries = Column(Integer, nullable=False)
+    reception_time: dt.datetime = Column(TIMESTAMP(timezone=True), nullable=False)
+    check_message: bool = Column(Boolean, nullable=False)
+    retries: int = Column(Integer, nullable=False)
     tx_hash: Optional[str] = Column(ForeignKey("chain_txs.hash"), nullable=True)
 
     tx: Optional[ChainTxDb] = relationship("ChainTxDb")
@@ -50,6 +51,7 @@ class PendingMessageDb(Base):
     def from_obj(
         cls,
         obj: BasePendingMessage,
+        reception_time: dt.datetime,
         tx_hash: Optional[str] = None,
         check_message: bool = True,
     ) -> "PendingMessageDb":
@@ -65,12 +67,14 @@ class PendingMessageDb(Base):
             check_message=check_message,
             retries=0,
             tx_hash=tx_hash,
+            reception_time=reception_time,
         )
 
     @classmethod
     def from_message_dict(
         cls,
         message_dict: Mapping[str, Any],
+        reception_time: dt.datetime,
         tx_hash: Optional[str] = None,
         check_message: bool = True,
     ) -> "PendingMessageDb":
@@ -94,6 +98,7 @@ class PendingMessageDb(Base):
             check_message=check_message,
             retries=0,
             tx_hash=tx_hash,
+            reception_time=reception_time,
         )
 
 

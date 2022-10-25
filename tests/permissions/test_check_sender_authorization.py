@@ -1,4 +1,5 @@
 import datetime as dt
+from typing import Any, Mapping
 
 import pytest
 
@@ -59,7 +60,7 @@ async def test_store_unauthorized(mocker):
     assert not is_authorized
 
 
-AUTHORIZED_MESSAGE = {
+AUTHORIZED_MESSAGE: Mapping[str, Any] = {
     "chain": "ETH",
     "channel": "TEST",
     "item_content": '{"address":"0xA3c613b12e862EB6e0C9897E03F1deEb207b5B58","time":1651050219.3481126,"content":{"date":"2022-04-27T09:03:38.361081","test":true,"answer":42,"something":"interesting"},"type":"test"}',
@@ -118,6 +119,7 @@ async def test_authorized_with_db(session_factory: DbSessionFactory):
             content=aggregate_content,
             creation_datetime=aggregate_datetime,
         ),
+        dirty=False,
     )
     message = make_validated_message_from_dict(
         AUTHORIZED_MESSAGE, AUTHORIZED_MESSAGE["item_content"]

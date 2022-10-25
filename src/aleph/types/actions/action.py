@@ -1,4 +1,4 @@
-from typing import Optional, Sequence
+from typing import Optional, Sequence, List
 from enum import Enum
 
 
@@ -9,6 +9,10 @@ class ActionStatus(Enum):
 
 
 class Action:
+    status: ActionStatus
+    dependencies: Sequence["Action"]
+    error: Optional[Exception]
+
     def __init__(self, dependencies: Optional[Sequence["Action"]] = None):
         self.status = ActionStatus.PENDING
         self.dependencies = dependencies or []

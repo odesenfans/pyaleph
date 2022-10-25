@@ -24,3 +24,7 @@ def coerce_to_datetime(
         return datetime_or_timestamp
 
     return timestamp_to_datetime(datetime_or_timestamp)
+
+
+def utc_now() -> dt.datetime:
+    return pytz.utc.localize(dt.datetime.utcnow())

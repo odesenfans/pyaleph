@@ -1,3 +1,4 @@
+import datetime as dt
 import json
 from pathlib import Path
 from typing import Any, Dict, Sequence
@@ -36,7 +37,11 @@ async def _load_fixtures(
     chain_txs = []
     tx_hashes = set()
     for message_dict in messages_json:
-        pending_messages.append(PendingMessageDb.from_message_dict(message_dict))
+        pending_messages.append(
+            PendingMessageDb.from_message_dict(
+                message_dict, reception_time=dt.datetime(2022, 1, 1)
+            )
+        )
         for confirmation in message_dict.get("confirmations", []):
             if (tx_hash := confirmation["hash"]) not in tx_hashes:
                 chain_txs.append(ChainTxDb.from_dict(confirmation))

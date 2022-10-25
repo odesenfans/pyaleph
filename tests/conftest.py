@@ -35,7 +35,7 @@ def drop_db(db_name: str, config: Config):
 
 @pytest.fixture
 def session_factory(mock_config):
-    engine = make_engine(mock_config, echo=True)
+    engine = make_engine(mock_config, echo=False)
 
     with engine.begin() as conn:
         Base.metadata.drop_all(conn)

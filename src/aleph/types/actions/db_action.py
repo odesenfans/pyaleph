@@ -36,10 +36,17 @@ class InsertPendingMessage(DbAction):
 
         return [
             insert(MessageStatusDb)
-            .values(item_hash=message.item_hash, status=MessageStatus.PENDING)
+            .values(
+                item_hash=message.item_hash,
+                status=MessageStatus.PENDING,
+                reception_time=self.pending_message.reception_time,
+            )
             .on_conflict_do_update(
                 index_elements=["item_hash"],
-                set_={"status": MessageStatus.PENDING},
+                set_={
+                    "status": MessageStatus.PENDING,
+                    "reception_time": self.pending_message.reception_time,
+                },
                 where=MessageStatusDb.status == MessageStatus.REJECTED,
             ),
             insert(PendingMessageDb).values(**pending_message_dict),
@@ -100,6 +107,7 @@ class UpsertMessage(MessageDbAction):
             make_message_status_upsert_query(
                 item_hash=self.message.item_hash,
                 new_status=MessageStatus.FETCHED,
+                reception_time=self.pending_message.reception_time,
                 where=(MessageStatusDb.status == MessageStatus.PENDING),
             ),
         ]

@@ -1,4 +1,5 @@
 import datetime as dt
+from copy import copy
 
 import pytest
 import pytz
@@ -14,6 +15,8 @@ from aleph.db.accessors.messages import (
     append_to_forgotten_by,
     get_forgotten_message,
     reject_message,
+    make_message_upsert_query,
+    make_confirmation_upsert_query, get_distinct_channels,
 )
 from aleph.db.models import (
     MessageDb,
@@ -160,15 +163,76 @@ async def test_message_exists(session_factory: DbSessionFactory, fixture_message
 
 
 @pytest.mark.asyncio
-async def test_upsert_query_confirmation(session_factory: DbSessionFactory):
-    # TODO
-    assert False
+async def test_upsert_query_confirmation(
+    session_factory: DbSessionFactory, fixture_message: MessageDb
+):
+    item_hash = fixture_message.item_hash
+
+    chain_tx = ChainTxDb(
+        hash="0xdeadbeef",
+        chain=Chain.ETH,
+        height=1000,
+        datetime=pytz.utc.localize(dt.datetime(2022, 10, 1)),
+        publisher="0xabadbabe",
+    )
+
+    upsert_stmt = make_confirmation_upsert_query(
+        item_hash=item_hash, tx_hash=chain_tx.hash
+    )
+
+    with session_factory() as session:
+        session.add(fixture_message)
+        session.add(chain_tx)
+        session.commit()
+
+    # Insert
+    with session_factory() as session:
+        session.execute(upsert_stmt)
+        session.commit()
+
+        confirmation_db = session.execute(
+            select(MessageConfirmationDb).where(
+                MessageConfirmationDb.item_hash == item_hash
+            )
+        ).scalar_one()
+        assert confirmation_db.tx_hash == chain_tx.hash
+
+    # Upsert
+    with session_factory() as session:
+        session.execute(upsert_stmt)
+        session.commit()
+
+        confirmation_db = session.execute(
+            select(MessageConfirmationDb).where(
+                MessageConfirmationDb.item_hash == item_hash
+            )
+        ).scalar_one()
+        assert confirmation_db.tx_hash == chain_tx.hash
 
 
 @pytest.mark.asyncio
-async def test_upsert_query_message(session_factory: DbSessionFactory):
-    # TODO
-    assert False
+async def test_upsert_query_message(
+    session_factory: DbSessionFactory, fixture_message: MessageDb
+):
+    message = copy(fixture_message)
+    message.time = fixture_message.time - dt.timedelta(seconds=1)
+
+    upsert_stmt = make_message_upsert_query(message)
+
+    with session_factory() as session:
+        session.add(message)
+        session.commit()
+
+    with session_factory() as session:
+        session.execute(upsert_stmt)
+        session.commit()
+
+        message_db = await get_message_by_item_hash(
+            session=session, item_hash=message.item_hash
+        )
+
+    assert message_db
+    assert message_db.time == message.time
 
 
 @pytest.mark.asyncio
@@ -226,8 +290,17 @@ async def test_get_unconfirmed_messages(
 
 
 @pytest.mark.asyncio
-async def test_get_distinct_channels(session_factory: DbSessionFactory):
-    assert False
+async def test_get_distinct_channels(session_factory: DbSessionFactory, fixture_message: MessageDb):
+    # TODO: improve this test
+    #       * use several messages
+    #       * test if None if considered as a channel
+    #       * test
+    with session_factory() as session:
+        session.add(fixture_message)
+        session.commit()
+        channels = list(await get_distinct_channels(session=session))
+
+    assert channels == [fixture_message.channel]
 
 
 @pytest.mark.asyncio
@@ -238,7 +311,9 @@ async def test_forget_message(
         session.add(fixture_message)
         session.add(
             MessageStatusDb(
-                item_hash=fixture_message.item_hash, status=MessageStatus.PROCESSED
+                item_hash=fixture_message.item_hash,
+                status=MessageStatus.PROCESSED,
+                reception_time=fixture_message.time,
             )
         )
         session.commit()
@@ -304,6 +379,7 @@ async def test_forget_message(
             new_forget_message_hash,
         ]
 
+
 @pytest.mark.asyncio
 async def test_reject_message(
     session_factory: DbSessionFactory, fixture_message: MessageDb
@@ -312,7 +388,9 @@ async def test_reject_message(
         session.add(fixture_message)
         session.add(
             MessageStatusDb(
-                item_hash=fixture_message.item_hash, status=MessageStatus.FETCHED
+                item_hash=fixture_message.item_hash,
+                status=MessageStatus.FETCHED,
+                reception_time=fixture_message.time,
             )
         )
         session.commit()
@@ -320,7 +398,7 @@ async def test_reject_message(
     with session_factory() as session:
         await reject_message(
             session=session,
-            item_hash=fixture_message.item_hash,
+            message=fixture_message,
             exception=InvalidSignature("Signature does not match"),
         )
         session.commit()

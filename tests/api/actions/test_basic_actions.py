@@ -13,7 +13,7 @@ class TestAction(Action):
 
 
 class TestExecutor(Executor):
-    async def execute(self, actions: Sequence[TestAction]):
+    async def execute(self, actions: Sequence[TestAction]):  # type: ignore[override]
         for action in actions:
             print(action.text)
 

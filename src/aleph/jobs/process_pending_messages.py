@@ -316,7 +316,7 @@ class PendingMessageProcessor:
                     except PermissionDenied as e:
                         await reject_message(
                             session=session,
-                            item_hash=fetched_message.item_hash,
+                            message=fetched_message,
                             exception=e,
                         )
                 session.commit()

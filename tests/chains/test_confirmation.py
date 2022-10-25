@@ -78,7 +78,9 @@ async def test_confirm_message(
         storage_service=test_storage_service,
     )
 
-    pending_message = PendingMessageDb.from_message_dict(MESSAGE_DICT)
+    pending_message = PendingMessageDb.from_message_dict(
+        MESSAGE_DICT, reception_time=dt.datetime(2022, 1, 1)
+    )
     await message_handler.fetch_and_process_one_message_db(pending_message)
 
     with session_factory() as session:
@@ -143,7 +145,9 @@ async def test_process_confirmed_message(
         session.add(chain_tx)
         session.commit()
 
-    pending_message = PendingMessageDb.from_message_dict(MESSAGE_DICT)
+    pending_message = PendingMessageDb.from_message_dict(
+        MESSAGE_DICT, reception_time=dt.datetime(2022, 1, 1)
+    )
     pending_message.tx_hash = chain_tx.hash
     pending_message.tx = chain_tx
     await message_handler.fetch_and_process_one_message_db(

@@ -81,6 +81,7 @@ class MessageStatusDb(Base):
 
     item_hash: str = Column(String, primary_key=True)
     status: MessageStatus = Column(ChoiceType(MessageStatus), nullable=False)
+    reception_time: dt.datetime = Column(TIMESTAMP(timezone=True), nullable=False)
 
 
 class MessageDb(Base):
@@ -198,9 +199,9 @@ class RejectedMessageDb(Base):
     __tablename__ = "rejected_messages"
 
     item_hash: str = Column(String, primary_key=True)
+    message: Dict[str, Any] = Column(JSONB, nullable=False)
     reason: str = Column(String, nullable=False)
-    traceback: str = Column(String, nullable=False)
-
+    traceback: Optional[str] = Column(String, nullable=True)
 
 class MessageConfirmationDb(Base):
     __tablename__ = "message_confirmations"

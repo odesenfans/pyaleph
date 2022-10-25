@@ -14,6 +14,9 @@ from aleph.db.models.pending_txs import PendingTxDb, ChainSyncProtocol
 from aleph.jobs.job_utils import perform_db_operations
 from aleph.jobs.process_pending_txs import PendingTxProcessor
 from aleph.storage import StorageService
+from aleph.types.actions.db_action import InsertPendingMessage, DeletePendingTx
+from aleph.types.actions.db_executor import DbExecutor
+from aleph.types.actions.executor import execute_actions
 from aleph.types.db_session import DbSessionFactory
 from aleph.types.message_status import MessageStatus
 from .load_fixtures import load_fixture_messages
@@ -63,30 +66,27 @@ async def test_process_pending_tx(
         pending_tx=pending_tx, seen_ids=seen_ids
     )
 
-    db_operations_by_model = defaultdict(list)
-    for op in db_operations:
-        db_operations_by_model[op.model].append(op)
+    db_operations_by_type = defaultdict(list)
+    for action in db_operations:
+        db_operations_by_type[type(action)].append(action)
 
-    assert set(db_operations_by_model.keys()) == {
-        PendingMessageDb,
-        PendingTxDb,
-        MessageStatusDb,
+    assert set(db_operations_by_type.keys()) == {
+        InsertPendingMessage,
+        DeletePendingTx,
     }
 
-    pending_tx_ops = db_operations_by_model[PendingTxDb]
+    pending_tx_ops = db_operations_by_type[DeletePendingTx]
     assert len(pending_tx_ops) == 1
-    delete_sql_op = pending_tx_ops[0].operation
-    assert isinstance(delete_sql_op, Delete)
-    assert delete_sql_op.table == PendingTxDb.__table__
 
-    pending_msg_ops = db_operations_by_model[PendingMessageDb]
+    pending_msg_ops = db_operations_by_type[InsertPendingMessage]
     fixture_messages = load_fixture_messages(f"{pending_tx.content}.json")
 
     assert len(pending_msg_ops) == len(fixture_messages)
 
+    await execute_actions(
+        actions=db_operations, executors=DbExecutor(session_factory=session_factory)
+    )
     with session_factory() as session:
-        await perform_db_operations(session, db_operations)
-        session.commit()
 
         for fixture_message in fixture_messages:
             item_hash = fixture_message["item_hash"]

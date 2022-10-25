@@ -1,3 +1,5 @@
+import datetime as dt
+
 import pytest
 from aleph_message.models import Chain, MessageType, ItemType
 from configmanager import Config
@@ -75,8 +77,12 @@ async def test_forget_post_message(
         },
     }
 
-    pending_message = PendingMessageDb.from_message_dict(target_message_dict)
-    pending_forget_message = PendingMessageDb.from_message_dict(forget_message_dict)
+    pending_message = PendingMessageDb.from_message_dict(
+        target_message_dict, reception_time=dt.datetime(2022, 1, 1)
+    )
+    pending_forget_message = PendingMessageDb.from_message_dict(
+        forget_message_dict, reception_time=dt.datetime(2022, 1, 2)
+    )
 
     with session_factory() as session:
         target_message = one(
@@ -144,6 +150,7 @@ async def test_forget_store_message(
         channel=Channel("TEST"),
         retries=0,
         check_message=True,
+        reception_time=dt.datetime(2022, 1, 1),
     )
 
     pending_forget_message = PendingMessageDb(
@@ -158,6 +165,7 @@ async def test_forget_store_message(
         channel=Channel("TEST"),
         retries=0,
         check_message=True,
+        reception_time=dt.datetime(2022, 1, 2),
     )
 
     storage_engine = message_processor.message_handler.storage_service.storage_engine
@@ -251,13 +259,16 @@ async def test_forget_forget_message(
         channel=Channel("TEST"),
         retries=0,
         check_message=True,
+        reception_time=dt.datetime(2022, 1, 2),
     )
 
     with session_factory() as session:
         session.add(target_message)
         session.add(
             MessageStatusDb(
-                item_hash=target_message.item_hash, status=MessageStatus.PROCESSED
+                item_hash=target_message.item_hash,
+                status=MessageStatus.PROCESSED,
+                reception_time=dt.datetime(2022, 1, 1),
             )
         )
         session.commit()
@@ -361,6 +372,7 @@ async def test_forget_store_multi_users(
         channel=Channel("TESTS_FORGET"),
         retries=0,
         check_message=True,
+        reception_time=dt.datetime(2022, 1, 2),
     )
 
     storage_engine = message_processor.message_handler.storage_service.storage_engine
@@ -372,12 +384,16 @@ async def test_forget_store_multi_users(
         session.add(store_message_user2)
         session.add(
             MessageStatusDb(
-                item_hash=store_message_user1.item_hash, status=MessageStatus.PROCESSED
+                item_hash=store_message_user1.item_hash,
+                status=MessageStatus.PROCESSED,
+                reception_time=dt.datetime(2022, 1, 1),
             )
         )
         session.add(
             MessageStatusDb(
-                item_hash=store_message_user2.item_hash, status=MessageStatus.PROCESSED
+                item_hash=store_message_user2.item_hash,
+                status=MessageStatus.PROCESSED,
+                reception_time=dt.datetime(2022, 1, 2),
             )
         )
         session.add(

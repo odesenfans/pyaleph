@@ -5,6 +5,7 @@ from aleph.db.models import PendingMessageDb
 from aleph.schemas.pending_messages import parse_message
 import datetime as dt
 
+
 @pytest.mark.asyncio
 async def test_tezos_verify_signature_raw():
     message_dict = {
@@ -64,7 +65,9 @@ async def test_tezos_verify_signature_micheline():
     connector = TezosConnector()
 
     message = parse_message(message_dict)
-    message = PendingMessageDb.from_message_dict(message_dict)
+    message = PendingMessageDb.from_message_dict(
+        message_dict, reception_time=dt.datetime(2022, 1, 1)
+    )
     assert await connector.verify_signature(message)
 
 

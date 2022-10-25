@@ -31,6 +31,7 @@ from aleph.types.actions.db_action import (
 )
 from aleph.types.db_session import DbSessionFactory
 from .job_utils import prepare_loop, process_job_results
+from ..toolkit.timestamp import utc_now
 
 LOGGER = logging.getLogger("jobs.pending_txs")
 
@@ -85,10 +86,8 @@ class PendingTxProcessor:
                     LOGGER.warning(error)
                     continue
 
-                message.time = tx_context.time + (i / 1000)  # force order
-
                 # we add it to the message queue... bad idea? should we process it asap?
-                pending_message = PendingMessageDb.from_obj(message)
+                pending_message = PendingMessageDb.from_obj(message, reception_time=utc_now())
                 pending_message.tx_hash = tx_context.tx_hash
                 db_operations.append(
                     InsertPendingMessage(pending_message=pending_message)

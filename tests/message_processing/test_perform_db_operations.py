@@ -131,7 +131,12 @@ def make_insert_message_statement(msg: Dict) -> Insert:
     values = msg.copy()
     values["time"] = pytz.utc.localize(dt.datetime.utcfromtimestamp(msg["time"]))
 
-    return insert(PendingMessageDb).values(**values, retries=0, check_message=True)
+    return insert(PendingMessageDb).values(
+        **values,
+        retries=0,
+        check_message=True,
+        reception_time=values["time"] + dt.timedelta(seconds=1)
+    )
 
 
 @pytest.mark.asyncio

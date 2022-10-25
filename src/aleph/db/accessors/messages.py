@@ -200,12 +200,21 @@ async def get_message_status(
 
 
 # TODO typing: Find a correct type for `where`
-def make_message_status_upsert_query(item_hash: str, new_status: MessageStatus, where):
+def make_message_status_upsert_query(
+    item_hash: str, new_status: MessageStatus, reception_time: dt.datetime, where
+):
     return (
         insert(MessageStatusDb)
-        .values(item_hash=item_hash, status=new_status)
+        .values(item_hash=item_hash, status=new_status, reception_time=reception_time)
         .on_conflict_do_update(
-            constraint="message_status_pkey", set_={"status": new_status}, where=where
+            constraint="message_status_pkey",
+            set_={
+                "status": new_status,
+                "reception_time": func.least(
+                    MessageStatusDb.reception_time, reception_time
+                ),
+            },
+            where=where,
         )
     )
 
@@ -284,8 +293,14 @@ async def append_to_forgotten_by(
 
 
 async def reject_message(
-    session: DbSession, item_hash: str, exception: InvalidMessageException
+    session: DbSession, message: MessageDb, exception: InvalidMessageException
 ):
+    item_hash = message.item_hash
+
+    # TODO: use a Pydantic schema?
+    message_dict = message.to_dict()
+    message_dict["time"] = message_dict["time"].timestamp()
+
     session.execute(
         update(MessageStatusDb)
         .values(status=MessageStatus.REJECTED)
@@ -294,6 +309,7 @@ async def reject_message(
     session.execute(
         insert(RejectedMessageDb).values(
             item_hash=item_hash,
+            message=message_dict,
             reason=str(exception),
             traceback="\n".join(
                 traceback.format_exception(
@@ -329,6 +345,12 @@ async def reject_pending_message(
             session.execute(delete_pending_message_stmt)
             return
 
+    # TODO: use Pydantic schema
+    pending_message_dict = pending_message.to_dict(
+        exclude={"id", "check_message", "retries", "tx_hash", "reception_time"}
+    )
+    pending_message_dict["time"] = pending_message_dict["time"].timestamp()
+
     session.execute(
         update(MessageStatusDb)
         .values(status=MessageStatus.REJECTED)
@@ -336,6 +358,7 @@ async def reject_pending_message(
     )
     insert_rejected_message_stmt = insert(RejectedMessageDb).values(
         item_hash=item_hash,
+        message=pending_message_dict,
         reason=str(exception),
         traceback="\n".join(
             traceback.format_exception(InvalidMessageException, exception, None)

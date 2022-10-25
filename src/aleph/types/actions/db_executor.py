@@ -24,7 +24,7 @@ class DbExecutor(Executor):
     def __init__(self, session_factory: DbSessionFactory):
         self.session_factory = session_factory
 
-    async def execute(self, actions: Sequence[DbAction]):
+    async def execute(self, actions: Sequence[DbAction]):   # type: ignore[override]
         db_statements = [action.to_db_statements() for action in actions]
 
         try:

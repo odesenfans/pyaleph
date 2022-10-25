@@ -35,6 +35,7 @@ def fixture_pending_messages():
                 datetime=dt.datetime(2022, 10, 7, 17, 4),
                 publisher="0xdeadb00t",
             ),
+            reception_time=dt.datetime(2022, 10, 7, 17, 5, 10),
         ),
         PendingMessageDb(
             id=27,
@@ -49,6 +50,7 @@ def fixture_pending_messages():
             time=dt.datetime(2022, 10, 7, 22, 10),
             retries=3,
             check_message=True,
+            reception_time=dt.datetime(2022, 10, 7, 22, 10, 10),
         ),
         PendingMessageDb(
             id=42,
@@ -70,6 +72,7 @@ def fixture_pending_messages():
                 datetime=dt.datetime(2022, 10, 7, 21, 50),
                 publisher="0xabadbabe",
             ),
+            reception_time=dt.datetime(2022, 10, 7, 21, 53, 10),
         ),
     ]
 

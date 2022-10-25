@@ -1,3 +1,4 @@
+import datetime as dt
 import logging
 import time
 from collections import defaultdict
@@ -75,12 +76,18 @@ class MessageHandler:
     async def delayed_incoming(
         self,
         message: BasePendingMessage,
+        reception_time: dt.datetime,
         tx_hash: Optional[str] = None,
     ):
 
         with self.session_factory() as session:
             session.add(
-                PendingMessageDb.from_obj(message, tx_hash=tx_hash, check_message=True)
+                PendingMessageDb.from_obj(
+                    message,
+                    tx_hash=tx_hash,
+                    check_message=True,
+                    reception_time=reception_time,
+                )
             )
             session.commit()
 

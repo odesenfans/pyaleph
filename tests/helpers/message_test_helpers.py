@@ -1,6 +1,7 @@
+import datetime as dt
 import itertools
 import json
-from typing import Dict, List, Optional, Union, Any, Mapping, Sequence, Iterable
+from typing import List, Optional, Union, Any, Mapping, Sequence, Iterable
 
 from aleph_message.models import ItemType, MessageConfirmation
 from configmanager import Config
@@ -29,7 +30,9 @@ def make_validated_message_from_dict(
         assert message_dict["item_type"] == ItemType.inline
         raw_content = message_dict["item_content"]
 
-    pending_message = PendingMessageDb.from_message_dict(message_dict)
+    pending_message = PendingMessageDb.from_message_dict(
+        message_dict, reception_time=dt.datetime(2022, 1, 1)
+    )
     return MessageDb.from_pending_message(
         pending_message=pending_message,
         content_dict=json.loads(raw_content),

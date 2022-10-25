@@ -18,6 +18,8 @@ from aleph.types.channel import Channel
 from aleph.types.db_session import DbSessionFactory, DbSession
 from message_test_helpers import process_pending_messages
 
+import datetime as dt
+
 
 @pytest.mark.asyncio
 async def test_process_aggregate_first_element(
@@ -111,6 +113,7 @@ def aggregate_updates() -> Sequence[PendingMessageDb]:
         time=timestamp_to_datetime(1644859283.101),
         check_message=True,
         retries=0,
+        reception_time=dt.datetime(2022, 1, 1),
     )
     update = PendingMessageDb(
         item_hash="0022ed09d16a1c3d6cbb3c7e2645657ebaa0382eba65be06264b106f528b85bf",
@@ -124,6 +127,7 @@ def aggregate_updates() -> Sequence[PendingMessageDb]:
         time=timestamp_to_datetime(1644859283.12),
         check_message=True,
         retries=0,
+        reception_time=dt.datetime(2022, 1, 1),
     )
 
     return original, update
