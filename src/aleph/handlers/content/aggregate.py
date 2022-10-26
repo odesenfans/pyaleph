@@ -105,7 +105,7 @@ class AggregateMessageHandler(ContentHandler):
         :param elements: New elements to insert, ordered by their creation_datetime field.
         :return:
         """
-        dirty_threshold = 5000
+        dirty_threshold = 1000
 
         aggregate_metadata = await get_aggregate_by_key(
             session=session, owner=owner, key=key, with_content=False
