@@ -183,6 +183,7 @@ class MessageHandler:
         return validated_message, actions
 
     async def check_permissions(self, session: DbSession, message: MessageDb):
+        # TODO: check balance
         content_handler = self.get_content_handler(message.type)
         await content_handler.check_permissions(session=session, message=message)
 
@@ -195,7 +196,6 @@ class MessageHandler:
         messages_by_type = defaultdict(list)
 
         for message in messages:
-            # TODO: check permissions and balance
             messages_by_type[message.type].append(message)
 
         # FORGETs should be last to avoid race conditions. Other message types
