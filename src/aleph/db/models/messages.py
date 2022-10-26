@@ -13,7 +13,8 @@ from aleph_message.models import (
     StoreContent,
     AggregateContentKey,
 )
-from pydantic import Field, Extra
+from pydantic import Field, Extra, ValidationError
+from pydantic.error_wrappers import ErrorWrapper
 from sqlalchemy import (
     Column,
     TIMESTAMP,
@@ -58,11 +59,21 @@ CONTENT_TYPE_MAP: Dict[MessageType, Type[BaseContent]] = {
 
 
 def validate_message_content(
-    pending_message: PendingMessageDb,
+    message_type: MessageType,
     content_dict: Dict[str, Any],
 ) -> BaseContent:
 
-    return CONTENT_TYPE_MAP[pending_message.type].parse_obj(content_dict)
+    content_type = CONTENT_TYPE_MAP[message_type]
+    content = content_type.parse_obj(content_dict)
+    # Validate that the content time can be converted to datetime. This will
+    # raise a ValueError and be caught
+    # TODO: move this validation in aleph-message
+    try:
+        _ = dt.datetime.fromtimestamp(content_dict["time"])
+    except ValueError as e:
+        raise ValidationError([ErrorWrapper(e, loc="time")], model=content_type) from e
+
+    return content
 
 
 class MessageStatusDb(Base):
@@ -104,7 +115,7 @@ class MessageDb(Base):
     @property
     def parsed_content(self):
         if self._parsed_content is None:
-            self._parsed_content = validate_message_content(self, self.content)
+            self._parsed_content = validate_message_content(self.type, self.content)
         return self._parsed_content
 
     @staticmethod
@@ -126,7 +137,7 @@ class MessageDb(Base):
     ) -> "MessageDb":
 
         content_dict = cls._coerce_content(pending_message, content_dict)
-        parsed_content = validate_message_content(pending_message, content_dict)
+        parsed_content = validate_message_content(pending_message.type, content_dict)
 
         message = cls(
             item_hash=pending_message.item_hash,
