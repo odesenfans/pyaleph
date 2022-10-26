@@ -2,8 +2,8 @@ import datetime as dt
 from typing import Optional, Iterable, Any, Dict, Tuple, Sequence
 
 from aleph_message.models import ItemHash
-from sqlalchemy import cast as sqla_cast, select, delete, update, func, text
-from sqlalchemy.dialects.postgresql import insert, JSONB
+from sqlalchemy import cast as sqla_cast, select, delete, update, func, text, literal_column
+from sqlalchemy.dialects.postgresql import insert, JSONB, aggregate_order_by
 from sqlalchemy.orm import selectinload, load_only, defer
 
 from aleph.db.models import AggregateDb, AggregateElementDb
@@ -176,24 +176,53 @@ async def mark_aggregate_as_dirty(session: DbSession, owner: str, key: str):
 
 
 async def refresh_aggregate(session: DbSession, owner: str, key: str):
-    elements = list(
-        session.execute(
-            select(AggregateElementDb)
-            .where(
-                (AggregateElementDb.key == key) & (AggregateElementDb.owner == owner)
-            )
-            .order_by(AggregateElementDb.creation_datetime)
-        ).scalars()
-    )
-    content = merge_aggregate_elements(elements)
 
-    insert_stmt = insert(AggregateDb).values(
-        key=key,
-        owner=owner,
-        content=content,
-        creation_datetime=elements[0].creation_datetime,
-        last_revision_hash=elements[-1].item_hash,
-        dirty=False,
+    # Step 1: use a group by to retrieve the aggregate content. This uses a custom
+    # aggregate function (see 78dd67881db4_jsonb_merge_aggregate.py).
+    select_merged_aggregate_subquery = (
+        select(
+            AggregateElementDb.key,
+            AggregateElementDb.owner,
+            func.min(AggregateElementDb.creation_datetime).label("creation_datetime"),
+            func.max(AggregateElementDb.creation_datetime).label(
+                "last_revision_datetime"
+            ),
+            func.jsonb_merge(
+                aggregate_order_by(
+                    AggregateElementDb.content, AggregateElementDb.creation_datetime
+                )
+            ).label("content"),
+        )
+        .group_by(AggregateElementDb.key, AggregateElementDb.owner)
+        .where((AggregateElementDb.key == key) & (AggregateElementDb.owner == owner))
+    ).subquery()
+
+    # Step 2: we miss the last revision hash, so we retrieve it through an additional
+    # join.
+    # TODO: is this really necessary? Could we just store the last revision datetime
+    #       instead and avoid the join? Consider the case where two aggregate elements
+    #       have the same timestamp.
+    select_stmt = select(
+        select_merged_aggregate_subquery.c.key,
+        select_merged_aggregate_subquery.c.owner,
+        select_merged_aggregate_subquery.c.creation_datetime,
+        select_merged_aggregate_subquery.c.content,
+        AggregateElementDb.item_hash,
+        literal_column("false").label("dirty"),
+    ).join(
+        AggregateElementDb,
+        (select_merged_aggregate_subquery.c.key == AggregateElementDb.key)
+        & (select_merged_aggregate_subquery.c.owner == AggregateElementDb.owner)
+        & (
+            select_merged_aggregate_subquery.c.last_revision_datetime
+            == AggregateElementDb.creation_datetime
+        ),
+    )
+
+    # Step 3: insert/update the aggregate.
+    insert_stmt = insert(AggregateDb).from_select(
+        ["key", "owner", "creation_datetime", "content", "last_revision_hash", "dirty"],
+        select_stmt,
     )
     upsert_aggregate_stmt = insert_stmt.on_conflict_do_update(
         constraint="aggregates_pkey",
