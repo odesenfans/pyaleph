@@ -172,8 +172,8 @@ async def test_process_aggregates_in_order(
         )
 
         # Sanity check
-        assert update.item_hash == aggregate_updates[0].item_hash
-        assert original.item_hash == aggregate_updates[1].item_hash
+        assert original.item_hash == aggregate_updates[0].item_hash
+        assert update.item_hash == aggregate_updates[1].item_hash
 
         content = original.parsed_content
         assert isinstance(content, AggregateContent)
