@@ -47,7 +47,9 @@ async def address_aggregate(request):
     with session_factory() as session:
         dirty_aggregates = session.execute(
             select(AggregateDb.key).where(
-                (AggregateDb.owner == address) & AggregateDb.dirty
+                (AggregateDb.owner == address)
+                & (AggregateDb.owner == address)
+                & AggregateDb.dirty
             )
         ).scalars()
         for key in dirty_aggregates:

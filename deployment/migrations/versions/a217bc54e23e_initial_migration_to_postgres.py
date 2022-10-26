@@ -191,6 +191,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["item_hash"],
             ["messages.item_hash"],
+            ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
             ["tx_hash"],

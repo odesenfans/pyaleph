@@ -10,10 +10,19 @@ from aleph_message.models import (
     ForgetContent,
     PostContent,
     ProgramContent,
-    StoreContent, AggregateContentKey,
+    StoreContent,
+    AggregateContentKey,
 )
 from pydantic import Field, Extra
-from sqlalchemy import Column, TIMESTAMP, String, Integer, ForeignKey, UniqueConstraint, ARRAY
+from sqlalchemy import (
+    Column,
+    TIMESTAMP,
+    String,
+    Integer,
+    ForeignKey,
+    UniqueConstraint,
+    ARRAY,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy_utils.types.choice import ChoiceType
@@ -171,7 +180,7 @@ class ForgottenMessageDb(Base):
     item_type: ItemType = Column(ChoiceType(ItemType), nullable=False)
     time: dt.datetime = Column(TIMESTAMP(timezone=True), nullable=False, index=True)
     channel: Optional[Channel] = Column(String, nullable=True, index=True)
-    forgotten_by: List[str] = Column(ARRAY(String), nullable=False)     # type: ignore
+    forgotten_by: List[str] = Column(ARRAY(String), nullable=False)  # type: ignore
 
 
 class RejectedMessageDb(Base):
@@ -182,14 +191,15 @@ class RejectedMessageDb(Base):
     traceback: str = Column(String, nullable=False)
 
 
-
 class MessageConfirmationDb(Base):
     __tablename__ = "message_confirmations"
     __table_args__ = (UniqueConstraint("item_hash", "tx_hash"),)
 
     id = Column(Integer, primary_key=True)
     item_hash: str = Column(ForeignKey(MessageDb.item_hash), nullable=False, index=True)
-    tx_hash: str = Column(ForeignKey("chain_txs.hash"), nullable=False)
+    tx_hash: str = Column(
+        ForeignKey("chain_txs.hash", ondelete="CASCADE"), nullable=False
+    )
 
     message: MessageDb = relationship(MessageDb, back_populates="confirmations")
     tx: ChainTxDb = relationship("ChainTxDb")

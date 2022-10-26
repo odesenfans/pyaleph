@@ -302,6 +302,11 @@ async def reject_message(
             ),
         )
     )
+    session.execute(
+        delete(MessageConfirmationDb).where(
+            MessageConfirmationDb.item_hash == item_hash
+        )
+    )
     session.execute(delete(MessageDb).where(MessageDb.item_hash == item_hash))
 
 
