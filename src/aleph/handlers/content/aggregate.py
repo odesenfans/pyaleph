@@ -155,29 +155,26 @@ class AggregateMessageHandler(ContentHandler):
 
         # Last chance before a full refresh, check the keys of the aggregate
         # and determine if there's a conflict.
-        start_time = time.perf_counter()
         keys = set(
             await get_aggregate_content_keys(session=session, key=key, owner=owner)
         )
-        db_time = time.perf_counter()
         new_keys = set(itertools.chain(element.content.keys for element in elements))
-        new_keys_time = time.perf_counter()
         conflicting_keys = keys & new_keys
-        conflicting_keys_time = time.perf_counter()
-
-        LOGGER.info("nb_elements: %d", len(elements))
-        LOGGER.info(
-            "times: %.4f - %.4f - %.4f",
-            db_time - start_time,
-            new_keys_time - db_time,
-            conflicting_keys_time - new_keys_time,
-        )
 
         if not conflicting_keys:
             LOGGER.info("No conflicting keys for %s/%s, updating it", owner, key)
             await self._append_to_aggregate(
                 session=session, aggregate=aggregate_metadata, elements=elements
             )
+            return
+
+        # One more case we can consider: if the last revision overwrote all the keys
+        # from the last revision. After that, only a full refresh can solve the issue.
+        last_revision_keys = set(aggregate_metadata.last_revision.content.keys())
+        keys_requiring_refresh = new_keys - last_revision_keys
+        if not keys_requiring_refresh:
+            # A full refresh would yield the same aggregate, nothing to do.
+            LOGGER.info("Outdated info, skipping refresh for %s/%s", owner, key)
             return
 
         if (
