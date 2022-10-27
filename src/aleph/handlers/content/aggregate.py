@@ -1,5 +1,6 @@
 import itertools
 import logging
+import time
 from typing import Tuple, List, cast, Sequence
 
 from aleph_message.models import AggregateContent
@@ -13,6 +14,7 @@ from aleph.db.accessors.aggregates import (
     update_aggregate,
     count_aggregate_elements,
     mark_aggregate_as_dirty,
+    get_aggregate_content_keys,
 )
 from aleph.db.models import MessageDb, AggregateElementDb, AggregateDb
 from aleph.handlers.content.content_handler import ContentHandler
@@ -133,7 +135,10 @@ class AggregateMessageHandler(ContentHandler):
 
         # Best case scenario: the elements we are adding are all posterior to the last
         # update, we can just merge the content of aggregate and the new elements.
-        if aggregate_metadata.last_revision.creation_datetime < elements[0].creation_datetime:
+        if (
+            aggregate_metadata.last_revision.creation_datetime
+            < elements[0].creation_datetime
+        ):
             await self._append_to_aggregate(
                 session=session, aggregate=aggregate_metadata, elements=elements
             )
@@ -147,6 +152,34 @@ class AggregateMessageHandler(ContentHandler):
             return
 
         LOGGER.info("%s/%s: out of order refresh", owner, key)
+
+        # Last chance before a full refresh, check the keys of the aggregate
+        # and determine if there's a conflict.
+        start_time = time.perf_counter()
+        keys = set(
+            await get_aggregate_content_keys(session=session, key=key, owner=owner)
+        )
+        db_time = time.perf_counter()
+        new_keys = set(itertools.chain(element.content.keys for element in elements))
+        new_keys_time = time.perf_counter()
+        conflicting_keys = keys & new_keys
+        conflicting_keys_time = time.perf_counter()
+
+        LOGGER.info("nb_elements: %d", len(elements))
+        LOGGER.info(
+            "times: %.4f - %.4f - %.4f",
+            db_time - start_time,
+            new_keys_time - db_time,
+            conflicting_keys_time - new_keys_time,
+        )
+
+        if not conflicting_keys:
+            LOGGER.info("No conflicting keys for %s/%s, updating it", owner, key)
+            await self._append_to_aggregate(
+                session=session, aggregate=aggregate_metadata, elements=elements
+            )
+            return
+
         if (
             await count_aggregate_elements(session=session, owner=owner, key=key)
             > dirty_threshold

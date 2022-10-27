@@ -85,16 +85,22 @@ def _get_pending_message_id(pending_message: PendingMessageDb) -> ProcessingMess
 
 
 async def handle_fetch_error(
-    session: DbSession, pending_message: PendingMessageDb, exception: BaseException
+    session: DbSession,
+    pending_message: PendingMessageDb,
+    exception: BaseException,
+    max_retries: int,
 ):
     if isinstance(exception, InvalidMessageException):
         LOGGER.warning(
-            "Rejecting invalid pending message: %s: %s",
+            "Rejecting invalid pending message: %s - %s",
             pending_message.item_hash,
             str(exception),
         )
         await reject_pending_message(
-            session=session, pending_message=pending_message, exception=exception
+            session=session,
+            pending_message=pending_message,
+            reason=str(exception),
+            exception=None,
         )
     else:
         if isinstance(exception, MessageUnavailable):
@@ -103,17 +109,33 @@ async def handle_fetch_error(
             LOGGER.exception(
                 "Unexpected error while fetching message", exc_info=exception
             )
-        await increase_pending_message_retry_count(
-            session=session, pending_message=pending_message
-        )
+        if pending_message.retries >= max_retries:
+            LOGGER.warning("Rejecting pending message: %s - too many retries")
+            rejection_exception = (
+                None if isinstance(exception, MessageUnavailable) else exception
+            )
+            await reject_pending_message(
+                session=session,
+                pending_message=pending_message,
+                reason="Too many retries",
+                exception=rejection_exception,
+            )
+        else:
+            await increase_pending_message_retry_count(
+                session=session, pending_message=pending_message
+            )
 
 
 class PendingMessageProcessor:
     def __init__(
-        self, session_factory: DbSessionFactory, message_handler: MessageHandler
+        self,
+        session_factory: DbSessionFactory,
+        message_handler: MessageHandler,
+        max_retries: int,
     ):
         self.session_factory = session_factory
         self.message_handler = message_handler
+        self.max_retries = max_retries
 
     async def _fetch_pending_message(
         self,
@@ -162,6 +184,7 @@ class PendingMessageProcessor:
                     session=session,
                     pending_message=pending_message,
                     exception=exception,
+                    max_retries=self.max_retries,
                 )
             else:
                 message, message_actions = finished_task.result()
@@ -378,7 +401,9 @@ async def fetch_and_process_messages_task(config: Config, shared_stats: Dict):
         storage_service=storage_service,
     )
     pending_message_processor = PendingMessageProcessor(
-        session_factory=session_factory, message_handler=message_handler
+        session_factory=session_factory,
+        message_handler=message_handler,
+        max_retries=config.aleph.jobs.pending_messages.max_retries.value,
     )
 
     while True:

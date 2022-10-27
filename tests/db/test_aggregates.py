@@ -3,7 +3,11 @@ from typing import Sequence, Tuple, Optional
 import pytest
 import sqlalchemy.orm.exc
 
-from aleph.db.accessors.aggregates import get_aggregate_by_key, refresh_aggregate
+from aleph.db.accessors.aggregates import (
+    get_aggregate_by_key,
+    refresh_aggregate,
+    get_aggregate_content_keys,
+)
 from aleph.db.models import AggregateDb, AggregateElementDb
 from aleph.types.db_session import DbSessionFactory
 import datetime as dt
@@ -185,3 +189,33 @@ async def test_refresh_aggregate_update_no_op(
         expected_aggregate=aggregate,
         elements=elements,
     )
+
+
+@pytest.mark.asyncio
+async def test_get_content_keys(
+    session_factory: DbSessionFactory,
+    aggregate_fixtures: Tuple[AggregateDb, Sequence[AggregateElementDb]],
+):
+    aggregate, elements = aggregate_fixtures
+
+    with session_factory() as session:
+        session.add_all(elements)
+        session.add(aggregate)
+        session.commit()
+
+    with session_factory() as session:
+        keys = set(
+            await get_aggregate_content_keys(
+                session=session, key=aggregate.key, owner=aggregate.owner
+            )
+        )
+        assert keys == set(aggregate.content.keys())
+
+    # Test no match
+    with session_factory() as session:
+        keys = set(
+            await get_aggregate_content_keys(
+                session=session, key="not-a-key", owner="no-one"
+            )
+        )
+        assert keys == set()

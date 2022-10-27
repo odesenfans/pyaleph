@@ -1,6 +1,6 @@
-from typing import Dict, Any, Optional, Set
+from typing import Dict, Any, Optional, Set, List, Iterable
 
-from sqlalchemy import Table, exists, text
+from sqlalchemy import Table, exists, text, Column, func, select
 from sqlalchemy.orm import declarative_base
 
 from aleph.types.db_session import DbSession
@@ -22,9 +22,7 @@ class AugmentedBase:
     @classmethod
     async def count(cls, session: DbSession):
         return (
-            session.execute(
-                f"SELECT COUNT(*) FROM {cls.__tablename__}"  # type: ignore
-            )
+            session.execute(f"SELECT COUNT(*) FROM {cls.__tablename__}")  # type: ignore
         ).scalar_one()
 
     # TODO: set type of "where" to the SQLA boolean expression class
@@ -34,6 +32,13 @@ class AugmentedBase:
         exists_stmt = exists(text("1")).select().where(where)
         result = (session.execute(exists_stmt)).scalar()
         return result is not None
+
+    @classmethod
+    async def jsonb_keys(
+        cls, session: DbSession, column: Column, where
+    ) -> Iterable[str]:
+        select_stmt = select(func.jsonb_object_keys(column)).where(where)
+        return session.execute(select_stmt).scalars()
 
 
 Base = declarative_base(cls=AugmentedBase)

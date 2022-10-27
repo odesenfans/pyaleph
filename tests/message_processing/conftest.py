@@ -84,6 +84,8 @@ def message_processor(mocker, session_factory: DbSessionFactory):
         storage_service=storage_service,
     )
     message_processor = PendingMessageProcessor(
-        session_factory=session_factory, message_handler=message_handler
+        session_factory=session_factory,
+        message_handler=message_handler,
+        max_retries=1,
     )
     return message_processor

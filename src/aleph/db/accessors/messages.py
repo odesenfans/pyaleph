@@ -329,7 +329,8 @@ async def reject_message(
 async def reject_pending_message(
     session: DbSession,
     pending_message: PendingMessageDb,
-    exception: InvalidMessageException,
+    reason: str,
+    exception: Optional[BaseException] = None,
 ):
     item_hash = pending_message.item_hash
     message_status = await get_message_status(session=session, item_hash=item_hash)
@@ -356,13 +357,16 @@ async def reject_pending_message(
         .values(status=MessageStatus.REJECTED)
         .where(MessageStatusDb.item_hash == item_hash)
     )
+    exc_traceback = (
+        "\n".join(traceback.format_exception(InvalidMessageException, exception, None))
+        if exception
+        else None
+    )
     insert_rejected_message_stmt = insert(RejectedMessageDb).values(
         item_hash=item_hash,
         message=pending_message_dict,
-        reason=str(exception),
-        traceback="\n".join(
-            traceback.format_exception(InvalidMessageException, exception, None)
-        ),
+        reason=reason,
+        traceback=exc_traceback,
     )
     upsert_rejected_message_stmt = insert_rejected_message_stmt.on_conflict_do_update(
         constraint="rejected_messages_pkey",

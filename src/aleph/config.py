@@ -16,6 +16,7 @@ def get_defaults():
             "reference_node_url": None,
             "jobs": {
                 "pending_messages": {
+                    "max_retries": 1000,
                     "max_concurrency": 2000,
                     "store": 30,
                 },

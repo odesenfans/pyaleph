@@ -2,7 +2,15 @@ import datetime as dt
 from typing import Optional, Iterable, Any, Dict, Tuple, Sequence
 
 from aleph_message.models import ItemHash
-from sqlalchemy import cast as sqla_cast, select, delete, update, func, text, literal_column
+from sqlalchemy import (
+    cast as sqla_cast,
+    select,
+    delete,
+    update,
+    func,
+    text,
+    literal_column,
+)
 from sqlalchemy.dialects.postgresql import insert, JSONB, aggregate_order_by
 from sqlalchemy.orm import selectinload, load_only, defer
 
@@ -58,12 +66,22 @@ async def get_aggregate_by_key(
     ).scalar()
 
 
+async def get_aggregate_content_keys(
+    session: DbSession, owner: str, key: str
+) -> Iterable[str]:
+    return await AggregateDb.jsonb_keys(
+        session=session,
+        column=AggregateDb.content,
+        where=(AggregateDb.key == key) & (AggregateDb.owner == owner),
+    )
+
+
 async def get_aggregate_elements(
     session: DbSession, owner: str, key: str
 ) -> Iterable[AggregateElementDb]:
     select_stmt = (
         select(AggregateElementDb)
-        .where((AggregateElementDb.owner == owner) & (AggregateElementDb.key == key))
+        .where((AggregateElementDb.key == key) & (AggregateElementDb.owner == owner))
         .order_by(AggregateElementDb.creation_datetime)
     )
     return (session.execute(select_stmt)).scalars()
