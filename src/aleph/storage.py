@@ -82,12 +82,17 @@ async def compute_content_hash_ipfs(
 ) -> Optional[str]:
     """
     Computes the IPFS hash of the content.
+
+    CIDs v0 are computed with a custom library to offload the IPFS daemon. However, the performance
+    of this library is not satisfactory yet for large files (> 10MB). We also use the IPFS daemon
+    for CIDv1 computations.
+
     :param content: Content to hash.
     :param cid_version: CID version of the hash.
     :return: The computed hash of the content. Can return None if the operation fails for some reason.
     """
 
-    if cid_version == 0:
+    if cid_version == 0 and len(content) < 10**7:
         return compute_cid(content)
 
     try:
