@@ -8,6 +8,7 @@ from hashlib import sha256
 from typing import Any, AnyStr, IO, Optional, cast
 
 from aleph_message.models import ItemType
+from py_ipfs_cid import compute_cid
 
 from aleph.config import get_config
 from aleph.exceptions import InvalidContent, ContentCurrentlyUnavailable
@@ -86,7 +87,9 @@ async def compute_content_hash_ipfs(
     :return: The computed hash of the content. Can return None if the operation fails for some reason.
     """
 
-    # TODO: get a better way to compare hashes (without depending on the IPFS daemon)
+    if cid_version == 0:
+        return compute_cid(content)
+
     try:
         computed_hash = await add_ipfs_bytes(content, cid_version=cid_version)
         return computed_hash
