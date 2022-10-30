@@ -346,6 +346,29 @@ class PendingMessageProcessor:
 
             yield checked_messages
 
+    async def batch_messages_for_large_sync(
+        self,
+        message_iterator: AsyncIterator[Sequence[MessageDb]],
+        sync_mode_threshold: int = 30000,
+    ) -> AsyncIterator[Sequence[MessageDb]]:
+        message_batch = []
+
+        with self.session_factory() as session:
+            async for messages in message_iterator:
+                message_batch.extend(messages)
+
+                nb_pending_messages = await PendingMessageDb.count(session=session)
+                is_syncing = nb_pending_messages > sync_mode_threshold
+
+                # Note: 10000 is completely arbitrary, we just need a value where
+                # a batch of messages will not get stuck because we did not get enough valid
+                # messages.
+                min_batch_size = 10000 if is_syncing else 0
+
+                if len(message_batch) > min_batch_size:
+                    yield message_batch
+                    message_batch = []
+
     async def process_messages(
         self, message_iterator: AsyncIterator[Sequence[MessageDb]]
     ) -> AsyncIterator[Sequence[MessageDb]]:
@@ -365,7 +388,11 @@ class PendingMessageProcessor:
             yield messages
 
     def make_pipeline(
-        self, config: Config, shared_stats: Dict, loop: bool = True
+        self,
+        config: Config,
+        shared_stats: Dict,
+        loop: bool = True,
+        batch_during_sync: bool = True,
     ) -> AsyncIterator[Sequence[MessageDb]]:
         fetch_iterator = self.fetch_pending_messages(
             config=config, shared_stats=shared_stats, loop=loop
@@ -373,9 +400,16 @@ class PendingMessageProcessor:
         permission_check_iterator = self.check_permissions(
             message_iterator=fetch_iterator
         )
-        process_iterator = self.process_messages(
-            message_iterator=permission_check_iterator
-        )
+
+        if batch_during_sync:
+            batch_iterator = self.batch_messages_for_large_sync(
+                message_iterator=permission_check_iterator
+            )
+            process_iterator = self.process_messages(message_iterator=batch_iterator)
+        else:
+            process_iterator = self.process_messages(
+                message_iterator=permission_check_iterator
+            )
         return process_iterator
 
 
