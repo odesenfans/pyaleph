@@ -15,7 +15,9 @@ class Pagination(object):
     def get_pagination_params(request):
         pagination_page = int(request.match_info.get("page", "1"))
         pagination_page = int(request.query.get("page", pagination_page))
-        pagination_param = int(request.query.get("pagination", DEFAULT_MESSAGES_PER_PAGE))
+        pagination_param = int(
+            request.query.get("pagination", DEFAULT_MESSAGES_PER_PAGE)
+        )
         with_pagination = pagination_param != 0
 
         if pagination_page < 1:
@@ -68,21 +70,6 @@ class Pagination(object):
                 last = num
 
 
-def make_date_filters(start: float, end: float, filter_key: str):
-    filters = []
-    if start:
-        filters.append({filter_key: {"$gte": start}})
-    if end:
-        filters.append({filter_key: {"$lt": end}})
-
-    if len(filters) > 1:
-        return {"$and": filters}
-    if filters:
-        return filters[0]
-
-    return None
-
-
 def prepare_date_filters(request, filter_key):
     date_filters = None
 
@@ -107,27 +94,6 @@ def prepare_date_filters(request, filter_key):
             date_filters = new_filter
 
     return date_filters
-
-
-def prepare_block_height_filters(request, filter_key):
-    height_filters = None
-
-    start_height = int(request.query.get("startHeight", 0))
-    end_height = int(request.query.get("endHeight", 0))
-
-    if start_height > 0:
-        height_filters = {}
-        height_filters[filter_key] = {"$gte": start_height}
-
-    if end_height > 0:
-        new_filter = {}
-        new_filter[filter_key] = {"$lte": end_height}
-        if height_filters is not None:
-            height_filters = {"$and": [height_filters, new_filter]}
-        else:
-            height_filters = new_filter
-
-    return height_filters
 
 
 def cond_output(request, context, template):

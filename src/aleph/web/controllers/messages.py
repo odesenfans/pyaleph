@@ -7,7 +7,6 @@ from aleph_message.models import MessageType, ItemHash, Chain
 from pydantic import BaseModel, Field, validator, ValidationError, root_validator
 
 from aleph.db.accessors.messages import get_matching_messages, count_matching_messages
-from aleph.db.models import MessageDb
 from aleph.types.db_session import DbSessionFactory
 from aleph.types.sort_order import SortOrder
 from aleph.web.controllers.utils import (
@@ -90,60 +89,6 @@ class BaseMessageQueryParams(BaseModel):
             return v.split(LIST_FIELD_SEPARATOR)
         return v
 
-    def to_filter_list(self) -> List[Mapping[str, Any]]:
-        filters: List[Mapping[str, Any]] = []
-
-        if self.message_type is not None:
-            filters.append({"type": self.message_type})
-
-        if self.addresses is not None:
-            filters.append(
-                {
-                    "$or": [
-                        {"content.address": {"$in": self.addresses}},
-                        {"sender": {"$in": self.addresses}},
-                    ]
-                }
-            )
-
-        if self.content_hashes is not None:
-            filters.append({"content.item_hash": {"$in": self.content_hashes}})
-        if self.content_keys is not None:
-            filters.append({"content.key": {"$in": self.content_keys}})
-        if self.content_types is not None:
-            filters.append({"content.type": {"$in": self.content_types}})
-        if self.refs is not None:
-            filters.append({"content.ref": {"$in": self.refs}})
-        if self.tags is not None:
-            filters.append({"content.content.tags": {"$elemMatch": {"$in": self.tags}}})
-        if self.chains is not None:
-            filters.append({"chain": {"$in": self.chains}})
-        if self.channels is not None:
-            filters.append({"channel": {"$in": self.channels}})
-        if self.hashes is not None:
-            filters.append(
-                {
-                    "$or": [
-                        {"item_hash": {"$in": self.hashes}},
-                        {"tx_hash": {"$in": self.hashes}},
-                    ]
-                }
-            )
-
-        return filters
-
-    def to_mongodb_filters(self) -> Mapping[str, Any]:
-        filters = self.to_filter_list()
-        return self._make_and_filter(filters)
-
-    @staticmethod
-    def _make_and_filter(filters: List[Mapping[str, Any]]) -> Mapping[str, Any]:
-        and_filter: Mapping[str, Any] = {}
-        if filters:
-            and_filter = {"$and": filters} if len(filters) > 1 else filters[0]
-
-        return and_filter
-
 
 class MessageQueryParams(BaseMessageQueryParams):
     pagination: int = Field(
@@ -197,7 +142,6 @@ async def view_messages_list(request):
 
     pagination_page = query_params.page
     pagination_per_page = query_params.pagination
-    pagination_skip = (query_params.page - 1) * query_params.pagination
 
     session_factory: DbSessionFactory = request.app["session_factory"]
     with session_factory() as session:

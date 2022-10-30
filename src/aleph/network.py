@@ -71,7 +71,7 @@ def listener_tasks(
             incoming_ipfs_channel(
                 ipfs_service=ipfs_service,
                 topic=config.aleph.queue_topic.value,
-                message_processor=message_handler,
+                message_handler=message_handler,
             )
         )
     return tasks

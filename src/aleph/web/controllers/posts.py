@@ -1,11 +1,10 @@
-from typing import Optional, List, Mapping, Any, Dict
+from typing import Optional, List, Any, Dict
 
 from aiohttp import web
 from aleph_message.models import ItemHash
 from pydantic import BaseModel, Field, root_validator, validator, ValidationError
 
 from aleph.db.accessors.posts import get_matching_posts, MergedPost, count_matching_posts
-from aleph.db.models.posts import PostDb
 from aleph.types.db_session import DbSessionFactory
 from aleph.web.controllers.utils import (
     DEFAULT_MESSAGES_PER_PAGE,
@@ -13,7 +12,6 @@ from aleph.web.controllers.utils import (
     LIST_FIELD_SEPARATOR,
     Pagination,
     cond_output,
-    make_date_filters,
 )
 
 
