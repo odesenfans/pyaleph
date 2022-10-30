@@ -4,7 +4,7 @@ Job in charge of (re-) processing Aleph messages waiting in the pending queue.
 
 import asyncio
 from logging import getLogger
-from typing import Any, Dict, List, Set, Tuple, cast, Optional, AsyncIterator, Sequence
+from typing import Any, Dict, List, Set, Tuple, cast, Optional, AsyncIterator, Sequence, NewType
 
 import sentry_sdk
 from aleph_message.models import MessageType
@@ -65,23 +65,19 @@ def _init_semaphores(config: Config) -> Dict[MessageType, asyncio.BoundedSemapho
     return semaphores
 
 
-ProcessingMessageId = Tuple[str, str, Optional[str], Optional[int]]
+# ProcessingMessageId = Tuple[str, str, Optional[str], Optional[int]]
+ProcessingMessageId = NewType("ProcessingMessageId", str)
 
 
 def _get_pending_message_id(pending_message: PendingMessageDb) -> ProcessingMessageId:
-    source = pending_message.tx
+    # source = pending_message.tx
+    #
+    # if source:
+    #     chain_name, height = source.chain.value, source.height
+    # else:
+    #     chain_name, height = None, None
 
-    if source:
-        chain_name, height = source.chain.value, source.height
-    else:
-        chain_name, height = None, None
-
-    return (
-        pending_message.item_hash,
-        pending_message.sender,
-        chain_name,
-        height,
-    )
+    return ProcessingMessageId(pending_message.item_hash)
 
 
 async def handle_fetch_error(
