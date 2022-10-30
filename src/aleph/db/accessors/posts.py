@@ -148,15 +148,22 @@ def make_matching_posts_query(
 
 
 async def count_matching_posts(
-    session: DbSession, page: int = 1, pagination: int = 0, **kwargs
+    session: DbSession,
+    page: int = 1,
+    pagination: int = 0,
+    sort_order: Optional[SortOrder] = None,
+    **kwargs,
 ) -> int:
     # Note that we deliberately ignore the pagination parameters so that users can pass
     # the same parameters as get_matching_posts and get the total number of posts,
     # not just the number on a page.
     if kwargs:
-        select_stmt = make_matching_posts_query(**kwargs, page=1, pagination=0)
+        select_stmt = make_matching_posts_query(
+            **kwargs, page=1, pagination=0, sort_order=None
+        )
     else:
-        select_stmt = make_select_merged_post_stmt()
+        # Without filters, counting the number of original posts is faster.
+        select_stmt = select(PostDb).where(PostDb.amends.is_(None))
 
     select_count_stmt = select(func.count()).select_from(select_stmt)
     return session.execute(select_count_stmt).scalar_one()
