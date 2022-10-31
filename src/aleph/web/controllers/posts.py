@@ -106,7 +106,7 @@ async def view_posts_list(request):
     except ValidationError as e:
         raise web.HTTPUnprocessableEntity(body=e.json(indent=4))
 
-    find_filters = query_params.dict()
+    find_filters = query_params.dict(exclude_none=True)
 
     pagination_page = query_params.page
     pagination_per_page = query_params.pagination

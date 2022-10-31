@@ -138,7 +138,7 @@ async def view_messages_list(request):
     if url_page_param := request.match_info.get("page"):
         query_params.page = int(url_page_param)
 
-    find_filters = query_params.dict()
+    find_filters = query_params.dict(exclude_none=True)
 
     pagination_page = query_params.page
     pagination_per_page = query_params.pagination
