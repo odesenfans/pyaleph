@@ -111,13 +111,20 @@ async def handle_fetch_error(
         )
     else:
         if isinstance(exception, MessageUnavailable):
-            LOGGER.warning("Could not fetch message, retrying later")
+            LOGGER.warning(
+                "Could not fetch message %s, retrying later: %s",
+                pending_message.item_hash,
+                str(exception),
+            )
         else:
             LOGGER.exception(
                 "Unexpected error while fetching message", exc_info=exception
             )
         if pending_message.retries >= max_retries:
-            LOGGER.warning("Rejecting pending message: %s - too many retries")
+            LOGGER.warning(
+                "Rejecting pending message: %s - too many retries",
+                pending_message.item_hash,
+            )
             rejection_exception = (
                 None if isinstance(exception, MessageUnavailable) else exception
             )
