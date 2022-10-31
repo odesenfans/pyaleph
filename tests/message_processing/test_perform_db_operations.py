@@ -8,9 +8,10 @@ from sqlalchemy import delete, insert, select
 from sqlalchemy.sql import Insert
 
 from aleph.db.bulk_operations import DbBulkOperation
-from aleph.db.models import PendingTxDb, ChainSyncProtocol, PendingMessageDb
+from aleph.db.models import PendingTxDb, PendingMessageDb
 from aleph.db.models.chains import ChainTxDb
 from aleph.jobs.job_utils import perform_db_operations
+from aleph.types.chain_sync import ChainSyncProtocol
 from aleph.types.db_session import DbSessionFactory
 
 PENDING_TX = {
@@ -45,17 +46,15 @@ def chain_tx():
         datetime=dt.datetime.utcfromtimestamp(1632835747),
         height=13314512,
         publisher="0x23eC28598DCeB2f7082Cc3a9D670592DfEd6e0dC",
+        protocol=ChainSyncProtocol.OFF_CHAIN,
+        protocol_version=1,
+        content="tx-content",
     )
 
 
 @pytest.fixture
 def pending_tx(chain_tx):
-    return PendingTxDb(
-        tx_hash=chain_tx.hash,
-        protocol=ChainSyncProtocol.OffChain,
-        protocol_version=1,
-        content="test-data-pending-tx-messages",
-    )
+    return PendingTxDb(tx=chain_tx)
 
 
 async def insert_chain_tx(session_factory: DbSessionFactory, chain_tx: ChainTxDb):
@@ -73,9 +72,6 @@ async def test_db_operations_insert_one(session_factory, chain_tx, pending_tx):
             model=PendingTxDb,
             operation=insert(PendingTxDb).values(
                 tx_hash=chain_tx.hash,
-                protocol=pending_tx.protocol,
-                protocol_version=pending_tx.protocol_version,
-                content=pending_tx.content,
             ),
         )
     ]
@@ -92,9 +88,9 @@ async def test_db_operations_insert_one(session_factory, chain_tx, pending_tx):
             )
         ).scalar()
 
-    assert stored_pending_tx.content == pending_tx.content
-    # assert stored_pending_tx["context"] == PENDING_TX["context"]
-    assert end_count - start_count == 1
+        assert stored_pending_tx.tx.content == pending_tx.tx.content
+        # assert stored_pending_tx["context"] == PENDING_TX["context"]
+        assert end_count - start_count == 1
 
 
 @pytest.mark.asyncio

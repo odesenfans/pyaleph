@@ -10,8 +10,8 @@ from aleph.chains.chain_service import ChainService
 from aleph.db.accessors.messages import get_message_by_item_hash
 from aleph.db.models import ChainTxDb, PendingMessageDb
 from aleph.handlers.message_handler import MessageHandler
-from aleph.schemas.pending_messages import parse_message
 from aleph.storage import StorageService
+from aleph.types.chain_sync import ChainSyncProtocol
 from aleph.types.db_session import DbSessionFactory
 
 MESSAGE_DICT: Mapping = {
@@ -39,6 +39,9 @@ def chain_tx() -> ChainTxDb:
         height=8000,
         datetime=pytz.utc.localize(dt.datetime(2022, 10, 1)),
         publisher="0xabadbabe",
+        protocol=ChainSyncProtocol.OFF_CHAIN,
+        protocol_version=1,
+        content="Qmsomething",
     )
 
 

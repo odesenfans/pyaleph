@@ -8,6 +8,7 @@ from aleph.db.accessors.pending_messages import (
     get_pending_messages,
 )
 from aleph.db.models import PendingMessageDb, ChainTxDb
+from aleph.types.chain_sync import ChainSyncProtocol
 from aleph.types.db_session import DbSessionFactory
 import datetime as dt
 
@@ -34,6 +35,9 @@ def fixture_pending_messages():
                 height=8000,
                 datetime=dt.datetime(2022, 10, 7, 17, 4),
                 publisher="0xdeadb00t",
+                protocol=ChainSyncProtocol.OFF_CHAIN,
+                protocol_version=1,
+                content="Qmsomething",
             ),
             reception_time=dt.datetime(2022, 10, 7, 17, 5, 10),
         ),
@@ -71,6 +75,9 @@ def fixture_pending_messages():
                 height=1001,
                 datetime=dt.datetime(2022, 10, 7, 21, 50),
                 publisher="0xabadbabe",
+                protocol=ChainSyncProtocol.OFF_CHAIN,
+                protocol_version=1,
+                content="Qmsomething",
             ),
             reception_time=dt.datetime(2022, 10, 7, 21, 53, 10),
         ),

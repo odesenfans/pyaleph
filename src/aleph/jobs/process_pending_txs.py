@@ -58,9 +58,9 @@ class PendingTxProcessor:
         # TODO: get rid of this compatibility layer. 'get_chaindata_messages' is recursive and this proves
         #       to be tricky to refactor at this time of the night.
         tx_content = {
-            "content": pending_tx.content,
-            "protocol": pending_tx.protocol,
-            "version": pending_tx.protocol_version,
+            "content": pending_tx.tx.content,
+            "protocol": pending_tx.tx.protocol,
+            "version": pending_tx.tx.protocol_version,
         }
         tx_context = TxContext(
             chain_name=str(pending_tx.tx.chain),
@@ -130,7 +130,7 @@ class PendingTxProcessor:
         LOGGER.info("handling TXs")
         with self.session_factory() as session:
             for pending_tx in await get_pending_txs_stream(session):
-                if pending_tx.content in seen_offchain_hashes:
+                if pending_tx.tx.content in seen_offchain_hashes:
                     continue
 
                 if len(tasks) == max_concurrent_tasks:
@@ -140,7 +140,7 @@ class PendingTxProcessor:
                     await self.process_tx_job_results(tasks=done)
                     session.commit()
 
-                seen_offchain_hashes.add(pending_tx.content)
+                seen_offchain_hashes.add(pending_tx.tx.content)
                 tx_task = asyncio.create_task(
                     self.handle_pending_tx(pending_tx, seen_ids=seen_ids)
                 )

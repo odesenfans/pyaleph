@@ -4,7 +4,8 @@ import pytest
 from aleph_message.models import Chain
 
 from aleph.db.accessors.pending_txs import get_pending_txs_stream, count_pending_txs
-from aleph.db.models import ChainTxDb, PendingTxDb, ChainSyncProtocol
+from aleph.db.models import ChainTxDb, PendingTxDb
+from aleph.types.chain_sync import ChainSyncProtocol
 import datetime as dt
 
 from aleph.types.db_session import DbSessionFactory
@@ -14,48 +15,45 @@ from aleph.types.db_session import DbSessionFactory
 def fixture_txs() -> Sequence[PendingTxDb]:
     return [
         PendingTxDb(
-            protocol=ChainSyncProtocol.OffChain,
-            protocol_version=1,
-            content="1",
             tx=ChainTxDb(
                 hash="1",
                 chain=Chain.ETH,
                 height=1200,
                 datetime=dt.datetime(2022, 1, 1),
                 publisher="0xabadbabe",
+                protocol=ChainSyncProtocol.OFF_CHAIN,
+                protocol_version=1,
+                content="1",
             )
         ),
         PendingTxDb(
-            protocol=ChainSyncProtocol.OffChain,
-            protocol_version=1,
-            content="2",
             tx=ChainTxDb(
                 hash="2",
                 chain=Chain.SOL,
                 height=30000000,
                 datetime=dt.datetime(2022, 1, 2),
                 publisher="SOLMATE",
+                protocol=ChainSyncProtocol.OFF_CHAIN,
+                protocol_version=1,
+                content="2",
             )
         ),
         PendingTxDb(
-            protocol=ChainSyncProtocol.OffChain,
-            protocol_version=1,
-            content="3",
             tx=ChainTxDb(
                 hash="3",
                 chain=Chain.ETH,
                 height=1202,
                 datetime=dt.datetime(2022, 1, 3),
                 publisher="0xabadbabe",
+                protocol=ChainSyncProtocol.OFF_CHAIN,
+                protocol_version=1,
+                content="3",
             )
         ),
     ]
 
 
 def assert_pending_txs_equal(expected: PendingTxDb, actual: PendingTxDb):
-    assert expected.protocol == actual.protocol
-    assert expected.protocol_version == actual.protocol_version
-    assert expected.content == actual.content
     assert expected.tx_hash == actual.tx_hash
 
 

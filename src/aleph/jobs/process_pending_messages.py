@@ -4,7 +4,18 @@ Job in charge of (re-) processing Aleph messages waiting in the pending queue.
 
 import asyncio
 from logging import getLogger
-from typing import Any, Dict, List, Set, Tuple, cast, Optional, AsyncIterator, Sequence, NewType
+from typing import (
+    Any,
+    Dict,
+    List,
+    Set,
+    Tuple,
+    cast,
+    Optional,
+    AsyncIterator,
+    Sequence,
+    NewType,
+)
 
 import sentry_sdk
 from aleph_message.models import MessageType
@@ -347,10 +358,11 @@ class PendingMessageProcessor:
         message_iterator: AsyncIterator[Sequence[MessageDb]],
         sync_mode_threshold: int = 30000,
     ) -> AsyncIterator[Sequence[MessageDb]]:
-        message_batch = []
+        message_batch: List[MessageDb] = []
 
         with self.session_factory() as session:
             async for messages in message_iterator:
+                LOGGER.info("batcher: received %d messages", len(messages))
                 message_batch.extend(messages)
 
                 nb_pending_messages = await PendingMessageDb.count(session=session)
@@ -362,8 +374,16 @@ class PendingMessageProcessor:
                 min_batch_size = 10000 if is_syncing else 0
 
                 if len(message_batch) > min_batch_size:
+                    LOGGER.info("batcher: releasing %d messages", len(message_batch))
                     yield message_batch
                     message_batch = []
+
+                else:
+                    LOGGER.info(
+                        "batcher: %d/%d, waiting for more",
+                        len(message_batch),
+                        min_batch_size,
+                    )
 
     async def process_messages(
         self, message_iterator: AsyncIterator[Sequence[MessageDb]]

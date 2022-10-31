@@ -9,6 +9,7 @@ from aleph.types.actions.action import ActionStatus
 from aleph.types.actions.db_action import DbAction
 from aleph.types.actions.db_executor import DbExecutor
 from aleph.types.actions.executor import execute_actions
+from aleph.types.chain_sync import ChainSyncProtocol
 
 
 class TestDbAction(DbAction):
@@ -28,6 +29,9 @@ async def test_execute_one_db_action(session_factory):
         height=8000,
         datetime=dt.datetime(2020, 1, 1),
         publisher="0xabadbabe",
+        protocol=ChainSyncProtocol.OFF_CHAIN,
+        protocol_version=1,
+        content="Qmsomething",
     )
     action = TestDbAction(chain_tx)
     executor = DbExecutor(session_factory=session_factory)
@@ -51,6 +55,9 @@ async def test_execute_multiple_db_actions_success(session_factory):
         height=8000,
         datetime=dt.datetime(2020, 1, 1),
         publisher="0xabadbabe",
+        protocol=ChainSyncProtocol.OFF_CHAIN,
+        protocol_version=1,
+        content="eth-content",
     )
     chain_tx_2 = ChainTxDb(
         hash="0x1235",
@@ -58,6 +65,9 @@ async def test_execute_multiple_db_actions_success(session_factory):
         height=1000,
         datetime=dt.datetime(1987, 10, 10),
         publisher="solana",
+        protocol=ChainSyncProtocol.OFF_CHAIN,
+        protocol_version=1,
+        content="solana-content",
     )
     chain_tx_3 = ChainTxDb(
         hash="0xdeadbeef",
@@ -65,6 +75,9 @@ async def test_execute_multiple_db_actions_success(session_factory):
         height=10000,
         datetime=dt.datetime(2022, 2, 22),
         publisher="b0rg",
+        protocol=ChainSyncProtocol.OFF_CHAIN,
+        protocol_version=1,
+        content="tezos-content",
     )
 
     executor = DbExecutor(session_factory=session_factory)
@@ -90,6 +103,9 @@ async def test_execute_multiple_db_actions_primary_key_conflict(session_factory)
         height=8000,
         datetime=dt.datetime(2020, 1, 1),
         publisher="0xabadbabe",
+        protocol=ChainSyncProtocol.OFF_CHAIN,
+        protocol_version=1,
+        content="Qmsomething",
     )
 
     executor = DbExecutor(session_factory=session_factory)

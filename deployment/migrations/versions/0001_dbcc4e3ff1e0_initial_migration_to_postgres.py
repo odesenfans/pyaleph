@@ -52,6 +52,9 @@ def upgrade() -> None:
         sa.Column("height", sa.Integer(), nullable=False),
         sa.Column("datetime", sa.TIMESTAMP(timezone=True), nullable=False),
         sa.Column("publisher", sa.String(), nullable=False),
+        sa.Column("protocol", sa.String(), nullable=False),
+        sa.Column("protocol_version", sa.Integer(), nullable=False),
+        sa.Column("content", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.PrimaryKeyConstraint("hash"),
     )
     op.create_table(
@@ -248,9 +251,6 @@ def upgrade() -> None:
     op.create_table(
         "pending_txs",
         sa.Column("tx_hash", sa.String(), nullable=False),
-        sa.Column("protocol", sa.String(), nullable=False),
-        sa.Column("protocol_version", sa.Integer(), nullable=False),
-        sa.Column("content", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.ForeignKeyConstraint(
             ["tx_hash"],
             ["chain_txs.hash"],

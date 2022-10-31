@@ -10,7 +10,8 @@ from aleph.config import get_config
 from aleph.db.accessors.files import upsert_file_pin
 from aleph.db.models import ChainTxDb, MessageDb
 from aleph.db.models.files import FilePinDb
-from aleph.db.models.pending_txs import ChainSyncProtocol, PendingTxDb
+from aleph.db.models.pending_txs import PendingTxDb
+from aleph.types.chain_sync import ChainSyncProtocol
 from aleph.exceptions import (
     InvalidContent,
     AlephStorageException,
@@ -67,7 +68,7 @@ class ChainDataService:
         message_dicts = [message_to_dict(message) for message in messages]
 
         chaindata = {
-            "protocol": ChainSyncProtocol.OnChain,
+            "protocol": ChainSyncProtocol.ON_CHAIN,
             "version": 1,
             "content": {"messages": message_dicts},
         }
@@ -76,7 +77,7 @@ class ChainDataService:
             ipfs_id = await self.storage_service.add_json(chaindata)
             return json.dumps(
                 {
-                    "protocol": ChainSyncProtocol.OffChain,
+                    "protocol": ChainSyncProtocol.OFF_CHAIN,
                     "version": 1,
                     "content": ipfs_id,
                 }
@@ -162,15 +163,15 @@ class ChainDataService:
         """
         session.add(
             PendingTxDb(
-                protocol=content["protocol"],
-                protocol_version=content["version"],
-                content=content["content"],
                 tx=ChainTxDb(
                     hash=context.tx_hash,
                     chain=Chain(context.chain_name),
                     height=context.height,
                     datetime=timestamp_to_datetime(context.time),
                     publisher=context.publisher,
+                    protocol=content["protocol"],
+                    protocol_version=content["version"],
+                    content=content["content"],
                 ),
             )
         )

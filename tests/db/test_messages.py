@@ -23,9 +23,9 @@ from aleph.db.models import (
     MessageConfirmationDb,
     ChainTxDb,
     MessageStatusDb,
-    ForgottenMessageDb,
 )
 from aleph.toolkit.timestamp import timestamp_to_datetime
+from aleph.types.chain_sync import ChainSyncProtocol
 from aleph.types.channel import Channel
 from aleph.types.db_session import DbSessionFactory
 from aleph.types.message_status import MessageStatus, InvalidSignature
@@ -103,6 +103,9 @@ async def test_get_message_with_confirmations(
                 height=1000,
                 datetime=pytz.utc.localize(dt.datetime(2022, 10, 1)),
                 publisher="0xabadbabe",
+                protocol=ChainSyncProtocol.OFF_CHAIN,
+                protocol_version=1,
+                content="tx-content-1",
             ),
         ),
         MessageConfirmationDb(
@@ -113,6 +116,9 @@ async def test_get_message_with_confirmations(
                 height=1020,
                 datetime=pytz.utc.localize(dt.datetime(2022, 10, 2)),
                 publisher="0x0bobafed",
+                protocol=ChainSyncProtocol.OFF_CHAIN,
+                protocol_version=1,
+                content="tx-content-2",
             ),
         ),
     ]
@@ -174,6 +180,9 @@ async def test_upsert_query_confirmation(
         height=1000,
         datetime=pytz.utc.localize(dt.datetime(2022, 10, 1)),
         publisher="0xabadbabe",
+        protocol=ChainSyncProtocol.OFF_CHAIN,
+        protocol_version=1,
+        content="Qmsomething",
     )
 
     upsert_stmt = make_confirmation_upsert_query(
@@ -256,6 +265,9 @@ async def test_get_unconfirmed_messages(
         height=8000,
         datetime=timestamp_to_datetime(1664999900),
         publisher="0xabadbabe",
+        protocol=ChainSyncProtocol.OFF_CHAIN,
+        protocol_version=1,
+        content="Qmsomething",
     )
     with session_factory() as session:
         session.add(tx)
