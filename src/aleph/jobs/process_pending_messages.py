@@ -415,7 +415,7 @@ class PendingMessageProcessor:
         config: Config,
         shared_stats: Dict,
         loop: bool = True,
-        batch_during_sync: bool = True,
+        batch_during_sync: bool = False,
     ) -> AsyncIterator[Sequence[MessageDb]]:
         fetch_iterator = self.fetch_pending_messages(
             config=config, shared_stats=shared_stats, loop=loop
