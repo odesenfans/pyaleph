@@ -107,6 +107,11 @@ class AggregateMessageHandler(ContentHandler):
         :param elements: New elements to insert, ordered by their creation_datetime field.
         :return:
         """
+
+        # Let's forget about you for now
+        if owner == "0x51A58800b26AA1451aaA803d1746687cB88E0501":
+            return
+
         dirty_threshold = 1000
 
         aggregate_metadata = await get_aggregate_by_key(
