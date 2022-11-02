@@ -152,6 +152,8 @@ async def count_matching_posts(
     page: int = 1,
     pagination: int = 0,
     sort_order: Optional[SortOrder] = None,
+    start_date: float = 0,
+    end_date: float = 0,
     **kwargs,
 ) -> int:
     # Note that we deliberately ignore the pagination parameters so that users can pass
@@ -159,7 +161,12 @@ async def count_matching_posts(
     # not just the number on a page.
     if kwargs:
         select_stmt = make_matching_posts_query(
-            **kwargs, page=1, pagination=0, sort_order=None
+            **kwargs,
+            page=1,
+            pagination=0,
+            sort_order=None,
+            start_date=start_date,
+            end_date=end_date,
         )
     else:
         # Without filters, counting the number of original posts is faster.
