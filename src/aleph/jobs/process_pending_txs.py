@@ -87,7 +87,12 @@ class PendingTxProcessor:
                     continue
 
                 # we add it to the message queue... bad idea? should we process it asap?
-                pending_message = PendingMessageDb.from_obj(message, reception_time=utc_now())
+                try:
+                    pending_message = PendingMessageDb.from_obj(message, reception_time=utc_now())
+                except ValueError as e:
+                    LOGGER.warning("Invalid message: %s - %s", message.item_hash, str(e))
+                    continue
+
                 pending_message.tx_hash = tx_context.tx_hash
                 db_operations.append(
                     InsertPendingMessage(pending_message=pending_message)

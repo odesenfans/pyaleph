@@ -56,13 +56,14 @@ class ChainService:
 
         while True:
             try:
+                LOGGER.info("Fetching on-chain data...")
                 await connector.fetcher(config)
             except Exception:
                 LOGGER.exception(
                     "Chain reader task for %s failed, retrying in 10 seconds.", chain
                 )
 
-            await asyncio.sleep(10)
+            await asyncio.sleep(60)
 
     async def chain_writer_task(self, chain: Chain, config: Config):
         connector = self.writers[chain]
