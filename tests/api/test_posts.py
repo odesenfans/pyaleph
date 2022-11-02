@@ -2,11 +2,8 @@ from typing import Dict, Iterable, Sequence
 
 import aiohttp
 import pytest
-from aleph_message.models import MessageType
 
-from aleph.db.models import MessageDb
 from aleph.db.models.posts import PostDb
-from .utils import get_messages_by_keys
 
 POSTS_URI = "/api/v0/posts.json"
 

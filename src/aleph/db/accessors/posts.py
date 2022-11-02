@@ -31,50 +31,22 @@ Original = aliased(PostDb)
 
 
 def make_select_merged_post_stmt() -> Select:
-    select_latest_by_amend_stmt = (
-        select(
-            Amend.amends, func.max(PostDb.creation_datetime).label("latest_amend_time")
-        )
-        .group_by(Amend.amends)
-        .subquery()
-    )
-    select_latest_amend_stmt = (
-        select(
-            Amend.item_hash.label("item_hash"),
-            Amend.amends.label("amends"),
-            Amend.content.label("content"),
-            Amend.creation_datetime.label("creation_datetime"),
-        )
-        .join(
-            select_latest_by_amend_stmt,
-            (Amend.amends == select_latest_by_amend_stmt.c.amends)
-            & (
-                Amend.creation_datetime
-                == select_latest_by_amend_stmt.c.latest_amend_time
-            ),
-        )
-        .subquery()
-    )
     select_merged_post_stmt = (
         select(
             Original.item_hash.label("original_item_hash"),
-            func.coalesce(
-                select_latest_amend_stmt.c.item_hash, Original.item_hash
-            ).label("item_hash"),
-            func.coalesce(select_latest_amend_stmt.c.content, Original.content).label(
-                "content"
-            ),
+            func.coalesce(Amend.item_hash, Original.item_hash).label("item_hash"),
+            func.coalesce(Amend.content, Original.content).label("content"),
             Original.owner.label("owner"),
             Original.ref.label("ref"),
-            func.coalesce(
-                select_latest_amend_stmt.c.creation_datetime, Original.creation_datetime
-            ).label("last_updated"),
+            func.coalesce(Amend.creation_datetime, Original.creation_datetime).label(
+                "last_updated"
+            ),
             Original.channel.label("channel"),
             Original.creation_datetime.label("created"),
             Original.type.label("original_type"),
         ).join(
-            select_latest_amend_stmt,
-            Original.item_hash == select_latest_amend_stmt.c.amends,
+            Amend,
+            Original.latest_amend == Amend.item_hash,
             isouter=True,
         )
     ).where(Original.amends.is_(None))
@@ -151,7 +123,6 @@ async def count_matching_posts(
     session: DbSession,
     page: int = 1,
     pagination: int = 0,
-    sort_order: Optional[SortOrder] = None,
     start_date: float = 0,
     end_date: float = 0,
     **kwargs,
@@ -164,7 +135,6 @@ async def count_matching_posts(
             **kwargs,
             page=1,
             pagination=0,
-            sort_order=None,
             start_date=start_date,
             end_date=end_date,
         )

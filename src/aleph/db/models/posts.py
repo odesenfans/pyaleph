@@ -21,3 +21,5 @@ class PostDb(Base):
     channel: Optional[Channel] = Column(String, nullable=True)
     content: Any = Column(JSONB, nullable=False)
     creation_datetime: dt.datetime = Column(TIMESTAMP(timezone=True), nullable=False)
+
+    latest_amend: Optional[str] = Column(String, nullable=True)

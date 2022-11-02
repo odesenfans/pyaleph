@@ -1,6 +1,7 @@
 from typing import List, Tuple
 
 from aleph_message.models import PostContent
+from sqlalchemy import update
 
 from aleph.db.models import MessageDb
 from aleph.db.models.posts import PostDb
@@ -8,6 +9,7 @@ from aleph.toolkit.timestamp import timestamp_to_datetime
 from aleph.types.db_session import DbSession
 from aleph.types.message_status import MessageUnavailable
 from .content_handler import ContentHandler
+from ...db.accessors.posts import get_matching_posts
 
 
 class PostMessageHandler(ContentHandler):
@@ -51,6 +53,8 @@ class PostMessageHandler(ContentHandler):
             content = message.parsed_content
             assert isinstance(content, PostContent)
 
+            creation_datetime = timestamp_to_datetime(content.time)
+
             post = PostDb(
                 item_hash=message.item_hash,
                 owner=content.address,
@@ -59,8 +63,19 @@ class PostMessageHandler(ContentHandler):
                 amends=content.ref if content.type == "amend" else None,
                 channel=message.channel,
                 content=content.content,
-                creation_datetime=timestamp_to_datetime(content.time),
+                creation_datetime=creation_datetime,
             )
             session.add(post)
+
+            if content.type == "amend":
+                [amended_post] = await get_matching_posts(
+                    session=session, hashes=[content.ref]
+                )
+                if amended_post.last_updated < creation_datetime:
+                    session.execute(
+                        update(PostDb)
+                        .where(PostDb.item_hash == content.ref)
+                        .values(latest_amend=message.item_hash)
+                    )
 
         return messages, []
