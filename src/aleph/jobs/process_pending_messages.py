@@ -273,20 +273,12 @@ class PendingMessageProcessor:
                     session.commit()
 
                 if len(fetch_tasks) < max_concurrent_tasks:
-                    pending_messages = list(
-                        await get_pending_messages(
-                            session=session,
-                            limit=max_concurrent_tasks - len(fetch_tasks),
-                            offset=len(fetch_tasks),
-                            skip_store=semaphores[MessageType.store].locked(),
-                        )
+                    pending_messages = await get_pending_messages(
+                        session=session,
+                        limit=max_concurrent_tasks - len(fetch_tasks),
+                        offset=len(fetch_tasks),
+                        skip_store=semaphores[MessageType.store].locked(),
                     )
-
-                    s = set(pm.item_hash for pm in pending_messages)
-                    LOGGER.warning(
-                        "Pending: %d unique, %d total", len(s), len(pending_messages)
-                    )
-                    LOGGER.warning("Processing: %d", len(processing_messages))
 
                     for pending_message in pending_messages:
                         # Check if the message is already processing

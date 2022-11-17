@@ -183,9 +183,9 @@ class MessageHandler:
         await self.fetch_related_content(session=session, message=validated_message)
 
         # All the content was fetched successfully, we can mark the message as fetched
-        actions.append(
-            UpsertMessage(message=validated_message, pending_message=pending_message)
-        )
+        # actions.append(
+        #     UpsertMessage(message=validated_message, pending_message=pending_message)
+        # )
 
         return validated_message, actions
 

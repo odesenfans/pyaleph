@@ -106,7 +106,7 @@ class UpsertMessage(MessageDbAction):
             ),
             make_message_status_upsert_query(
                 item_hash=self.message.item_hash,
-                new_status=MessageStatus.FETCHED,
+                new_status=MessageStatus.PROCESSED,
                 reception_time=self.pending_message.reception_time,
                 where=(MessageStatusDb.status == MessageStatus.PENDING),
             ),
