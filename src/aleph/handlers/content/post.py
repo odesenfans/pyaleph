@@ -45,6 +45,13 @@ class PostMessageHandler(ContentHandler):
                     f"Post {content.ref} referenced by {message.item_hash} is not yet processed"
                 )
 
+    async def is_related_content_fetched(self, session: DbSession, message: MessageDb) -> bool:
+        try:
+            _ = await self.fetch_related_content(session=session, message=message)
+            return True
+        except MessageUnavailable:
+            return False
+
     async def process(
         self, session: DbSession, messages: List[MessageDb]
     ) -> Tuple[List[MessageDb], List[MessageDb]]:

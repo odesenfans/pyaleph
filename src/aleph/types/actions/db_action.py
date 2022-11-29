@@ -1,6 +1,6 @@
 import abc
 from abc import ABC
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Any, Dict
 
 from sqlalchemy import delete
 from sqlalchemy.dialects.postgresql import insert
@@ -10,6 +10,7 @@ from aleph.db.accessors.messages import (
     make_confirmation_upsert_query,
     make_message_status_upsert_query,
 )
+from aleph.db.accessors.pending_messages import make_pending_message_fetched_statement
 from aleph.db.models import PendingMessageDb, MessageStatusDb, PendingTxDb, MessageDb
 from aleph.types.actions.action import Action
 from aleph.types.message_status import MessageStatus
@@ -86,6 +87,24 @@ class ConfirmMessage(MessageDbAction):
             )
 
         return statements
+
+
+class MarkPendingMessageAsFetched(MessageDbAction):
+    def __init__(
+        self,
+        pending_message: PendingMessageDb,
+        content: Dict[str, Any],
+        dependencies: Optional[Sequence[Action]] = None,
+    ):
+        super().__init__(pending_message=pending_message, dependencies=dependencies)
+        self.content = content
+
+    def to_db_statements(self):
+        return [
+            make_pending_message_fetched_statement(
+                pending_message=self.pending_message, content=self.content
+            )
+        ]
 
 
 class UpsertMessage(MessageDbAction):

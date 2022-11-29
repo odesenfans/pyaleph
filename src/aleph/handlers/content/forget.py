@@ -92,6 +92,15 @@ class ForgetMessageHandler(ContentHandler):
                     f"is not yet available: {content.address}/{aggregate_key}"
                 )
 
+    async def is_related_content_fetched(
+        self, session: DbSession, message: MessageDb
+    ) -> bool:
+        try:
+            _ = await self.fetch_related_content(session=session, message=message)
+            return True
+        except MessageUnavailable:
+            return False
+
     @staticmethod
     async def delete_aggregate_element(
         session: DbSession, aggregate_message: MessageDb

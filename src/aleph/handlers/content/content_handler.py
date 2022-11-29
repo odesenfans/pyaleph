@@ -17,6 +17,9 @@ class MessageProcessingResult:
 
 
 class ContentHandler(abc.ABC):
+    async def is_related_content_fetched(self, session: DbSession, message: MessageDb) -> bool:
+        pass
+
     async def fetch_related_content(
         self, session: DbSession, message: MessageDb
     ) -> None:

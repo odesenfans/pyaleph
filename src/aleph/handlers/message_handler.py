@@ -4,7 +4,7 @@ import time
 from collections import defaultdict
 from typing import Optional, Dict, Iterable, Sequence, Tuple
 
-from aleph_message.models import MessageType
+from aleph_message.models import MessageType, ItemType
 from pydantic import ValidationError
 
 from aleph.chains.chain_service import ChainService
@@ -156,6 +156,27 @@ class MessageHandler:
             raise InvalidSignature(f"Invalid signature for {pending_message.item_hash}")
 
         return ConfirmMessage(pending_message=pending_message)
+
+    async def is_fetched(self, session: DbSession, pending_message: PendingMessageDb) -> bool:
+        if pending_message.item_type != ItemType.inline:
+            return False
+
+        message = await self.fetch_pending_message(pending_message=pending_message)
+        content_handler = self.get_content_handler(message.type)
+        return await content_handler.is_related_content_fetched(session=session, message=message)
+
+    async def add_pending_message(self, session: DbSession, pending_message: PendingMessageDb):
+        ...
+
+    async def verify_and_fetch_new(
+        self, session: DbSession, pending_message: PendingMessageDb
+    ) -> MessageDb:
+        await self.verify_signature(pending_message=pending_message)
+        validated_message = await self.fetch_pending_message(
+            pending_message=pending_message
+        )
+        await self.fetch_related_content(session=session, message=validated_message)
+        return validated_message
 
     async def verify_and_fetch(
         self, session: DbSession, pending_message: PendingMessageDb

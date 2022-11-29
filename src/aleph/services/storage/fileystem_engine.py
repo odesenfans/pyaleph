@@ -31,3 +31,7 @@ class FileSystemStorageEngine(StorageEngine):
     async def delete(self, filename: str):
         file_path = self.folder / filename
         file_path.unlink(missing_ok=True)
+
+    async def exists(self, filename: str) -> bool:
+        file_path = self.folder / filename
+        return file_path.exists()

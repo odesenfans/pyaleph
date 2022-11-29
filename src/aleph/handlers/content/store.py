@@ -41,6 +41,13 @@ class StoreMessageHandler(ContentHandler):
         self.session_factory = session_factory
         self.storage_service = storage_service
 
+    async def is_related_content_fetched(self, session: DbSession, message: MessageDb) -> bool:
+        content = message.parsed_content
+        assert isinstance(content, StoreContent)
+
+        file_hash = content.item_hash
+        return await self.storage_service.storage_engine.exists(file_hash)
+
     async def fetch_related_content(
         self, session: DbSession, message: MessageDb
     ) -> None:
