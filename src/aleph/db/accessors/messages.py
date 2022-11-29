@@ -1,6 +1,6 @@
 import datetime as dt
 import traceback
-from typing import Optional, Sequence, Union, Iterable
+from typing import Optional, Sequence, Union, Iterable, Any, Mapping, overload
 
 from aleph_message.models import ItemHash, Chain, MessageType
 from sqlalchemy import func, select, update, text, delete
@@ -326,37 +326,12 @@ async def reject_message(
     session.execute(delete(MessageDb).where(MessageDb.item_hash == item_hash))
 
 
-async def reject_pending_message(
-    session: DbSession,
-    pending_message: PendingMessageDb,
+def make_upsert_rejected_message_statement(
+    item_hash: str,
+    pending_message_dict: Mapping[str, Any],
     reason: str,
     exception: Optional[BaseException] = None,
 ):
-    item_hash = pending_message.item_hash
-    message_status = await get_message_status(session=session, item_hash=item_hash)
-
-    delete_pending_message_stmt = delete(PendingMessageDb).where(
-        PendingMessageDb.id == pending_message.id
-    )
-
-    # The message may already be processed and someone is sending invalid copies.
-    # Just drop the pending message.
-    if message_status:
-        if message_status.status not in (MessageStatus.PENDING, MessageStatus.REJECTED):
-            session.execute(delete_pending_message_stmt)
-            return
-
-    # TODO: use Pydantic schema
-    pending_message_dict = pending_message.to_dict(
-        exclude={"id", "check_message", "retries", "tx_hash", "reception_time"}
-    )
-    pending_message_dict["time"] = pending_message_dict["time"].timestamp()
-
-    session.execute(
-        update(MessageStatusDb)
-        .values(status=MessageStatus.REJECTED)
-        .where(MessageStatusDb.item_hash == item_hash)
-    )
     exc_traceback = (
         "\n".join(traceback.format_exception(InvalidMessageException, exception, None))
         if exception
@@ -375,6 +350,125 @@ async def reject_pending_message(
             "traceback": insert_rejected_message_stmt.excluded.traceback,
         },
     )
+    return upsert_rejected_message_stmt
+
+
+@overload
+async def reject_new_pending_message(
+    session: DbSession,
+    pending_message: Mapping[str, Any],
+    reason: str,
+    exception: Optional[BaseException] = None,
+):
+    ...
+
+
+@overload
+async def reject_new_pending_message(
+    session: DbSession,
+    pending_message: PendingMessageDb,
+    reason: str,
+    exception: Optional[BaseException] = None,
+):
+    ...
+
+
+async def reject_new_pending_message(
+    session: DbSession,
+    pending_message: Union[Mapping[str, Any], PendingMessageDb],
+    reason: str,
+    exception: Optional[BaseException] = None,
+):
+    """
+    Reject a pending message that is not yet in the DB.
+    """
+
+    pending_message_dict: Mapping[str, Any]
+
+    if isinstance(pending_message, PendingMessageDb):
+        pending_message_dict = pending_message.to_dict(
+            exclude={
+                "id",
+                "check_message",
+                "retries",
+                "fetched",
+                "tx_hash",
+                "reception_time",
+            }
+        )
+    else:
+        pending_message_dict = pending_message
+
+    # If the message does not even have an item hash, we just drop it silently.
+    try:
+        item_hash = pending_message_dict["item_hash"]
+    except KeyError:
+        return
+
+    # The message may already be processed and someone is sending invalid copies.
+    # Just do nothing if that is the case. We just consider the case where a previous
+    # message with the same item hash was already sent to replace the error message
+    # (ex: someone is retrying a message after fixing an error).
+    message_status = await get_message_status(session=session, item_hash=item_hash)
+    if message_status:
+        if message_status.status != MessageStatus.REJECTED:
+            return
+
+    upsert_rejected_message_stmt = make_upsert_rejected_message_statement(
+        item_hash=item_hash,
+        pending_message_dict=pending_message_dict,
+        reason=reason,
+        exception=exception,
+    )
+
+    session.execute(upsert_rejected_message_stmt)
+
+
+async def reject_existing_pending_message(
+    session: DbSession,
+    pending_message: PendingMessageDb,
+    reason: str,
+    exception: Optional[BaseException] = None,
+):
+    item_hash = pending_message.item_hash
+
+    delete_pending_message_stmt = delete(PendingMessageDb).where(
+        PendingMessageDb.id == pending_message.id
+    )
+
+    # The message may already be processed and someone is sending invalid copies.
+    # Just drop the pending message.
+    message_status = await get_message_status(session=session, item_hash=item_hash)
+    if message_status:
+        if message_status.status not in (MessageStatus.PENDING, MessageStatus.REJECTED):
+            session.execute(delete_pending_message_stmt)
+            return
+
+    # TODO: use Pydantic schema
+    pending_message_dict = pending_message.to_dict(
+        exclude={
+            "id",
+            "check_message",
+            "retries",
+            "fetched",
+            "tx_hash",
+            "reception_time",
+        }
+    )
+    pending_message_dict["time"] = pending_message_dict["time"].timestamp()
+
+    session.execute(
+        update(MessageStatusDb)
+        .values(status=MessageStatus.REJECTED)
+        .where(MessageStatusDb.item_hash == item_hash)
+    )
+    upsert_rejected_message_stmt = make_upsert_rejected_message_statement(
+        item_hash=item_hash,
+        pending_message_dict=pending_message_dict,
+        reason=reason,
+        exception=exception,
+    )
+
     session.execute(upsert_rejected_message_stmt)
     session.execute(delete_pending_message_stmt)
 

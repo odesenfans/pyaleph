@@ -1,15 +1,18 @@
+import logging
 from typing import List, Tuple
 
-from aleph_message.models import PostContent
+from aleph_message.models import PostContent, ChainRef
 from sqlalchemy import update
 
+from aleph.db.accessors.posts import get_matching_posts, get_original_post
 from aleph.db.models import MessageDb
 from aleph.db.models.posts import PostDb
 from aleph.toolkit.timestamp import timestamp_to_datetime
 from aleph.types.db_session import DbSession
-from aleph.types.message_status import MessageUnavailable
+from aleph.types.message_status import MessageUnavailable, InvalidMessageException, MissingDependency
 from .content_handler import ContentHandler
-from ...db.accessors.posts import get_matching_posts
+
+LOGGER = logging.getLogger(__name__)
 
 
 class PostMessageHandler(ContentHandler):
@@ -29,20 +32,31 @@ class PostMessageHandler(ContentHandler):
     in case a user decides to delete a version with a FORGET.
     """
 
-    async def fetch_related_content(
-        self, session: DbSession, message: MessageDb
-    ) -> None:
+    async def check_dependencies(self, session: DbSession, message: MessageDb):
         content = message.parsed_content
-        assert isinstance(content, PostContent)
+        if not isinstance(content, PostContent):
+            raise InvalidMessageException(
+                f"Unexpected content type for post {message.item_hash}"
+            )
 
         # For amends, ensure that the original message exists
         if content.type == "amend":
-            original_post_exists = await PostDb.exists(
-                session=session, where=PostDb.item_hash == content.ref
+
+            ref_hash = (
+                content.ref.item_hash
+                if isinstance(content.ref, ChainRef)
+                else content.ref
             )
-            if not original_post_exists:
-                raise MessageUnavailable(
+
+            original_post = await get_original_post(session=session, item_hash=ref_hash)
+            if not original_post:
+                raise MissingDependency(
                     f"Post {content.ref} referenced by {message.item_hash} is not yet processed"
+                )
+
+            if original_post.type == "amend":
+                raise InvalidMessageException(
+                    f"Post {message.item_hash} is invalid: cannot amend an amend"
                 )
 
     async def process(
@@ -71,6 +85,7 @@ class PostMessageHandler(ContentHandler):
                 [amended_post] = await get_matching_posts(
                     session=session, hashes=[content.ref]
                 )
+
                 if amended_post.last_updated < creation_datetime:
                     session.execute(
                         update(PostDb)

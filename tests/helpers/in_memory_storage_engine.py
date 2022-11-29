@@ -3,6 +3,7 @@ from typing import Dict, Optional
 from aleph.services.storage.engine import StorageEngine
 
 
+# TODO: remove duplication between this class and MockStorageEngine
 class InMemoryStorageEngine(StorageEngine):
     """
     A storage engine that stores files in a dictionary.
@@ -22,3 +23,6 @@ class InMemoryStorageEngine(StorageEngine):
 
     async def delete(self, filename: str):
         del self.files[filename]
+
+    async def exists(self, filename: str) -> bool:
+        return filename in self.files

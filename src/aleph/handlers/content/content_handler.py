@@ -17,6 +17,9 @@ class MessageProcessingResult:
 
 
 class ContentHandler(abc.ABC):
+    async def is_related_content_fetched(self, session: DbSession, message: MessageDb) -> bool:
+        return True
+
     async def fetch_related_content(
         self, session: DbSession, message: MessageDb
     ) -> None:
@@ -44,6 +47,9 @@ class ContentHandler(abc.ABC):
         * applying DB updates.
         """
         ...
+
+    async def check_dependencies(self, session: DbSession, message: MessageDb):
+        pass
 
     async def check_permissions(self, session: DbSession, message: MessageDb):
         await check_sender_authorization(session=session, message=message)

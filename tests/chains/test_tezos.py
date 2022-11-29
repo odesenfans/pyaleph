@@ -64,9 +64,10 @@ async def test_tezos_verify_signature_micheline():
     }
     connector = TezosConnector()
 
-    message = parse_message(message_dict)
     message = PendingMessageDb.from_message_dict(
-        message_dict, reception_time=dt.datetime(2022, 1, 1)
+        message_dict,
+        reception_time=dt.datetime(2022, 1, 1),
+        fetched=True,
     )
     assert await connector.verify_signature(message)
 

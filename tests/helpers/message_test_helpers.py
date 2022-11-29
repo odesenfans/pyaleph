@@ -6,9 +6,10 @@ from typing import List, Optional, Union, Any, Mapping, Sequence, Iterable
 from aleph_message.models import ItemType, MessageConfirmation
 from configmanager import Config
 
-from aleph.db.models import MessageDb, PendingMessageDb
+from aleph.db.models import MessageDb, PendingMessageDb, MessageStatusDb
 from aleph.jobs.process_pending_messages import PendingMessageProcessor
 from aleph.types.db_session import DbSession
+from aleph.types.message_status import MessageStatus
 
 
 def make_validated_message_from_dict(
@@ -31,7 +32,7 @@ def make_validated_message_from_dict(
         raw_content = message_dict["item_content"]
 
     pending_message = PendingMessageDb.from_message_dict(
-        message_dict, reception_time=dt.datetime(2022, 1, 1)
+        message_dict, fetched=True, reception_time=dt.datetime(2022, 1, 1)
     )
     return MessageDb.from_pending_message(
         pending_message=pending_message,
@@ -47,6 +48,15 @@ async def process_pending_messages(
     config: Config,
 ) -> Iterable[MessageDb]:
 
+    for pending_message in pending_messages:
+        session.add(pending_message)
+        session.add(
+            MessageStatusDb(
+                item_hash=pending_message.item_hash,
+                status=MessageStatus.PENDING,
+                reception_time=dt.datetime.now(),
+            )
+        )
     session.add_all(pending_messages)
     session.commit()
 

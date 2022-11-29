@@ -60,6 +60,11 @@ async def get_post(session: DbSession, item_hash: str) -> Optional[MergedPost]:
     return session.execute(select_stmt).one_or_none()
 
 
+async def get_original_post(session: DbSession, item_hash: str) -> Optional[PostDb]:
+    select_stmt = select(PostDb).where(PostDb.item_hash == item_hash)
+    return session.execute(select_stmt).scalar()
+
+
 def make_matching_posts_query(
     hashes: Optional[Sequence[ItemHash]] = None,
     addresses: Optional[Sequence[str]] = None,

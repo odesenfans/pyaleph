@@ -12,6 +12,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy_utils.types.choice import ChoiceType
 
@@ -37,6 +38,7 @@ class PendingMessageDb(Base):
     signature: str = Column(String, nullable=False)
     item_type: ItemType = Column(ChoiceType(ItemType), nullable=False)
     item_content = Column(String, nullable=True)
+    content: Optional[Dict[str, Any]] = Column(JSONB, nullable=True)
     time: dt.datetime = Column(TIMESTAMP(timezone=True), nullable=False)
     channel: Optional[Channel] = Column(String, nullable=True)
 
@@ -44,6 +46,7 @@ class PendingMessageDb(Base):
     check_message: bool = Column(Boolean, nullable=False)
     retries: int = Column(Integer, nullable=False)
     tx_hash: Optional[str] = Column(ForeignKey("chain_txs.hash"), nullable=True)
+    fetched: bool = Column(Boolean, nullable=False)
 
     tx: Optional[ChainTxDb] = relationship("ChainTxDb")
 
@@ -54,6 +57,7 @@ class PendingMessageDb(Base):
         reception_time: dt.datetime,
         tx_hash: Optional[str] = None,
         check_message: bool = True,
+        fetched: bool = False,
     ) -> "PendingMessageDb":
         return cls(
             item_hash=obj.item_hash,
@@ -68,6 +72,7 @@ class PendingMessageDb(Base):
             retries=0,
             tx_hash=tx_hash,
             reception_time=reception_time,
+            fetched=fetched,
         )
 
     @classmethod
@@ -75,6 +80,7 @@ class PendingMessageDb(Base):
         cls,
         message_dict: Mapping[str, Any],
         reception_time: dt.datetime,
+        fetched: bool,
         tx_hash: Optional[str] = None,
         check_message: bool = True,
     ) -> "PendingMessageDb":
@@ -96,6 +102,7 @@ class PendingMessageDb(Base):
             time=timestamp_to_datetime(message_dict["time"]),
             channel=message_dict.get("channel"),
             check_message=check_message,
+            fetched=fetched,
             retries=0,
             tx_hash=tx_hash,
             reception_time=reception_time,

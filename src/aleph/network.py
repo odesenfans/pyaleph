@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Coroutine, List
+from typing import Coroutine, List, Any, Dict
 from urllib.parse import unquote
 
 from aleph_p2p_client import AlephP2PServiceClient
@@ -15,11 +15,12 @@ from aleph.services.ipfs.pubsub import incoming_channel as incoming_ipfs_channel
 from aleph.services.storage.fileystem_engine import FileSystemStorageEngine
 from aleph.storage import StorageService
 from aleph.types.db_session import DbSessionFactory
+import aleph.toolkit.json as aleph_json
 
-LOGGER = logging.getLogger("NETWORK")
+LOGGER = logging.getLogger(__name__)
 
 
-async def decode_pubsub_message(message_data: bytes) -> BasePendingMessage:
+async def decode_pubsub_message(message_data: bytes) -> Dict[str, Any]:
     """
     Extracts an Aleph message out of a pubsub message.
 
@@ -27,14 +28,13 @@ async def decode_pubsub_message(message_data: bytes) -> BasePendingMessage:
     perform extra validation (ex: signature checks).
     """
     try:
-        message_dict = json.loads(unquote(message_data.decode("utf-8")))
-    except json.JSONDecodeError:
+        message_dict = aleph_json.loads(unquote(message_data.decode("utf-8")))
+    except aleph_json.DecodeError:
         raise InvalidMessageError("Data is not JSON: {!r}".format(message_data))
 
     LOGGER.debug("New message! %r" % message_dict)
 
-    message = parse_message(message_dict)
-    return message
+    return message_dict
 
 
 def listener_tasks(

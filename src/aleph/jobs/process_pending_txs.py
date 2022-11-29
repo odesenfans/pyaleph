@@ -9,48 +9,45 @@ from typing import List, Dict, Optional, Set
 import sentry_sdk
 from configmanager import Config
 from setproctitle import setproctitle
+from sqlalchemy import delete
 
+from aleph.chains.chain_service import ChainService
 from aleph.chains.chaindata import ChainDataService
 from aleph.chains.tx_context import TxContext
 from aleph.db.accessors.pending_txs import get_pending_txs_stream
 from aleph.db.connection import make_engine, make_session_factory
-from aleph.db.models import PendingMessageDb
 from aleph.db.models.pending_txs import PendingTxDb
-from aleph.exceptions import InvalidMessageError
-from aleph.logging import setup_logging
-from aleph.schemas.pending_messages import parse_message
+from aleph.handlers.message_handler import MessageHandler
 from aleph.services.ipfs.common import make_ipfs_client
 from aleph.services.ipfs.service import IpfsService
 from aleph.services.p2p import singleton
 from aleph.services.storage.fileystem_engine import FileSystemStorageEngine
 from aleph.storage import StorageService
-from aleph.types.actions.db_action import (
-    DbAction,
-    InsertPendingMessage,
-    DeletePendingTx,
-)
+from aleph.toolkit.logging import setup_logging
+from aleph.toolkit.timestamp import utc_now
 from aleph.types.db_session import DbSessionFactory
-from .job_utils import prepare_loop, process_job_results
-from ..toolkit.timestamp import utc_now
+from .job_utils import prepare_loop
 
-LOGGER = logging.getLogger("jobs.pending_txs")
+LOGGER = logging.getLogger(__name__)
 
 
 class PendingTxProcessor:
     def __init__(
-        self, session_factory: DbSessionFactory, storage_service: StorageService
+        self,
+        session_factory: DbSessionFactory,
+        storage_service: StorageService,
+        message_handler: MessageHandler,
     ):
         self.session_factory = session_factory
         self.storage_service = storage_service
+        self.message_handler = message_handler
         self.chain_data_service = ChainDataService(
             session_factory=session_factory, storage_service=storage_service
         )
 
     async def handle_pending_tx(
         self, pending_tx: PendingTxDb, seen_ids: Optional[Set[str]] = None
-    ) -> List[DbAction]:
-
-        db_operations: List[DbAction] = []
+    ) -> None:
         LOGGER.info(
             "%s Handling TX in block %s", pending_tx.tx.chain, pending_tx.tx.height
         )
@@ -78,50 +75,23 @@ class PendingTxProcessor:
 
         if messages:
             for i, message_dict in enumerate(messages):
-
-                try:
-                    # we don't check signatures yet.
-                    message = parse_message(message_dict)
-                except InvalidMessageError as error:
-                    LOGGER.warning(error)
-                    continue
-
-                # we add it to the message queue... bad idea? should we process it asap?
-                try:
-                    pending_message = PendingMessageDb.from_obj(message, reception_time=utc_now())
-                except ValueError as e:
-                    LOGGER.warning("Invalid message: %s - %s", message.item_hash, str(e))
-                    continue
-
-                pending_message.tx_hash = tx_context.tx_hash
-                db_operations.append(
-                    InsertPendingMessage(pending_message=pending_message)
+                await self.message_handler.add_pending_message(
+                    message_dict=message_dict,
+                    reception_time=utc_now(),
                 )
-
-                await asyncio.sleep(0)
 
         else:
             LOGGER.debug("TX contains no message")
 
         if messages is not None:
             # bogus or handled, we remove it.
-            db_operations.append(
-                DeletePendingTx(
-                    tx_hash=pending_tx.tx_hash, dependencies=db_operations[:]
+            with self.session_factory() as session:
+                session.execute(
+                    delete(PendingTxDb).where(
+                        PendingTxDb.tx_hash == pending_tx.tx_hash
+                    ),
                 )
-            )
-
-        return db_operations
-
-    async def process_tx_job_results(self, tasks: Set[asyncio.Task]):
-        await process_job_results(
-            session_factory=self.session_factory,
-            tasks=tasks,
-            on_error=lambda e: LOGGER.exception(
-                "error in incoming txs task",
-                exc_info=(type(e), e, e.__traceback__),
-            ),
-        )
+                session.commit()
 
     async def process_pending_txs(self, max_concurrent_tasks: int):
         """
@@ -142,8 +112,6 @@ class PendingTxProcessor:
                     done, tasks = await asyncio.wait(
                         tasks, return_when=asyncio.FIRST_COMPLETED
                     )
-                    await self.process_tx_job_results(tasks=done)
-                    session.commit()
 
                 seen_offchain_hashes.add(pending_tx.tx.content)
                 tx_task = asyncio.create_task(
@@ -154,15 +122,13 @@ class PendingTxProcessor:
             # Wait for the last tasks
             if tasks:
                 done, _ = await asyncio.wait(tasks, return_when=asyncio.ALL_COMPLETED)
-                await self.process_tx_job_results(tasks=done)
-                session.commit()
 
 
 async def handle_txs_task(config: Config):
     max_concurrent_tasks = config.aleph.jobs.pending_txs.max_concurrency.value
     await asyncio.sleep(4)
 
-    engine = make_engine(config)
+    engine = make_engine(config=config, application_name="aleph-txs")
     session_factory = make_session_factory(engine)
 
     ipfs_client = make_ipfs_client(config)
@@ -171,8 +137,19 @@ async def handle_txs_task(config: Config):
         storage_engine=FileSystemStorageEngine(folder=config.storage.folder.value),
         ipfs_service=ipfs_service,
     )
-    pending_tx_processor = PendingTxProcessor(
+    chain_service = ChainService(
         session_factory=session_factory, storage_service=storage_service
+    )
+
+    message_handler = MessageHandler(
+        session_factory=session_factory,
+        chain_service=chain_service,
+        storage_service=storage_service,
+    )
+    pending_tx_processor = PendingTxProcessor(
+        session_factory=session_factory,
+        storage_service=storage_service,
+        message_handler=message_handler,
     )
 
     while True:

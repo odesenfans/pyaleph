@@ -1,18 +1,45 @@
-from typing import Optional, Iterable
+from typing import Optional, Iterable, Any, Dict, Sequence, Collection
 
 from aleph_message.models import Chain, MessageType
 from sqlalchemy import select, func, update, delete
 from sqlalchemy.orm import selectinload, aliased
+from sqlalchemy.sql import Update
 
 from aleph.db.models import PendingMessageDb, ChainTxDb
 from aleph.types.db_session import DbSession
+
+
+async def get_next_pending_message(
+    session: DbSession,
+    offset: int = 0,
+    fetched: Optional[bool] = None,
+    exclude_item_hashes: Optional[Sequence[str]] = None,
+) -> Optional[PendingMessageDb]:
+    select_stmt = (
+        select(PendingMessageDb)
+        .order_by(PendingMessageDb.retries.asc(), PendingMessageDb.time.asc())
+        .offset(offset)
+        .options(selectinload(PendingMessageDb.tx))
+    )
+
+    if fetched is not None:
+        select_stmt = select_stmt.where(PendingMessageDb.fetched == fetched)
+
+    if exclude_item_hashes:
+        select_stmt = select_stmt.where(
+            PendingMessageDb.item_hash.not_in(exclude_item_hashes)
+        )
+
+    select_stmt = select_stmt.limit(1)
+    return (session.execute(select_stmt)).scalar()
 
 
 async def get_pending_messages(
     session: DbSession,
     limit: int = 10000,
     offset: int = 0,
-    skip_store: bool = False,
+    fetched: Optional[bool] = None,
+    exclude_item_hashes: Optional[Collection[str]] = None,
 ) -> Iterable[PendingMessageDb]:
     select_stmt = (
         select(PendingMessageDb)
@@ -20,11 +47,13 @@ async def get_pending_messages(
         .offset(offset)
         .options(selectinload(PendingMessageDb.tx))
     )
-    if skip_store:
-        subquery = aliased(PendingMessageDb, select_stmt.subquery())
-        select_stmt = (
-            select(subquery)
-            .where(subquery.type != MessageType.store)
+
+    if fetched is not None:
+        select_stmt = select_stmt.where(PendingMessageDb.fetched == fetched)
+
+    if exclude_item_hashes:
+        select_stmt = select_stmt.where(
+            PendingMessageDb.item_hash.not_in(exclude_item_hashes)
         )
 
     select_stmt = select_stmt.limit(limit)
@@ -50,12 +79,23 @@ async def count_pending_messages(
     return (session.execute(select_stmt)).scalar_one()
 
 
+def make_pending_message_fetched_statement(
+    pending_message: PendingMessageDb, content: Dict[str, Any]
+) -> Update:
+    update_stmt = (
+        update(PendingMessageDb)
+        .where(PendingMessageDb.id == pending_message.id)
+        .values(fetched=True, content=content, retries=0)
+    )
+    return update_stmt
+
+
 async def increase_pending_message_retry_count(
     session: DbSession, pending_message: PendingMessageDb
 ):
     update_stmt = (
         update(PendingMessageDb)
-        .where(PendingMessageDb.item_hash == pending_message.item_hash)
+        .where(PendingMessageDb.id == pending_message.id)
         .values(retries=PendingMessageDb.retries + 1)
     )
     session.execute(update_stmt)

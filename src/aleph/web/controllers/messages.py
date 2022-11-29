@@ -1,6 +1,5 @@
 import logging
-from typing import Any, List, Optional
-from typing import Mapping
+from typing import List, Optional
 
 from aiohttp import web
 from aleph_message.models import MessageType, ItemHash, Chain
@@ -75,6 +74,7 @@ class BaseMessageQueryParams(BaseModel):
         return values
 
     @validator(
+        "hashes",
         "addresses",
         "content_hashes",
         "content_keys",

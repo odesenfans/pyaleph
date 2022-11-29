@@ -118,7 +118,10 @@ async def test_incoming_inline_content(
 
     # Signature validation fails for this fixture
     pending_message = PendingMessageDb.from_message_dict(
-        message_dict, check_message=False, reception_time=dt.datetime(2022, 1, 1)
+        message_dict,
+        check_message=False,
+        reception_time=dt.datetime(2022, 1, 1),
+        fetched=True,
     )
 
     with session_factory() as session:

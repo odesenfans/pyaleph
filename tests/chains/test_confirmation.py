@@ -82,7 +82,7 @@ async def test_confirm_message(
     )
 
     pending_message = PendingMessageDb.from_message_dict(
-        MESSAGE_DICT, reception_time=dt.datetime(2022, 1, 1)
+        MESSAGE_DICT, reception_time=dt.datetime(2022, 1, 1), fetched=True,
     )
     await message_handler.fetch_and_process_one_message_db(pending_message)
 
@@ -149,7 +149,7 @@ async def test_process_confirmed_message(
         session.commit()
 
     pending_message = PendingMessageDb.from_message_dict(
-        MESSAGE_DICT, reception_time=dt.datetime(2022, 1, 1)
+        MESSAGE_DICT, reception_time=dt.datetime(2022, 1, 1), fetched=True,
     )
     pending_message.tx_hash = chain_tx.hash
     pending_message.tx = chain_tx

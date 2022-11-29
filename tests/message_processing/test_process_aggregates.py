@@ -112,6 +112,7 @@ def aggregate_updates() -> Sequence[PendingMessageDb]:
         channel=Channel("INTEGRATION_TESTS"),
         time=timestamp_to_datetime(1644859283.101),
         check_message=True,
+        fetched=True,
         retries=0,
         reception_time=dt.datetime(2022, 1, 1),
     )
@@ -126,6 +127,7 @@ def aggregate_updates() -> Sequence[PendingMessageDb]:
         channel=Channel("INTEGRATION_TESTS"),
         time=timestamp_to_datetime(1644859283.12),
         check_message=True,
+        fetched=True,
         retries=0,
         reception_time=dt.datetime(2022, 1, 1),
     )

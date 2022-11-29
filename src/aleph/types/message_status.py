@@ -45,7 +45,21 @@ class PermissionDenied(InvalidMessageException):
     ...
 
 
-class MessageUnavailable(MessageException):
+class RetryMessageException(MessageException):
+    """
+    The message should be retried.
+    """
+    ...
+
+
+class MissingDependency(RetryMessageException):
+    """
+    An object targeted by the message is missing.
+    """
+    ...
+
+
+class MessageUnavailable(RetryMessageException):
     """
     The message or its related content is not available at the moment.
     """

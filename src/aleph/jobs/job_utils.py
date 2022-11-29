@@ -1,22 +1,15 @@
 import asyncio
 import logging
 from itertools import groupby
-from typing import Callable
 from typing import Dict
 from typing import Iterable, Tuple
-from typing import cast
 
 from configmanager import Config
 
 import aleph.config
 from aleph.db.bulk_operations import DbBulkOperation
-from aleph.toolkit.split import split_iterable
 from aleph.toolkit.timer import Timer
-from aleph.types.actions.action import ActionStatus
-from aleph.types.actions.db_action import DeletePendingTx, InsertPendingMessage
-from aleph.types.actions.db_executor import DbExecutor
-from aleph.types.actions.executor import execute_actions
-from aleph.types.db_session import DbSession, DbSessionFactory
+from aleph.types.db_session import DbSession
 
 LOGGER = logging.getLogger(__name__)
 
@@ -69,41 +62,3 @@ async def perform_db_operations(
             model.__tablename__,
             timer.elapsed(),
         )
-
-
-async def process_job_results(
-    session_factory: DbSessionFactory,
-    tasks: Iterable[asyncio.Task],  # TODO: switch to a generic type when moving to 3.9+
-    on_error: Callable[[BaseException], None],
-):
-    """
-    Processes the result of the pending TX/message tasks.
-
-    Splits successful and failed jobs, handles exceptions and performs
-    DB operations.
-
-    :param: session:
-    :param tasks: Finished job tasks. Each of these tasks must return a list of
-                  DbBulkOperation objects. It is up to the caller to determine
-                  when tasks are done, for example by using asyncio.wait.
-    :param on_error: Error callback function. This function will be called
-                     on each error from one of the tasks.
-    """
-    successes, errors = split_iterable(tasks, lambda t: t.exception() is None)
-
-    for error in errors:
-        # mypy sees Optional[BaseException] otherwise
-        exception = cast(BaseException, error.exception())
-        on_error(exception)
-
-    db_operations = [op for success in successes for op in success.result()]
-
-    db_executor = DbExecutor(session_factory=session_factory)
-    await execute_actions(
-        actions=db_operations,
-        executors={InsertPendingMessage: db_executor, DeletePendingTx: db_executor},
-    )
-
-    for operation in db_operations:
-        if operation.status == ActionStatus.FAILED:
-            LOGGER.exception("Failed to execute action: %s", str(operation.status))

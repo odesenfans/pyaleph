@@ -4,7 +4,6 @@ import shutil
 import sys
 from pathlib import Path
 
-import pymongo
 import pytest
 import pytest_asyncio
 from configmanager import Config
@@ -19,27 +18,30 @@ from aleph.storage import StorageService
 from aleph.types.db_session import DbSessionFactory
 from aleph.web import create_app
 
-TEST_DB = "ccn_automated_tests"
-
-
 # Add the helpers to the PYTHONPATH.
 # Note: mark the "helpers" directory as a source directory to tell PyCharm
 # about this trick and avoid IDE errors.
 sys.path.append(os.path.join(os.path.dirname(__file__), "helpers"))
 
 
-def drop_db(db_name: str, config: Config):
-    client = pymongo.MongoClient(config.mongodb.uri.value)
-    client.drop_database(db_name)
-
-
 @pytest.fixture
 def session_factory(mock_config):
-    engine = make_engine(mock_config, echo=False)
+    engine = make_engine(config=mock_config, echo=False, application_name="aleph-tests")
 
     with engine.begin() as conn:
         Base.metadata.drop_all(conn)
+        # TODO: run migrations instead
         Base.metadata.create_all(conn)
+
+        conn.execute("DROP AGGREGATE IF EXISTS jsonb_merge(jsonb)")
+        conn.execute(
+            """
+        CREATE AGGREGATE jsonb_merge(jsonb) (
+            SFUNC = 'jsonb_concat',
+            STYPE = jsonb,
+            INITCOND = '{}'
+        )"""
+        )
 
     return make_session_factory(engine)
 

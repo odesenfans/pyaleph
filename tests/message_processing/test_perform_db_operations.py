@@ -131,6 +131,7 @@ def make_insert_message_statement(msg: Dict) -> Insert:
         **values,
         retries=0,
         check_message=True,
+        fetched=True,
         reception_time=values["time"] + dt.timedelta(seconds=1)
     )
 

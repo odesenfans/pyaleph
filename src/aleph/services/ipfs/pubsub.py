@@ -18,13 +18,10 @@ async def incoming_channel(
         try:
             async for mvalue in ipfs_service.sub(topic):
                 try:
-                    message = await decode_pubsub_message(mvalue["data"])
-                    LOGGER.debug("New message %r" % message)
-                    await message_handler.delayed_incoming(
-                        message, reception_time=utc_now()
+                    message_dict = await decode_pubsub_message(mvalue["data"])
+                    await message_handler.add_pending_message(
+                        message_dict=message_dict, reception_time=utc_now()
                     )
-                    # TODO: reactivate?
-                    # asyncio.create_task(message_processor.process_one_message(message))
                 except InvalidMessageError:
                     LOGGER.warning(f"Invalid message {mvalue}")
         except Exception:

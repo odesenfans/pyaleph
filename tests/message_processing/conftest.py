@@ -39,7 +39,9 @@ async def _load_fixtures(
     for message_dict in messages_json:
         pending_messages.append(
             PendingMessageDb.from_message_dict(
-                message_dict, reception_time=dt.datetime(2022, 1, 1)
+                message_dict,
+                reception_time=dt.datetime(2022, 1, 1),
+                fetched=True,
             )
         )
         for confirmation in message_dict.get("confirmations", []):

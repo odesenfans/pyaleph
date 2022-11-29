@@ -32,7 +32,7 @@ from aleph.db.connection import make_engine, make_session_factory, make_db_url
 from aleph.exceptions import InvalidConfigException, KeyNotFoundException
 from aleph.jobs import start_jobs
 from aleph.jobs.job_utils import prepare_loop
-from aleph.logging import setup_logging
+from aleph.toolkit.logging import setup_logging
 from aleph.network import listener_tasks
 from aleph.services import p2p
 from aleph.services.ipfs import IpfsService
@@ -53,8 +53,8 @@ LOGGER = logging.getLogger(__name__)
 def run_db_migrations(config: Config):
     db_url = make_db_url(driver="psycopg2", config=config)
     alembic_cfg = alembic.config.Config("alembic.ini")
-    alembic_cfg.attributes['configure_logger'] = False
-    logging.getLogger('alembic').setLevel(logging.CRITICAL)
+    alembic_cfg.attributes["configure_logger"] = False
+    logging.getLogger("alembic").setLevel(logging.CRITICAL)
     alembic.command.upgrade(alembic_cfg, "head", tag=db_url)
 
 
@@ -87,7 +87,11 @@ async def run_server(
     LOGGER.debug("Setup of runner")
     p2p_client = await init_p2p_client(config, service_name=f"api-server-{port}")
 
-    engine = make_engine(config, echo=config.logging.level.value == logging.DEBUG)
+    engine = make_engine(
+        config,
+        echo=config.logging.level.value == logging.DEBUG,
+        application_name=f"aleph-api-{port}",
+    )
     session_factory = make_session_factory(engine)
 
     ipfs_client = make_ipfs_client(config)
@@ -221,7 +225,11 @@ async def main(args):
     run_db_migrations(config)
     LOGGER.info("Database initialized.")
 
-    engine = make_engine(config, echo=args.loglevel == logging.DEBUG)
+    engine = make_engine(
+        config,
+        echo=args.loglevel == logging.DEBUG,
+        application_name="aleph-conn-manager",
+    )
     session_factory = make_session_factory(engine)
 
     # TODO: find a way to prevent alembic from messing up the logging config

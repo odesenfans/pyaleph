@@ -33,7 +33,7 @@ async def incoming_channel(
                     # we should check the sender here to avoid spam
                     # and such things...
                     try:
-                        message = await decode_pubsub_message(message.body)
+                        message_dict = await decode_pubsub_message(message.body)
                     except InvalidMessageError:
                         LOGGER.warning(
                             "Received invalid message on P2P topic %s from %s",
@@ -42,9 +42,8 @@ async def incoming_channel(
                         )
                         continue
 
-                    LOGGER.debug("New message %r" % message)
-                    await message_handler.delayed_incoming(
-                        message, reception_time=utc_now()
+                    await message_handler.add_pending_message(
+                        message_dict=message_dict, reception_time=utc_now()
                     )
                 except Exception:
                     LOGGER.exception("Can't handle message")

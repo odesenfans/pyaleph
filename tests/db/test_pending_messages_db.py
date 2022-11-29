@@ -40,6 +40,7 @@ def fixture_pending_messages():
                 content="Qmsomething",
             ),
             reception_time=dt.datetime(2022, 10, 7, 17, 5, 10),
+            fetched=True,
         ),
         PendingMessageDb(
             id=27,
@@ -55,6 +56,7 @@ def fixture_pending_messages():
             retries=3,
             check_message=True,
             reception_time=dt.datetime(2022, 10, 7, 22, 10, 10),
+            fetched=True,
         ),
         PendingMessageDb(
             id=42,
@@ -80,6 +82,7 @@ def fixture_pending_messages():
                 content="Qmsomething",
             ),
             reception_time=dt.datetime(2022, 10, 7, 21, 53, 10),
+            fetched=True,
         ),
     ]
 
@@ -124,9 +127,14 @@ async def test_get_pending_messages(
         # Check the order of messages
         assert [m.id for m in pending_messages] == [404, 42, 27]
 
-        # Skip store
+        # Exclude hashes
         pending_messages = list(
-            await get_pending_messages(session=session, skip_store=True)
+            await get_pending_messages(
+                session=session,
+                exclude_item_hashes={
+                    "588ac154509de449b0915844fa1117c72b9136eaaabd078494ea5c5c39cd14b2"
+                },
+            )
         )
         assert len(pending_messages) == 2
         assert [m.id for m in pending_messages] == [404, 27]

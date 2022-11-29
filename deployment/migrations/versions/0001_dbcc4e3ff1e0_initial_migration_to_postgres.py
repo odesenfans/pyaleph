@@ -150,6 +150,7 @@ def upgrade() -> None:
         sa.Column("channel", sa.String(), nullable=True),
         sa.Column("content", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("creation_datetime", sa.TIMESTAMP(timezone=True), nullable=False),
+        sa.Column("latest_amend", sa.String(), nullable=True),
         sa.ForeignKeyConstraint(
             ["amends"],
             ["posts.item_hash"],
@@ -230,12 +231,14 @@ def upgrade() -> None:
         sa.Column("signature", sa.String(), nullable=False),
         sa.Column("item_type", sa.String(), nullable=False),
         sa.Column("item_content", sa.String(), nullable=True),
+        sa.Column("content", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("time", sa.TIMESTAMP(timezone=True), nullable=False),
         sa.Column("channel", sa.String(), nullable=True),
         sa.Column("reception_time", sa.TIMESTAMP(timezone=True), nullable=False),
         sa.Column("check_message", sa.Boolean(), nullable=False),
         sa.Column("retries", sa.Integer(), nullable=False),
         sa.Column("tx_hash", sa.String(), nullable=True),
+        sa.Column("fetched", sa.Boolean, nullable=False),
         sa.ForeignKeyConstraint(
             ["tx_hash"],
             ["chain_txs.hash"],

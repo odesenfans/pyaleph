@@ -24,9 +24,13 @@ def fixture_store_message() -> PendingMessageDb:
         item_content='{"address": "0x696879aE4F6d8DaDD5b8F1cbb1e663B89b08f106", "time": 1665478676.6585264, "item_type": "storage", "item_hash": "c25b0525bc308797d3e35763faf5c560f2974dab802cb4a734ae4e9d1040319e", "mime_type": "text/plain"}',
         time=timestamp_to_datetime(1665478676.658627),
         channel=Channel("TEST"),
+        check_message=True,
+        fetched=False,
+        reception_time=timestamp_to_datetime(1665478677),
     )
 
 
+# TODO: remove duplication of this class
 class MockStorageEngine(StorageEngine):
     def __init__(self, files: Mapping[str, bytes]):
         self.files = files
@@ -39,6 +43,9 @@ class MockStorageEngine(StorageEngine):
 
     async def delete(self, filename: str):
         pass
+
+    async def exists(self, filename: str) -> bool:
+        return filename in self.files
 
 
 @pytest.mark.asyncio

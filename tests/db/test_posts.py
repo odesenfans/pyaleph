@@ -132,6 +132,7 @@ async def test_get_post_with_one_amend(
     with session_factory() as session:
         session.add(original_post)
         session.add(first_amend_post)
+        original_post.latest_amend = first_amend_post.item_hash
         session.commit()
 
     with session_factory() as session:
@@ -162,6 +163,7 @@ async def test_get_post_with_two_amends(
         session.add(original_post)
         session.add(first_amend_post)
         session.add(second_amend_post)
+        original_post.latest_amend = second_amend_post.item_hash
         session.commit()
 
     with session_factory() as session:
@@ -186,6 +188,7 @@ async def test_get_matching_posts(
     with session_factory() as session:
         session.add(original_post)
         session.add(first_amend_post)
+        original_post.latest_amend = first_amend_post.item_hash
         session.add(post_from_second_user)
         session.commit()
 
@@ -252,6 +255,7 @@ async def test_get_matching_posts_time_filters(
     with session_factory() as session:
         session.add(original_post)
         session.add(first_amend_post)
+        original_post.latest_amend = first_amend_post.item_hash
         session.add(post_from_second_user)
         session.commit()
 
@@ -285,6 +289,7 @@ async def test_get_matching_posts_sort_order(
     with session_factory() as session:
         session.add(original_post)
         session.add(first_amend_post)
+        original_post.latest_amend = first_amend_post.item_hash
         session.add(post_from_second_user)
         session.commit()
 

@@ -78,10 +78,10 @@ async def test_forget_post_message(
     }
 
     pending_message = PendingMessageDb.from_message_dict(
-        target_message_dict, reception_time=dt.datetime(2022, 1, 1)
+        target_message_dict, reception_time=dt.datetime(2022, 1, 1), fetched=True
     )
     pending_forget_message = PendingMessageDb.from_message_dict(
-        forget_message_dict, reception_time=dt.datetime(2022, 1, 2)
+        forget_message_dict, reception_time=dt.datetime(2022, 1, 2), fetched=True
     )
 
     with session_factory() as session:
@@ -150,6 +150,7 @@ async def test_forget_store_message(
         channel=Channel("TEST"),
         retries=0,
         check_message=True,
+        fetched=True,
         reception_time=dt.datetime(2022, 1, 1),
     )
 
@@ -165,6 +166,7 @@ async def test_forget_store_message(
         channel=Channel("TEST"),
         retries=0,
         check_message=True,
+        fetched=True,
         reception_time=dt.datetime(2022, 1, 2),
     )
 
@@ -259,6 +261,7 @@ async def test_forget_forget_message(
         channel=Channel("TEST"),
         retries=0,
         check_message=True,
+        fetched=True,
         reception_time=dt.datetime(2022, 1, 2),
     )
 
@@ -372,6 +375,7 @@ async def test_forget_store_multi_users(
         channel=Channel("TESTS_FORGET"),
         retries=0,
         check_message=True,
+        fetched=True,
         reception_time=dt.datetime(2022, 1, 2),
     )
 

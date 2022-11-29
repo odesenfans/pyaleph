@@ -5,18 +5,20 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import NullPool
-
-from aleph.types.db_session import DbSessionFactory, AsyncDbSessionFactory
 
 from aleph.config import get_config
+from aleph.types.db_session import DbSessionFactory, AsyncDbSessionFactory
 
 
-def make_db_url(driver: str, config: Config) -> str:
+def make_db_url(
+    driver: str, config: Config, application_name: Optional[str] = None
+) -> str:
     """
     Returns the database connection string from configuration values.
 
+    :param driver: Driver name. Ex: psycopg2, asyncpg.
     :param config: Configuration. If not specified, the global configuration object is used.
+    :param application_name: Application name.
     :returns: The database connection string.
     """
 
@@ -26,15 +28,27 @@ def make_db_url(driver: str, config: Config) -> str:
     password = config.postgres.password.value
     database = config.postgres.database.value
 
-    return f"postgresql+{driver}://{user}:{password}@{host}:{port}/{database}"
+    connection_string = (
+        f"postgresql+{driver}://{user}:{password}@{host}:{port}/{database}"
+    )
+    if application_name:
+        connection_string += f"?application_name={application_name}"
+
+    return connection_string
 
 
-def make_engine(config: Optional[Config] = None, echo: bool = False) -> Engine:
+def make_engine(
+    config: Optional[Config] = None,
+    echo: bool = False,
+    application_name: Optional[str] = None,
+) -> Engine:
     if config is None:
         config = get_config()
 
     return create_engine(
-        make_db_url(driver="psycopg2", config=config),
+        make_db_url(
+            driver="psycopg2", config=config, application_name=application_name
+        ),
         echo=echo,
         pool_size=config.postgres.pool_size.value,
     )
@@ -43,9 +57,12 @@ def make_engine(config: Optional[Config] = None, echo: bool = False) -> Engine:
 def make_async_engine(
     config: Optional[Config] = None,
     echo: bool = False,
+    application_name: Optional[str] = None,
 ) -> AsyncEngine:
     return create_async_engine(
-        make_db_url(driver="asyncpg", config=config), future=True, echo=echo
+        make_db_url(driver="asyncpg", config=config, application_name=application_name),
+        future=True,
+        echo=echo,
     )
 
 

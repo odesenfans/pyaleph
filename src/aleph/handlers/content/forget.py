@@ -42,7 +42,7 @@ from aleph.types.message_status import (
     InvalidMessageException,
     MessageUnavailable,
     MessageStatus,
-    PermissionDenied,
+    PermissionDenied, MissingDependency,
 )
 from aleph.utils import item_type_from_hash
 
@@ -56,7 +56,7 @@ class ForgetMessageHandler(ContentHandler):
         self.session_factory = session_factory
         self.storage_service = storage_service
 
-    async def fetch_related_content(
+    async def check_dependencies(
         self, session: DbSession, message: MessageDb
     ) -> None:
         """
@@ -78,7 +78,7 @@ class ForgetMessageHandler(ContentHandler):
 
         for item_hash in content.hashes:
             if not await message_exists(session=session, item_hash=item_hash):
-                raise MessageUnavailable(
+                raise MissingDependency(
                     f"A target of FORGET message {message_item_hash} "
                     f"is not yet available: {item_hash}"
                 )
@@ -87,7 +87,7 @@ class ForgetMessageHandler(ContentHandler):
             if not aggregate_exists(
                 session=session, key=aggregate_key, owner=content.address
             ):
-                raise MessageUnavailable(
+                raise MissingDependency(
                     f"An aggregate listed in FORGET message {message_item_hash} "
                     f"is not yet available: {content.address}/{aggregate_key}"
                 )

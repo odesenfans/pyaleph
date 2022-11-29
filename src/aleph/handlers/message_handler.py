@@ -1,19 +1,25 @@
 import datetime as dt
 import logging
-import time
-from collections import defaultdict
-from typing import Optional, Dict, Iterable, Sequence, Tuple
+from typing import Optional, Dict, Any, Mapping
 
-from aleph_message.models import MessageType
+import psycopg2
+import sqlalchemy.exc
+from aleph_message.models import MessageType, ItemType
 from pydantic import ValidationError
+from sqlalchemy import delete, insert
 
 from aleph.chains.chain_service import ChainService
 from aleph.db.accessors.messages import (
     get_message_by_item_hash,
+    make_confirmation_upsert_query,
+    make_message_upsert_query,
+    make_message_status_upsert_query,
+    reject_new_pending_message,
 )
 from aleph.db.models import (
     PendingMessageDb,
     MessageDb,
+    MessageStatusDb,
 )
 from aleph.exceptions import (
     InvalidMessageError,
@@ -27,16 +33,14 @@ from aleph.handlers.content.forget import ForgetMessageHandler
 from aleph.handlers.content.post import PostMessageHandler
 from aleph.handlers.content.program import ProgramMessageHandler
 from aleph.handlers.content.store import StoreMessageHandler
-from aleph.schemas.pending_messages import BasePendingMessage
+from aleph.schemas.pending_messages import parse_message
 from aleph.storage import StorageService
-from aleph.types.actions.db_action import UpsertMessage, ConfirmMessage, MessageDbAction
-from aleph.types.actions.db_executor import DbExecutor
-from aleph.types.actions.executor import execute_actions
 from aleph.types.db_session import DbSessionFactory, DbSession
 from aleph.types.message_status import (
     InvalidMessageException,
     InvalidSignature,
     MessageUnavailable,
+    MessageStatus,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -72,24 +76,6 @@ class MessageHandler:
     # TODO typing: make this function generic on message type
     def get_content_handler(self, message_type: MessageType) -> ContentHandler:
         return self.content_handlers[message_type]
-
-    async def delayed_incoming(
-        self,
-        message: BasePendingMessage,
-        reception_time: dt.datetime,
-        tx_hash: Optional[str] = None,
-    ):
-
-        with self.session_factory() as session:
-            session.add(
-                PendingMessageDb.from_obj(
-                    message,
-                    tx_hash=tx_hash,
-                    check_message=True,
-                    reception_time=reception_time,
-                )
-            )
-            session.commit()
 
     async def verify_signature(self, pending_message: PendingMessageDb):
         if pending_message.check_message:
@@ -149,104 +135,176 @@ class MessageHandler:
 
     @staticmethod
     async def confirm_existing_message(
+        session: DbSession,
         existing_message: MessageDb,
         pending_message: PendingMessageDb,
-    ) -> MessageDbAction:
+    ):
         if pending_message.signature != existing_message.signature:
             raise InvalidSignature(f"Invalid signature for {pending_message.item_hash}")
 
-        return ConfirmMessage(pending_message=pending_message)
+        session.execute(
+            delete(PendingMessageDb).where(PendingMessageDb.id == pending_message.id)
+        )
+        if tx_hash := pending_message.tx_hash:
+            session.execute(
+                make_confirmation_upsert_query(
+                    item_hash=pending_message.item_hash, tx_hash=tx_hash
+                )
+            )
+
+    async def load_fetched_content(
+        self, session: DbSession, pending_message: PendingMessageDb
+    ) -> PendingMessageDb:
+        if pending_message.item_type != ItemType.inline:
+            pending_message.fetched = False
+            return pending_message
+
+        message = await self.fetch_pending_message(pending_message=pending_message)
+        content_handler = self.get_content_handler(message.type)
+        is_fetched = await content_handler.is_related_content_fetched(
+            session=session, message=message
+        )
+
+        pending_message.fetched = is_fetched
+        pending_message.content = message.content
+        return pending_message
+
+    async def add_pending_message(
+        self,
+        message_dict: Mapping[str, Any],
+        reception_time: dt.datetime,
+    ) -> Optional[PendingMessageDb]:
+
+        with self.session_factory() as session:
+            try:
+                # we don't check signatures yet.
+                message = parse_message(message_dict)
+            except InvalidMessageError as error:
+                LOGGER.warning(error)
+                await reject_new_pending_message(
+                    session=session, pending_message=message_dict, reason=str(error)
+                )
+                return None
+
+            # we add it to the message queue... bad idea? should we process it asap?
+            try:
+                pending_message = PendingMessageDb.from_obj(
+                    message, reception_time=reception_time
+                )
+            except ValueError as e:
+                LOGGER.warning("Invalid message: %s - %s", message.item_hash, str(e))
+                await reject_new_pending_message(
+                    session=session, pending_message=message_dict, reason=str(e)
+                )
+                return None
+
+            try:
+                with self.session_factory() as session:
+                    pending_message = await self.load_fetched_content(
+                        session, pending_message
+                    )
+            except InvalidMessageException as e:
+                LOGGER.warning("Invalid message: %s - %s", message.item_hash, str(e))
+                await reject_new_pending_message(
+                    session=session, pending_message=message_dict, reason=str(e)
+                )
+                return None
+
+            upsert_message_status_stmt = make_message_status_upsert_query(
+                item_hash=pending_message.item_hash,
+                new_status=MessageStatus.PENDING,
+                reception_time=reception_time,
+                where=MessageStatusDb.status == MessageStatus.REJECTED,
+            )
+            insert_pending_message_stmt = insert(PendingMessageDb).values(
+                pending_message.to_dict(exclude={"id"})
+            )
+
+            try:
+                session.execute(upsert_message_status_stmt)
+                session.execute(insert_pending_message_stmt)
+                session.commit()
+                return pending_message
+
+            except (psycopg2.Error, sqlalchemy.exc.SQLAlchemyError) as e:
+                LOGGER.warning(
+                    "Failed to add new pending message %s - DB error: %s",
+                    pending_message.item_hash,
+                    str(e),
+                )
+                session.rollback()
+                await reject_new_pending_message(
+                    session=session,
+                    pending_message=message_dict,
+                    reason=str(e),
+                    exception=e,
+                )
+                session.commit()
+                return None
+
+    async def insert_message(
+        self, session: DbSession, pending_message: PendingMessageDb, message: MessageDb
+    ):
+        session.execute(make_message_upsert_query(message))
+        session.execute(
+            delete(PendingMessageDb).where(PendingMessageDb.id == pending_message.id)
+        )
+        session.execute(
+            make_message_status_upsert_query(
+                item_hash=message.item_hash,
+                new_status=MessageStatus.PROCESSED,
+                reception_time=pending_message.reception_time,
+                where=(MessageStatusDb.status == MessageStatus.PENDING),
+            )
+        )
+
+        if tx_hash := pending_message.tx_hash:
+            session.execute(
+                make_confirmation_upsert_query(
+                    item_hash=message.item_hash, tx_hash=tx_hash
+                )
+            )
 
     async def verify_and_fetch(
         self, session: DbSession, pending_message: PendingMessageDb
-    ) -> Tuple[Optional[MessageDb], Sequence[MessageDbAction]]:
-        item_hash = pending_message.item_hash
-
-        existing_message = await get_message_by_item_hash(
-            session=session, item_hash=item_hash
-        )
-        actions = []
-
-        if existing_message:
-            # The message already exists and is validated. The current message is a confirmation.
-            confirm_action = await self.confirm_existing_message(
-                pending_message=pending_message,
-                existing_message=existing_message,
-            )
-            actions.append(confirm_action)
-            return None, actions
-
+    ) -> MessageDb:
         await self.verify_signature(pending_message=pending_message)
         validated_message = await self.fetch_pending_message(
             pending_message=pending_message
         )
         await self.fetch_related_content(session=session, message=validated_message)
+        return validated_message
 
-        # All the content was fetched successfully, we can mark the message as fetched
-        actions.append(
-            UpsertMessage(message=validated_message, pending_message=pending_message)
+    async def process(self, session: DbSession, pending_message: PendingMessageDb):
+        existing_message = await get_message_by_item_hash(
+            session=session, item_hash=pending_message.item_hash
         )
+        if existing_message:
+            await self.confirm_existing_message(
+                session=session,
+                existing_message=existing_message,
+                pending_message=pending_message,
+            )
+            return existing_message
 
-        return validated_message, actions
+        message = await self.verify_and_fetch(
+            session=session, pending_message=pending_message
+        )
+        content_handler = self.get_content_handler(message.type)
+        await content_handler.check_dependencies(session=session, message=message)
+        await self.check_permissions(session=session, message=message)
+        await self.insert_message(
+            session=session, pending_message=pending_message, message=message
+        )
+        await content_handler.process(session=session, messages=[message])
+        return message
 
     async def check_permissions(self, session: DbSession, message: MessageDb):
         # TODO: check balance
         content_handler = self.get_content_handler(message.type)
         await content_handler.check_permissions(session=session, message=message)
 
-    async def process(
-        self, session: DbSession, messages: Iterable[MessageDb]
-    ) -> Tuple[Sequence[MessageDb], Sequence[MessageDb]]:
-
-        successes = []
-        errors = []
-        messages_by_type = defaultdict(list)
-
-        for message in messages:
-            messages_by_type[message.type].append(message)
-
-        # FORGETs should be last to avoid race conditions. Other message types
-        # can be rearranged if deemed necessary, i.e. to treat faster operations at
-        # the start.
-        for message_type in (
-            MessageType.aggregate,
-            MessageType.post,
-            MessageType.program,
-            MessageType.store,
-            MessageType.forget,
-        ):
-            content_handler = self.get_content_handler(message_type)
-            start_time = time.perf_counter()
-            mtype_successes, mtype_errors = await content_handler.process(
-                session=session, messages=messages_by_type[message_type]
-            )
-            end_time = time.perf_counter()
-            LOGGER.info(
-                "Processed %d %s messages in %.4f seconds",
-                len(messages_by_type[message_type]),
-                message_type,
-                end_time - start_time,
-            )
-            successes += mtype_successes
-            errors += mtype_errors
-
-        return successes, errors
-
     async def fetch_and_process_one_message_db(self, pending_message: PendingMessageDb):
-        # Fetch
         with self.session_factory() as session:
-            validated_message, actions = await self.verify_and_fetch(
-                session=session, pending_message=pending_message
-            )
-            session.commit()
-            await execute_actions(
-                actions=actions, executors=DbExecutor(self.session_factory)
-            )
-
-            if validated_message is None:
-                # The pending message was a confirmation, we are done.
-                return
-
-            await self.check_permissions(session=session, message=validated_message)
-            await self.process(session=session, messages=[validated_message])
+            await self.process(session=session, pending_message=pending_message)
             session.commit()
