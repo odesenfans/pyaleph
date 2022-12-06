@@ -3,7 +3,7 @@ from typing import Sequence, Optional
 import pytest
 
 from aleph.types.actions.action import Action, ActionStatus
-from aleph.types.actions.executor import Executor, execute_actions
+from aleph.types.actions.executors.executor import Executor, execute_actions
 
 
 class TestAction(Action):

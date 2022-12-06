@@ -15,7 +15,7 @@ from aleph.toolkit.timer import Timer
 from aleph.types.actions.action import ActionStatus
 from aleph.types.actions.db_action import DeletePendingTx, InsertPendingMessage
 from aleph.types.actions.db_executor import DbExecutor
-from aleph.types.actions.executor import execute_actions
+from aleph.types.actions.executors.executor import execute_actions
 from aleph.types.db_session import DbSession, DbSessionFactory
 
 LOGGER = logging.getLogger(__name__)

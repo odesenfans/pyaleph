@@ -8,7 +8,7 @@ from aleph.db.models import ChainTxDb
 from aleph.types.actions.action import ActionStatus
 from aleph.types.actions.db_action import DbAction
 from aleph.types.actions.db_executor import DbExecutor
-from aleph.types.actions.executor import execute_actions
+from aleph.types.actions.executors.executor import execute_actions
 from aleph.types.chain_sync import ChainSyncProtocol
 
 

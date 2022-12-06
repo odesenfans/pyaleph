@@ -31,7 +31,7 @@ from aleph.schemas.pending_messages import BasePendingMessage
 from aleph.storage import StorageService
 from aleph.types.actions.db_action import UpsertMessage, ConfirmMessage, MessageDbAction
 from aleph.types.actions.db_executor import DbExecutor
-from aleph.types.actions.executor import execute_actions
+from aleph.types.actions.executors.executor import execute_actions
 from aleph.types.db_session import DbSessionFactory, DbSession
 from aleph.types.message_status import (
     InvalidMessageException,

@@ -14,7 +14,7 @@ from aleph.jobs.process_pending_txs import PendingTxProcessor
 from aleph.storage import StorageService
 from aleph.types.actions.db_action import InsertPendingMessage, DeletePendingTx
 from aleph.types.actions.db_executor import DbExecutor
-from aleph.types.actions.executor import execute_actions
+from aleph.types.actions.executors.executor import execute_actions
 from aleph.types.chain_sync import ChainSyncProtocol
 from aleph.types.db_session import DbSessionFactory
 from aleph.types.message_status import MessageStatus

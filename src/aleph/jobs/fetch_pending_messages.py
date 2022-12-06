@@ -11,7 +11,6 @@ from typing import (
     Set,
     Tuple,
     cast,
-    Optional,
     AsyncIterator,
     Sequence,
     NewType,
@@ -21,11 +20,9 @@ import sentry_sdk
 from aleph_message.models import MessageType
 from configmanager import Config, NotFound
 from setproctitle import setproctitle
-from sqlalchemy import update
 
 from aleph.chains.chain_service import ChainService
 from aleph.db.accessors.messages import (
-    reject_message,
     reject_pending_message,
 )
 from aleph.db.accessors.pending_messages import (
@@ -33,7 +30,7 @@ from aleph.db.accessors.pending_messages import (
     increase_pending_message_retry_count,
 )
 from aleph.db.connection import make_engine, make_session_factory
-from aleph.db.models import PendingMessageDb, MessageDb, MessageStatusDb
+from aleph.db.models import PendingMessageDb, MessageDb
 from aleph.handlers.message_handler import MessageHandler
 from aleph.logging import setup_logging
 from aleph.services.ipfs import IpfsService
@@ -45,14 +42,12 @@ from aleph.types.db_session import DbSession, DbSessionFactory
 from aleph.types.message_status import (
     MessageUnavailable,
     InvalidMessageException,
-    MessageStatus,
-    PermissionDenied,
 )
 from .job_utils import prepare_loop
 from aleph.types.actions.action import ActionStatus
 from aleph.types.actions.db_action import MessageDbAction, MarkPendingMessageAsFetched
 from aleph.types.actions.db_executor import DbExecutor
-from aleph.types.actions.executor import execute_actions
+from aleph.types.actions.executors.executor import execute_actions
 
 LOGGER = getLogger(__name__)
 

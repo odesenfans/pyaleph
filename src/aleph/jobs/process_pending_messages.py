@@ -52,7 +52,7 @@ from .job_utils import prepare_loop
 from aleph.types.actions.action import ActionStatus
 from aleph.types.actions.db_action import MessageDbAction
 from aleph.types.actions.db_executor import DbExecutor
-from aleph.types.actions.executor import execute_actions
+from aleph.types.actions.executors.executor import execute_actions
 
 LOGGER = getLogger("jobs.pending_messages")
 

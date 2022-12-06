@@ -189,27 +189,30 @@ class AcceptAggregateExecutor(AcceptMessageExecutor):
         session.flush()
         await refresh_aggregate(session=session, owner=owner, key=key)
 
-    def execute(self, actions: Sequence[AcceptAggregateMessageAction]):
+    async def execute(self, actions: Sequence[AcceptAggregateMessageAction]):
         with self.session_factory() as session:
             sorted_actions = sorted(
                 actions,
-                key=lambda a: (
-                    a.message.parsed_content.key,
-                    a.message.parsed_content.address,
-                    a.message.parsed_content.time,
+                key=lambda action: (
+                    action.message.parsed_content.key,
+                    action.message.parsed_content.address,
+                    action.message.parsed_content.time,
                 ),
             )
 
             for ((key, owner), actions_by_aggregate) in itertools.groupby(
                 sorted_actions,
-                key=lambda m: (m.parsed_content.key, m.parsed_content.address),
+                key=lambda action: (
+                    action.message.parsed_content.key,
+                    action.message.parsed_content.address,
+                ),
             ):
-                aggregate_elements = [
-                    await self._insert_aggregate_element(
-                        session=session, message=message
-                    )
-                    for message in actions_by_aggregate
-                ]
+                aggregate_elements = []
+                for action in actions_by_aggregate:
+                    self.accept_message(session=session, action=action)
+                    aggregate_elements.append(await self._insert_aggregate_element(
+                        session=session, message=action.message
+                    ))
 
                 await self._update_aggregate(
                     session=session, key=key, owner=owner, elements=aggregate_elements

@@ -6,7 +6,7 @@ import psycopg2
 import sqlalchemy.exc
 
 from aleph.types.actions.db_action import DbAction
-from aleph.types.actions.executor import Executor
+from aleph.types.actions.executors.executor import Executor
 from aleph.types.db_session import DbSessionFactory
 
 LOGGER = logging.getLogger(__name__)
