@@ -1,4 +1,5 @@
 import asyncio
+import datetime as dt
 import json
 from typing import Dict, Optional, List, Any, Mapping, Set
 
@@ -7,11 +8,9 @@ from aleph_message.models import Chain
 from aleph.chains.common import LOGGER
 from aleph.chains.tx_context import TxContext
 from aleph.config import get_config
-from aleph.db.accessors.files import upsert_file_pin
-from aleph.db.models import ChainTxDb, MessageDb
-from aleph.db.models.files import FilePinDb
+from aleph.db.accessors.files import upsert_tx_file_pin, make_upsert_stored_file_query
+from aleph.db.models import ChainTxDb, MessageDb, StoredFileDb
 from aleph.db.models.pending_txs import PendingTxDb
-from aleph.types.chain_sync import ChainSyncProtocol
 from aleph.exceptions import (
     InvalidContent,
     AlephStorageException,
@@ -19,7 +18,9 @@ from aleph.exceptions import (
 )
 from aleph.storage import StorageService
 from aleph.toolkit.timestamp import timestamp_to_datetime
+from aleph.types.chain_sync import ChainSyncProtocol
 from aleph.types.db_session import DbSessionFactory, DbSession
+from aleph.types.files import FileType
 
 INCOMING_MESSAGE_AUTHORIZED_FIELDS = [
     "item_hash",
@@ -136,10 +137,17 @@ class ChainDataService:
                     with self.session_factory() as session:
                         # Some chain data files are duplicated, and can be treated in parallel,
                         # hence the upsert.
-                        await upsert_file_pin(
+                        stored_file = StoredFileDb(
+                            hash=content.hash,
+                            type=FileType.FILE,
+                            size=len(content.raw_value),
+                        )
+                        session.execute(make_upsert_stored_file_query(stored_file))
+                        await upsert_tx_file_pin(
                             session=session,
                             file_hash=chaindata["content"],
                             tx_hash=context.tx_hash,
+                            created=dt.datetime.utcnow(),
                         )
                         session.commit()
 

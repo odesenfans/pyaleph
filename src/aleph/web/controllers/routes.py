@@ -57,7 +57,7 @@ def register_routes(app: web.Application):
     app.router.add_get("/api/v0/storage/{hash}", storage.get_hash)
     app.router.add_get("/api/v0/storage/raw/{hash}", storage.get_raw_hash)
     app.router.add_get(
-        "/api/v0/storage/count/{hash}", storage.get_file_references_count
+        "/api/v0/storage/count/{hash}", storage.get_file_pins_count
     )
 
     app.router.add_get("/version", version.version)

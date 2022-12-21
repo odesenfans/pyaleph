@@ -8,3 +8,4 @@ from .peers import *
 from .pending_messages import *
 from .pending_txs import *
 from .posts import *
+from .programs import *

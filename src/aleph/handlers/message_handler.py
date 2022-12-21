@@ -184,6 +184,7 @@ class MessageHandler:
                 await reject_new_pending_message(
                     session=session, pending_message=message_dict, reason=str(error)
                 )
+                session.commit()
                 return None
 
             # we add it to the message queue... bad idea? should we process it asap?
@@ -196,6 +197,7 @@ class MessageHandler:
                 await reject_new_pending_message(
                     session=session, pending_message=message_dict, reason=str(e)
                 )
+                session.commit()
                 return None
 
             try:
@@ -208,6 +210,7 @@ class MessageHandler:
                 await reject_new_pending_message(
                     session=session, pending_message=message_dict, reason=str(e)
                 )
+                session.commit()
                 return None
 
             upsert_message_status_stmt = make_message_status_upsert_query(

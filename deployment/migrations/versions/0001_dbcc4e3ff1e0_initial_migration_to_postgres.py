@@ -65,18 +65,28 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("chain"),
     )
     op.create_table(
-        "file_pins",
-        sa.Column("file_hash", sa.String(), nullable=False),
-        sa.Column("tx_hash", sa.String(), nullable=False),
-        sa.PrimaryKeyConstraint("file_hash"),
-    )
-    op.create_table(
         "files",
         sa.Column("hash", sa.String(), nullable=False),
         sa.Column("size", sa.BigInteger(), nullable=True),
         sa.Column("type", sa.String(), nullable=False),
-        sa.Column("created", sa.TIMESTAMP(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint("hash"),
+    )
+    op.create_table(
+        "file_pins",
+        sa.Column("id", sa.BigInteger(), nullable=False),
+        sa.Column("file_hash", sa.String(), nullable=False),
+        sa.Column("created", sa.TIMESTAMP(timezone=True), nullable=False),
+        sa.Column("type", sa.String(), nullable=False),
+        sa.Column("tx_hash", sa.String(), nullable=True),
+        sa.Column("owner", sa.String(), nullable=True),
+        sa.Column("item_hash", sa.String(), nullable=True),
+        sa.Column("ref", sa.String(), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["file_hash"],
+            ["files.hash"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("item_hash"),
     )
     op.create_table(
         "forgotten_messages",
@@ -184,21 +194,20 @@ def upgrade() -> None:
     )
     op.create_index("ix_aggregates_owner", "aggregates", ["owner"], unique=False)
     op.create_table(
-        "file_references",
-        sa.Column("id", sa.BigInteger(), nullable=False),
-        sa.Column("file_hash", sa.String(), nullable=False),
+        "file_tags",
+        sa.Column("tag", sa.String(), nullable=False),
         sa.Column("owner", sa.String(), nullable=False),
-        sa.Column("item_hash", sa.String(), nullable=False),
+        sa.Column("file_hash", sa.String(), nullable=False),
+        sa.Column("last_updated", sa.TIMESTAMP(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(
             ["file_hash"],
             ["files.hash"],
         ),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("item_hash"),
+        sa.PrimaryKeyConstraint("tag"),
     )
     op.create_index(
-        op.f("ix_file_references_file_hash"),
-        "file_references",
+        op.f("ix_file_tags_file_hash"),
+        "file_tags",
         ["file_hash"],
         unique=False,
     )
@@ -273,8 +282,8 @@ def downgrade() -> None:
         op.f("ix_message_confirmations_item_hash"), table_name="message_confirmations"
     )
     op.drop_table("message_confirmations")
-    op.drop_index(op.f("ix_file_references_file_hash"), table_name="file_references")
-    op.drop_table("file_references")
+    op.drop_index(op.f("ix_file_tags_file_hash"), table_name="file_tags")
+    op.drop_table("file_tags")
     op.drop_index("ix_aggregates_owner", table_name="aggregates")
     op.drop_table("aggregates")
     op.drop_table("rejected_messages")
@@ -294,8 +303,8 @@ def downgrade() -> None:
         op.f("ix_forgotten_messages_channel"), table_name="forgotten_messages"
     )
     op.drop_table("forgotten_messages")
-    op.drop_table("files")
     op.drop_table("file_pins")
+    op.drop_table("files")
     op.drop_table("chains_sync_status")
     op.drop_table("chain_txs")
     op.drop_index("ix_time_desc", table_name="aggregate_elements")

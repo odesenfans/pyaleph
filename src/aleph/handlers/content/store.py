@@ -9,16 +9,20 @@ TODO:
 """
 
 import asyncio
-import datetime as dt
 import logging
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import aioipfs
-from aleph_message.models import ItemType, StoreContent
+from aleph_message.models import ItemType, StoreContent, ItemHash
 
 from aleph.config import get_config
-from aleph.db.accessors.files import make_upsert_stored_file_query, insert_file_reference
-from aleph.db.models import MessageDb, StoredFileDb, FileReferenceDb
+from aleph.db.accessors.files import (
+    make_upsert_stored_file_query,
+    insert_message_file_pin,
+    get_file_tag,
+    upsert_file_tag,
+)
+from aleph.db.models import MessageDb, StoredFileDb
 from aleph.exceptions import AlephStorageException, UnknownHashError
 from aleph.handlers.content.content_handler import ContentHandler
 from aleph.schemas.validated_message import (
@@ -26,12 +30,56 @@ from aleph.schemas.validated_message import (
     EngineInfo,
 )
 from aleph.storage import StorageService
+from aleph.toolkit.timestamp import timestamp_to_datetime
 from aleph.types.db_session import DbSessionFactory, DbSession
-from aleph.types.file_type import FileType
-from aleph.types.message_status import MessageUnavailable
+from aleph.types.files import FileTag, FileType
+from aleph.types.message_status import (
+    MessageUnavailable,
+    InvalidMessageException,
+    PermissionDenied,
+)
 from aleph.utils import item_type_from_hash
 
-LOGGER = logging.getLogger("HANDLERS.STORAGE")
+LOGGER = logging.getLogger(__name__)
+
+
+def _get_store_content(message: MessageDb) -> StoreContent:
+    content = message.parsed_content
+    if not isinstance(content, StoreContent):
+        raise InvalidMessageException(
+            f"Unexpected content type for store message: {message.item_hash}"
+        )
+    return content
+
+
+def make_file_tag(owner: str, ref: Optional[str], item_hash: str) -> FileTag:
+    """
+    Builds the file tag corresponding to a STORE message.
+
+    The file tag can be set to two different values:
+    * if the `ref` field is not set, the tag will be set to <item_hash>.
+    * if the `ref` field is set, two cases: if `ref` is an item hash, the tag is
+      the value of the ref field. If it is a user-defined value, the tag is
+      <owner>/<ref>.
+
+    :param owner: Owner of the file.
+    :param ref: Value of the `ref` field of the message content.
+    :param item_hash: Item hash of the message.
+    :return: The computed file tag.
+    """
+
+    # When the user does not specify a ref, we use the item hash.
+    if ref is None:
+        return FileTag(item_hash)
+
+    # If ref is an item hash, return it as is
+    try:
+        _item_hash = ItemHash(ref)
+        return FileTag(ref)
+    except ValueError:
+        pass
+
+    return FileTag(f"{owner}/{ref}")
 
 
 class StoreMessageHandler(ContentHandler):
@@ -41,7 +89,9 @@ class StoreMessageHandler(ContentHandler):
         self.session_factory = session_factory
         self.storage_service = storage_service
 
-    async def is_related_content_fetched(self, session: DbSession, message: MessageDb) -> bool:
+    async def is_related_content_fetched(
+        self, session: DbSession, message: MessageDb
+    ) -> bool:
         content = message.parsed_content
         assert isinstance(content, StoreContent)
 
@@ -144,26 +194,57 @@ class StoreMessageHandler(ContentHandler):
         stored_file = StoredFileDb(
             hash=item_hash,
             type=FileType.DIRECTORY if is_folder else FileType.FILE,
-            created=dt.datetime.utcnow(),
             size=size,
         )
         session.execute(make_upsert_stored_file_query(stored_file))
 
-    async def _create_file_reference(self, session: DbSession, message: MessageDb):
-        content = message.parsed_content
-        assert isinstance(content, StoreContent)
+    async def check_permissions(self, session: DbSession, message: MessageDb):
+        content = _get_store_content(message)
+        if content.ref is None:
+            return
 
-        await insert_file_reference(
+        owner = content.address
+        file_tag = make_file_tag(owner=owner, ref=content.ref, item_hash=message.item_hash)
+        file_tag_db = await get_file_tag(session=session, tag=file_tag)
+
+        if not file_tag_db:
+            return
+
+        if file_tag_db.owner != owner:
+            raise PermissionDenied(
+                f"{message.item_hash} attempts to update a file tag belonging to another user"
+            )
+
+    async def _pin_and_tag_file(self, session: DbSession, message: MessageDb):
+        content = _get_store_content(message)
+
+        file_hash = content.item_hash
+        owner = content.address
+
+        await insert_message_file_pin(
             session=session,
-            file_hash=content.item_hash,
-            owner=content.address,
+            file_hash=file_hash,
+            owner=owner,
             item_hash=message.item_hash,
+            ref=content.ref,
+            created=timestamp_to_datetime(content.time),
+        )
+
+        file_tag = make_file_tag(
+            owner=content.address, ref=content.ref, item_hash=message.item_hash
+        )
+        await upsert_file_tag(
+            session=session,
+            tag=file_tag,
+            owner=owner,
+            file_hash=file_hash,
+            last_updated=timestamp_to_datetime(content.time),
         )
 
     async def process(
         self, session: DbSession, messages: List[MessageDb]
     ) -> Tuple[List[MessageDb], List[MessageDb]]:
         for message in messages:
-            await self._create_file_reference(session=session, message=message)
+            await self._pin_and_tag_file(session=session, message=message)
 
         return messages, []

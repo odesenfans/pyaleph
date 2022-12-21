@@ -9,7 +9,7 @@ from aleph.db.models import MessageDb
 from aleph.db.models.posts import PostDb
 from aleph.toolkit.timestamp import timestamp_to_datetime
 from aleph.types.db_session import DbSession
-from aleph.types.message_status import MessageUnavailable, InvalidMessageException, MissingDependency
+from aleph.types.message_status import InvalidMessageException, MissingDependency
 from .content_handler import ContentHandler
 
 LOGGER = logging.getLogger(__name__)
@@ -36,7 +36,7 @@ class PostMessageHandler(ContentHandler):
         content = message.parsed_content
         if not isinstance(content, PostContent):
             raise InvalidMessageException(
-                f"Unexpected content type for post {message.item_hash}"
+                f"Unexpected content type for post message: {message.item_hash}"
             )
 
         # For amends, ensure that the original message exists

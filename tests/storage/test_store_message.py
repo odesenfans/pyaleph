@@ -11,7 +11,7 @@ from aleph.schemas.message_content import ContentSource, RawContent
 from aleph.services.ipfs import IpfsService
 from aleph.storage import StorageService
 from aleph.types.db_session import DbSessionFactory
-from aleph.types.file_type import FileType
+from aleph.types.files import FileType
 from message_test_helpers import make_validated_message_from_dict
 
 

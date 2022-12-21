@@ -1,12 +1,20 @@
-from typing import Optional, List
+from enum import Enum
+from typing import Optional, List, Any, Dict
 
 from sqlalchemy import BigInteger, Column, String, ForeignKey, TIMESTAMP
 from sqlalchemy.orm import relationship
 from sqlalchemy_utils import ChoiceType
 
-from aleph.types.file_type import FileType
+from aleph.types.files import FileType
 from .base import Base
 import datetime as dt
+
+from ...types.files import FileTag
+
+
+class FilePinType(str, Enum):
+    TX = "tx"
+    MESSAGE = "message"
 
 
 class StoredFileDb(Base):
@@ -27,28 +35,55 @@ class StoredFileDb(Base):
     # TODO: compute the size from local storage
     size: Optional[int] = Column(BigInteger, nullable=True)
     type: FileType = Column(ChoiceType(FileType), nullable=False)
-    created: dt.datetime = Column(TIMESTAMP(timezone=True), nullable=False)
 
-    references: List["FileReferenceDb"] = relationship(
-        "FileReferenceDb", back_populates="file"
+    pins: List["FilePinDb"] = relationship(
+        "FilePinDb", back_populates="file"
+    )
+    tags: List["FileTagDb"] = relationship(
+        "FileTagDb", back_populates="file"
     )
 
 
-class FileReferenceDb(Base):
-    __tablename__ = "file_references"
+class FileTagDb(Base):
+    __tablename__ = "file_tags"
 
-    id: int = Column(BigInteger, primary_key=True)
-
-    # TODO: should point to ID instead
-    file_hash: str = Column(ForeignKey(StoredFileDb.hash), nullable=False, index=True)
+    tag: FileTag = Column(String, primary_key=True)
     owner: str = Column(String, nullable=False)
-    item_hash: str = Column(String, nullable=False, unique=True)
+    file_hash: str = Column(ForeignKey(StoredFileDb.hash), nullable=False, index=True)
+    last_updated: dt.datetime = Column(TIMESTAMP(timezone=True), nullable=False)
 
-    file: StoredFileDb = relationship(StoredFileDb, back_populates="references")
+    file: StoredFileDb = relationship(StoredFileDb, back_populates="tags")
 
 
 class FilePinDb(Base):
     __tablename__ = "file_pins"
 
-    file_hash = Column(String, primary_key=True)
-    tx_hash = Column(String, nullable=False)
+    id: int = Column(BigInteger, primary_key=True)
+
+    file_hash: str = Column(ForeignKey(StoredFileDb.hash), nullable=False)
+    created: dt.datetime = Column(TIMESTAMP(timezone=True), nullable=False)
+    type: str = Column(String, nullable=False)
+
+    file: StoredFileDb = relationship(StoredFileDb, back_populates="pins")
+
+    __mapper_args__: Dict[str, Any] = {
+        "polymorphic_on": type,
+    }
+
+
+class TxFilePinDb(FilePinDb):
+    tx_hash = Column(String, nullable=True)
+
+    __mapper_args__ = {
+        "polymorphic_identity": FilePinType.TX.value,
+    }
+
+
+class MessageFilePinDb(FilePinDb):
+    owner = Column(String, nullable=True)
+    item_hash = Column(String, nullable=True)
+    ref = Column(String, nullable=True)
+
+    __mapper_args__ = {
+        "polymorphic_identity": FilePinType.MESSAGE.value,
+    }

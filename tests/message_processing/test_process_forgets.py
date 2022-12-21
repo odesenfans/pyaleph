@@ -6,7 +6,7 @@ from configmanager import Config
 from more_itertools import one
 from sqlalchemy import select
 
-from aleph.db.accessors.files import count_file_references
+from aleph.db.accessors.files import count_file_pins
 from aleph.db.accessors.messages import get_message_status, get_forgotten_message
 from aleph.db.accessors.posts import get_post
 from aleph.db.models import (
@@ -14,14 +14,15 @@ from aleph.db.models import (
     StoredFileDb,
     MessageDb,
     MessageStatusDb,
-    FileReferenceDb,
+    FileTagDb,
+    FilePinDb, MessageFilePinDb,
 )
 from aleph.handlers.content.forget import ForgetMessageHandler
 from aleph.jobs.process_pending_messages import PendingMessageProcessor
 from aleph.toolkit.timestamp import timestamp_to_datetime
 from aleph.types.channel import Channel
 from aleph.types.db_session import DbSessionFactory
-from aleph.types.file_type import FileType
+from aleph.types.files import FileType
 from aleph.types.message_status import MessageStatus
 from message_test_helpers import (
     process_pending_messages,
@@ -187,7 +188,7 @@ async def test_forget_store_message(
         )
 
         # Sanity check
-        nb_references = await count_file_references(
+        nb_references = await count_file_pins(
             session=session, file_hash=file_hash
         )
         assert nb_references == 1
@@ -205,7 +206,7 @@ async def test_forget_store_message(
         content = await storage_engine.read(filename=file_hash)
         assert content is None
 
-        nb_references = await count_file_references(
+        nb_references = await count_file_pins(
             session=session, file_hash=file_hash
         )
         assert nb_references == 0
@@ -405,21 +406,23 @@ async def test_forget_store_multi_users(
                 hash=file_hash,
                 size=file_size,
                 type=FileType.FILE,
+            )
+        )
+        session.add(
+            MessageFilePinDb(
+                file_hash=file_hash,
+                owner=store_message_user1.sender,
+                item_hash=store_message_user1.item_hash,
                 created=store_message_user1.time,
             )
         )
         session.add(
-            FileReferenceDb(
-                file_hash=file_hash,
-                owner=store_message_user1.sender,
-                item_hash=store_message_user1.item_hash,
-            )
-        )
-        session.add(
-            FileReferenceDb(
+            MessageFilePinDb(
                 file_hash=file_hash,
                 owner=store_message_user2.sender,
                 item_hash=store_message_user2.item_hash,
+                created=store_message_user2.time,
+
             )
         )
 
@@ -445,11 +448,11 @@ async def test_forget_store_multi_users(
         )
         assert message2_status
         assert message2_status.status == MessageStatus.PROCESSED
-        file_reference = session.execute(
-            select(FileReferenceDb).where(FileReferenceDb.file_hash == file_hash)
+        file_pin = session.execute(
+            select(FilePinDb).where(FilePinDb.file_hash == file_hash)
         ).scalar_one()
-        assert file_reference.item_hash == store_message_user2.item_hash
-        assert file_reference.owner == store_message_user2.sender
+        assert file_pin.item_hash == store_message_user2.item_hash
+        assert file_pin.owner == store_message_user2.sender
 
         # Check that the file is still there
         content = await storage_engine.read(filename=file_hash)

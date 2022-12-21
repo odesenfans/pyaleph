@@ -4,7 +4,6 @@ from typing import Any, Dict
 
 from aiohttp import web
 from aleph_message.models import MessageType
-from bson import json_util
 
 from aleph.db.accessors.messages import get_message_stats_by_sender
 from aleph.types.db_session import DbSessionFactory
