@@ -57,7 +57,13 @@ async def pub_json(request: web.Request):
     try:
         p2p_client: AlephP2PServiceClient = request.app["p2p_client"]
         await asyncio.wait_for(
-            pub_p2p(p2p_client, request_data.get("topic"), request_data.get("data")), 10
+            pub_p2p(
+                p2p_client,
+                request_data.get("topic"),
+                request_data.get("data"),
+                loopback=True,
+            ),
+            10,
         )
     except Exception:
         LOGGER.exception("Can't publish on p2p")
