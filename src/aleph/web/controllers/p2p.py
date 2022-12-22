@@ -48,7 +48,7 @@ async def pub_json(request: web.Request):
         ipfs_service: IpfsService = request.app["storage_service"].ipfs_service
         if request.app["config"].ipfs.enabled.value:
             await asyncio.wait_for(
-                ipfs_service.pub(request_data.get("topic"), request_data.get("data")), 1
+                ipfs_service.pub(request_data.get("topic"), request_data.get("data")), 10
             )
     except Exception:
         LOGGER.exception("Can't publish on ipfs")
