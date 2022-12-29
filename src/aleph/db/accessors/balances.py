@@ -33,7 +33,7 @@ async def update_balance(
         address=address, chain=chain, dapp=dapp, eth_height=eth_height, balance=balance
     )
     upsert_stmt = insert_stmt.on_conflict_do_update(
-        constraint="balances_pkey",
+        constraint="balances_address_chain_dapp_uindex",
         set_={"eth_height": eth_height, "balance": balance},
         where=AlephBalanceDb.eth_height < eth_height,
     )
