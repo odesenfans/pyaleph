@@ -37,8 +37,8 @@ from aleph.storage import StorageService
 from aleph.toolkit.logging import setup_logging
 from aleph.types.db_session import DbSession, DbSessionFactory
 from aleph.types.message_status import (
-    MessageUnavailable,
-    InvalidMessageException, RetryMessageException,
+    InvalidMessageException,
+    RetryMessageException,
 )
 from .job_utils import prepare_loop
 
@@ -63,8 +63,7 @@ async def handle_fetch_error(
         await reject_existing_pending_message(
             session=session,
             pending_message=pending_message,
-            reason=str(exception),
-            exception=None,
+            exception=exception,
         )
     else:
         if isinstance(exception, RetryMessageException):
@@ -82,14 +81,10 @@ async def handle_fetch_error(
                 "Rejecting pending message: %s - too many retries",
                 pending_message.item_hash,
             )
-            rejection_exception = (
-                None if isinstance(exception, MessageUnavailable) else exception
-            )
             await reject_existing_pending_message(
                 session=session,
                 pending_message=pending_message,
-                reason="Too many retries",
-                exception=rejection_exception,
+                exception=exception,
             )
         else:
             await increase_pending_message_retry_count(

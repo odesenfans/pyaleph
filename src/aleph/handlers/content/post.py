@@ -1,19 +1,22 @@
 import logging
-from decimal import Decimal
-from io import StringIO
 from typing import List, Tuple, Any, Dict, Mapping, Union, Optional
 
 from aleph_message.models import PostContent, ChainRef, Chain
-from sqlalchemy import update, delete
+from sqlalchemy import update
 
+from aleph.db.accessors.balances import update_balances as update_balances_db
 from aleph.db.accessors.posts import get_matching_posts, get_original_post
-from aleph.db.models import MessageDb, AlephBalanceDb
+from aleph.db.models.messages import MessageDb
 from aleph.db.models.posts import PostDb
 from aleph.toolkit.timestamp import timestamp_to_datetime
 from aleph.types.db_session import DbSession
-from aleph.types.message_status import InvalidMessageException, MissingDependency
+from aleph.types.message_status import (
+    InvalidMessageFormat,
+    CannotAmendAmend,
+    AmendTargetNotFound,
+    NoAmendTarget,
+)
 from .content_handler import ContentHandler
-from ...db.accessors.balances import update_balances as update_balances_db
 
 LOGGER = logging.getLogger(__name__)
 
@@ -21,17 +24,18 @@ LOGGER = logging.getLogger(__name__)
 def get_post_content(message: MessageDb) -> PostContent:
     content = message.parsed_content
     if not isinstance(content, PostContent):
-        raise InvalidMessageException(
+        raise InvalidMessageFormat(
             f"Unexpected content type for post message: {message.item_hash}"
         )
     return content
 
 
 async def update_balances(session: DbSession, content: Mapping[str, Any]):
-
     chain = Chain(content["chain"])
     height = content["main_height"]
     dapp = content.get("dapp")
+
+    LOGGER.info("Updating balances for %s (dapp: %s)", chain, dapp)
 
     balances: Dict[str, float] = content["balances"]
     await update_balances_db(
@@ -76,20 +80,14 @@ class PostMessageHandler(ContentHandler):
             ref = get_post_content_ref(content.ref)
 
             if ref is None:
-                raise InvalidMessageException(
-                    f"Amend post {message.item_hash} does not specify a ref"
-                )
+                raise NoAmendTarget()
 
             original_post = await get_original_post(session=session, item_hash=ref)
             if not original_post:
-                raise MissingDependency(
-                    f"Post {ref} referenced by {message.item_hash} is not yet processed"
-                )
+                raise AmendTargetNotFound()
 
             if original_post.type == "amend":
-                raise InvalidMessageException(
-                    f"Post {message.item_hash} is invalid: cannot amend an amend"
-                )
+                raise CannotAmendAmend()
 
     async def process_post(self, session: DbSession, message: MessageDb):
         content = get_post_content(message)

@@ -22,6 +22,7 @@ from aleph.db.models import (
 )
 from aleph.handlers.content.content_handler import ContentHandler
 from aleph.types.db_session import DbSession
+from aleph.types.message_status import InternalError
 
 
 def map_volume(volume: AbstractVolume) -> MachineVolumeBaseDb:
@@ -43,7 +44,7 @@ def map_volume(volume: AbstractVolume) -> MachineVolumeBaseDb:
             size_mib=volume.size_mib,
         )
     else:
-        raise ValueError(f"Unsupported volume type: {volume.__class__.__name__}")
+        raise InternalError(f"Unsupported volume type: {volume.__class__.__name__}")
 
 
 def program_message_to_db(message: MessageDb):

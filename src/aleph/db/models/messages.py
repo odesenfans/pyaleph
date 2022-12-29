@@ -195,13 +195,22 @@ class ForgottenMessageDb(Base):
     forgotten_by: List[str] = Column(ARRAY(String), nullable=False)  # type: ignore
 
 
+class ErrorCodeDb(Base):
+    __tablename__ = "error_codes"
+
+    code: int = Column(Integer, primary_key=True)
+    description: str = Column(String, nullable=False)
+
+
 class RejectedMessageDb(Base):
     __tablename__ = "rejected_messages"
 
     item_hash: str = Column(String, primary_key=True)
     message: Dict[str, Any] = Column(JSONB, nullable=False)
-    reason: str = Column(String, nullable=False)
+    error_code: int = Column(Integer, nullable=False)
+    details: Optional[Dict[str, Any]] = Column(JSONB, nullable=True)
     traceback: Optional[str] = Column(String, nullable=True)
+
 
 class MessageConfirmationDb(Base):
     __tablename__ = "message_confirmations"

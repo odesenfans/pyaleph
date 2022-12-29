@@ -40,11 +40,11 @@ from aleph.handlers.content.store import make_file_tag
 from aleph.storage import StorageService
 from aleph.types.db_session import DbSessionFactory, DbSession
 from aleph.types.message_status import (
-    InvalidMessageException,
-    MessageUnavailable,
+    MessageContentUnavailable,
     MessageStatus,
     PermissionDenied,
-    MissingDependency,
+    CannotForgetForgetMessage,
+    ForgetTargetNotFound, NoForgetTarget, InternalError,
 )
 from aleph.utils import item_type_from_hash
 
@@ -72,25 +72,17 @@ class ForgetMessageHandler(ContentHandler):
 
         if not content.hashes and not content.aggregates:
             # The user did not specify anything to forget.
-            raise InvalidMessageException(
-                f"FORGET message {message_item_hash} specifies nothing to forget"
-            )
+            raise NoForgetTarget()
 
         for item_hash in content.hashes:
             if not await message_exists(session=session, item_hash=item_hash):
-                raise MissingDependency(
-                    f"A target of FORGET message {message_item_hash} "
-                    f"is not yet available: {item_hash}"
-                )
+                raise ForgetTargetNotFound(item_hash)
 
         for aggregate_key in content.aggregates:
             if not aggregate_exists(
                 session=session, key=aggregate_key, owner=content.address
             ):
-                raise MissingDependency(
-                    f"An aggregate listed in FORGET message {message_item_hash} "
-                    f"is not yet available: {content.address}/{aggregate_key}"
-                )
+                raise ForgetTargetNotFound(aggregate_key=aggregate_key)
 
     @staticmethod
     async def delete_aggregate_element(
@@ -206,9 +198,7 @@ class ForgetMessageHandler(ContentHandler):
                 session=session, item_hash=target_hash
             )
             if not target_status:
-                raise MessageUnavailable(
-                    f"Target message {target_hash} is not known by this node."
-                )
+                raise ForgetTargetNotFound(target_hash=target_hash)
 
             if target_status.status in (
                 MessageStatus.FORGOTTEN,
@@ -217,21 +207,22 @@ class ForgetMessageHandler(ContentHandler):
                 continue
 
             if target_status.status != MessageStatus.PROCESSED:
-                raise MessageUnavailable(
-                    f"Target message {target_hash} is not yet processed."
-                )
+                raise ForgetTargetNotFound(target_hash=target_hash)
 
             target_message = await get_message_by_item_hash(
                 session=session, item_hash=target_hash
             )
             if not target_message:
-                raise MessageUnavailable(
+                raise InternalError(
                     f"Target message {target_hash} is marked as processed but does not exist."
                 )
             if target_message.type == MessageType.forget:
-                raise PermissionDenied(
-                    f"FORGET message {target_hash} may not be forgotten by {message.item_hash}"
+                logger.warning(
+                    f"FORGET message %s may not forget FORGET message %s",
+                    message.item_hash,
+                    target_hash,
                 )
+                raise CannotForgetForgetMessage(target_hash)
             if target_message.sender != message.sender:
                 raise PermissionDenied(
                     f"Cannot forget message {target_hash} because it belongs to another user"
@@ -269,9 +260,7 @@ class ForgetMessageHandler(ContentHandler):
     ):
         message_status = await get_message_status(session=session, item_hash=item_hash)
         if not message_status:
-            raise MessageUnavailable(
-                f"Target message {item_hash} is not known by this node."
-            )
+            raise ForgetTargetNotFound(target_hash=item_hash)
 
         if message_status.status == MessageStatus.REJECTED:
             logger.info("Message %s was rejected, nothing to do.", item_hash)
@@ -290,19 +279,17 @@ class ForgetMessageHandler(ContentHandler):
                 forgotten_by.item_hash,
                 item_hash,
             )
-            raise MessageUnavailable(
-                "Trying to process a FORGET message with target messages not processed!"
-            )
+            raise ForgetTargetNotFound(item_hash)
 
         message = await get_message_by_item_hash(session=session, item_hash=item_hash)
         if not message:
-            raise MessageUnavailable(f"Message {item_hash} not found")
+            raise ForgetTargetNotFound(item_hash)
 
         if message.type == MessageType.forget:
             # This should have been detected in check_permissions(). Raise an exception
             # if it happens nonetheless as it indicates an unforeseen concurrent modification
             # of the database.
-            raise PermissionDenied("Cannot forget a FORGET message")
+            raise CannotForgetForgetMessage(message.item_hash)
 
         await self._forget_message(
             session=session,

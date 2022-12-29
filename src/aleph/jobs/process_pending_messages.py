@@ -35,9 +35,10 @@ from aleph.storage import StorageService
 from aleph.toolkit.logging import setup_logging
 from aleph.types.db_session import DbSession, DbSessionFactory
 from aleph.types.message_status import (
-    MessageUnavailable,
+    MessageContentUnavailable,
     InvalidMessageException,
     RetryMessageException,
+    FileNotFoundException,
 )
 from .job_utils import prepare_loop
 
@@ -70,11 +71,10 @@ class PendingMessageProcessor:
             await reject_existing_pending_message(
                 session=session,
                 pending_message=pending_message,
-                reason=str(exception),
-                exception=None,
+                exception=exception,
             )
         else:
-            if isinstance(exception, MessageUnavailable):
+            if isinstance(exception, FileNotFoundException):
                 LOGGER.warning(
                     "Could not fetch message %s, putting it back in the fetch queue: %s",
                     pending_message.item_hash,
@@ -103,14 +103,10 @@ class PendingMessageProcessor:
                     "Rejecting pending message: %s - too many retries",
                     pending_message.item_hash,
                 )
-                rejection_exception = (
-                    None if isinstance(exception, MessageUnavailable) else exception
-                )
                 await reject_existing_pending_message(
                     session=session,
                     pending_message=pending_message,
-                    reason="Too many retries",
-                    exception=rejection_exception,
+                    exception=exception,
                 )
             else:
                 await increase_pending_message_retry_count(

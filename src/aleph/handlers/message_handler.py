@@ -23,7 +23,6 @@ from aleph.db.models import (
     MessageStatusDb,
 )
 from aleph.exceptions import (
-    InvalidMessageError,
     InvalidContent,
     ContentCurrentlyUnavailable,
     UnknownHashError,
@@ -40,7 +39,7 @@ from aleph.types.db_session import DbSessionFactory, DbSession
 from aleph.types.message_status import (
     InvalidMessageException,
     InvalidSignature,
-    MessageUnavailable,
+    MessageContentUnavailable,
     MessageStatus,
 )
 
@@ -84,13 +83,8 @@ class MessageHandler:
 
     async def verify_signature(self, pending_message: PendingMessageDb):
         if pending_message.check_message:
-            try:
-                # TODO: remove type: ignore by deciding the pending message type
-                await self.chain_service.verify_signature(pending_message)  # type: ignore
-            except InvalidMessageError:
-                raise InvalidSignature(
-                    f"Invalid signature for '{pending_message.item_hash}'"
-                )
+            # TODO: remove type: ignore by deciding the pending message type
+            await self.chain_service.verify_signature(pending_message)  # type: ignore
 
     async def fetch_pending_message(
         self, pending_message: PendingMessageDb
@@ -100,13 +94,13 @@ class MessageHandler:
         try:
             content = await self.storage_service.get_message_content(pending_message)
         except InvalidContent:
-            LOGGER.warning("Can't get content of message %r, won't retry." % item_hash)
-            raise InvalidMessageException("Can't get content of message %s", item_hash)
+            LOGGER.warning("Can't get content of message %r, won't retry.", item_hash)
+            raise InvalidMessageException(f"Can't get content of message {item_hash}")
 
         except (ContentCurrentlyUnavailable, Exception) as e:
             if not isinstance(e, ContentCurrentlyUnavailable):
                 LOGGER.exception("Can't get content of object %r" % item_hash)
-            raise MessageUnavailable(f"Could not fetch content for {item_hash}")
+            raise MessageContentUnavailable(f"Could not fetch content for {item_hash}")
 
         try:
             validated_message = MessageDb.from_pending_message(
@@ -130,11 +124,11 @@ class MessageHandler:
             raise InvalidMessageException(
                 f"Invalid IPFS hash for message {message.item_hash}"
             )
-        except (InvalidMessageException, MessageUnavailable):
+        except (InvalidMessageException, MessageContentUnavailable):
             raise
         except Exception as e:
             LOGGER.exception("Error using the message type handler")
-            raise MessageUnavailable(
+            raise MessageContentUnavailable(
                 f"Unexpected error while fetching related content of {message.item_hash}"
             ) from e
 
@@ -184,10 +178,10 @@ class MessageHandler:
             try:
                 # we don't check signatures yet.
                 message = parse_message(message_dict)
-            except InvalidMessageError as error:
-                LOGGER.warning(error)
+            except InvalidMessageException as e:
+                LOGGER.warning(e)
                 await reject_new_pending_message(
-                    session=session, pending_message=message_dict, reason=str(error)
+                    session=session, pending_message=message_dict, exception=e
                 )
                 session.commit()
                 return None
@@ -200,7 +194,7 @@ class MessageHandler:
             except ValueError as e:
                 LOGGER.warning("Invalid message: %s - %s", message.item_hash, str(e))
                 await reject_new_pending_message(
-                    session=session, pending_message=message_dict, reason=str(e)
+                    session=session, pending_message=message_dict, exception=e
                 )
                 session.commit()
                 return None
@@ -213,7 +207,7 @@ class MessageHandler:
             except InvalidMessageException as e:
                 LOGGER.warning("Invalid message: %s - %s", message.item_hash, str(e))
                 await reject_new_pending_message(
-                    session=session, pending_message=message_dict, reason=str(e)
+                    session=session, pending_message=message_dict, exception=e
                 )
                 session.commit()
                 return None
@@ -244,7 +238,6 @@ class MessageHandler:
                 await reject_new_pending_message(
                     session=session,
                     pending_message=message_dict,
-                    reason=str(e),
                     exception=e,
                 )
                 session.commit()

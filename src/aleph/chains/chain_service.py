@@ -5,12 +5,12 @@ from typing import Dict
 from aleph_message.models import Chain
 from configmanager import Config
 
-from aleph.exceptions import InvalidMessageError
 from aleph.schemas.pending_messages import BasePendingMessage
 from aleph.storage import StorageService
+from aleph.types.db_session import DbSessionFactory
+from aleph.types.message_status import InvalidMessageFormat, InvalidSignature
 from .chaindata import ChainDataService
 from .connector import ChainConnector, ChainReader, ChainWriter, Verifier
-from aleph.types.db_session import DbSessionFactory
 
 LOGGER = logging.getLogger(__name__)
 
@@ -40,16 +40,16 @@ class ChainService:
         try:
             verifier = self.verifiers[message.chain]
         except KeyError:
-            raise InvalidMessageError(f"Unknown chain for validation: {message.chain}")
+            raise InvalidMessageFormat(f"Unknown chain for validation: {message.chain}")
 
         try:
             if await verifier.verify_signature(message):
                 return
             else:
-                raise InvalidMessageError("The signature of the message is invalid")
+                raise InvalidSignature("The signature of the message is invalid")
 
-        except ValueError:
-            raise InvalidMessageError("Signature validation error")
+        except ValueError as e:
+            raise InvalidSignature(f"Signature validation error: {str(e)}")
 
     async def chain_reader_task(self, chain: Chain, config: Config):
         connector = self.readers[chain]

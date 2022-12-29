@@ -213,7 +213,7 @@ class StorageService:
 
         try:
             json_content = aleph_json.loads(content.value)
-        except json.JSONDecodeError as e:
+        except aleph_json.DecodeError as e:
             LOGGER.exception("Can't decode JSON")
             raise InvalidContent("Cannot decode JSON") from e
 

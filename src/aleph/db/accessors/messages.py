@@ -1,6 +1,6 @@
 import datetime as dt
 import traceback
-from typing import Optional, Sequence, Union, Iterable, Any, Mapping, overload
+from typing import Optional, Sequence, Union, Iterable, Any, Mapping, overload, List, Dict
 
 from aleph_message.models import ItemHash, Chain, MessageType
 from sqlalchemy import func, select, update, text, delete
@@ -12,7 +12,12 @@ from sqlalchemy.sql.elements import literal
 from aleph.toolkit.timestamp import coerce_to_datetime
 from aleph.types.channel import Channel
 from aleph.types.db_session import DbSession
-from aleph.types.message_status import MessageStatus, InvalidMessageException
+from aleph.types.message_status import (
+    MessageStatus,
+    InvalidMessageException,
+    MessageProcessingException,
+    ErrorCode,
+)
 from aleph.types.sort_order import SortOrder
 from ..models.chains import ChainTxDb
 from ..models.messages import (
@@ -292,73 +297,64 @@ async def append_to_forgotten_by(
     session.execute(update_stmt, {"forget_hash": forget_message_hash})
 
 
-async def reject_message(
-    session: DbSession, message: MessageDb, exception: InvalidMessageException
-):
-    item_hash = message.item_hash
-
-    # TODO: use a Pydantic schema?
-    message_dict = message.to_dict()
-    message_dict["time"] = message_dict["time"].timestamp()
-
-    session.execute(
-        update(MessageStatusDb)
-        .values(status=MessageStatus.REJECTED)
-        .where(MessageStatusDb.item_hash == item_hash)
-    )
-    session.execute(
-        insert(RejectedMessageDb).values(
-            item_hash=item_hash,
-            message=message_dict,
-            reason=str(exception),
-            traceback="\n".join(
-                traceback.format_exception(
-                    InvalidMessageException, exception, exception.__traceback__
-                )
-            ),
-        )
-    )
-    session.execute(
-        delete(MessageConfirmationDb).where(
-            MessageConfirmationDb.item_hash == item_hash
-        )
-    )
-    session.execute(delete(MessageDb).where(MessageDb.item_hash == item_hash))
-
-
 def make_upsert_rejected_message_statement(
     item_hash: str,
     pending_message_dict: Mapping[str, Any],
-    reason: str,
-    exception: Optional[BaseException] = None,
+    error_code: int,
+    details: Optional[Mapping[str, Any]] = None,
+    exc_traceback: Optional[str] = None,
 ):
-    exc_traceback = (
-        "\n".join(traceback.format_exception(InvalidMessageException, exception, None))
-        if exception
-        else None
-    )
     insert_rejected_message_stmt = insert(RejectedMessageDb).values(
         item_hash=item_hash,
         message=pending_message_dict,
-        reason=reason,
+        error_code=error_code,
+        details=details,
         traceback=exc_traceback,
     )
     upsert_rejected_message_stmt = insert_rejected_message_stmt.on_conflict_do_update(
         constraint="rejected_messages_pkey",
         set_={
-            "reason": insert_rejected_message_stmt.excluded.reason,
+            "error_code": insert_rejected_message_stmt.excluded.error_code,
+            "details": details,
             "traceback": insert_rejected_message_stmt.excluded.traceback,
         },
     )
     return upsert_rejected_message_stmt
 
 
+async def mark_pending_message_as_rejected(
+    session: DbSession,
+    item_hash: str,
+    pending_message_dict: Mapping[str, Any],
+    exception: BaseException,
+):
+    if isinstance(exception, MessageProcessingException):
+        error_code = exception.error_code
+        details = exception.details()
+        exc_traceback = None
+    else:
+        error_code = ErrorCode.INTERNAL_ERROR
+        details = None
+        exc_traceback = "\n".join(
+            traceback.format_exception(type(exception), exception, None)
+        )
+
+    upsert_rejected_message_stmt = make_upsert_rejected_message_statement(
+        item_hash=item_hash,
+        pending_message_dict=pending_message_dict,
+        details=details,
+        error_code=error_code,
+        exc_traceback=exc_traceback,
+    )
+
+    session.execute(upsert_rejected_message_stmt)
+
+
 @overload
 async def reject_new_pending_message(
     session: DbSession,
     pending_message: Mapping[str, Any],
-    reason: str,
-    exception: Optional[BaseException] = None,
+    exception: BaseException,
 ):
     ...
 
@@ -367,8 +363,7 @@ async def reject_new_pending_message(
 async def reject_new_pending_message(
     session: DbSession,
     pending_message: PendingMessageDb,
-    reason: str,
-    exception: Optional[BaseException] = None,
+    exception: BaseException,
 ):
     ...
 
@@ -376,8 +371,7 @@ async def reject_new_pending_message(
 async def reject_new_pending_message(
     session: DbSession,
     pending_message: Union[Mapping[str, Any], PendingMessageDb],
-    reason: str,
-    exception: Optional[BaseException] = None,
+    exception: BaseException,
 ):
     """
     Reject a pending message that is not yet in the DB.
@@ -414,21 +408,18 @@ async def reject_new_pending_message(
         if message_status.status != MessageStatus.REJECTED:
             return
 
-    upsert_rejected_message_stmt = make_upsert_rejected_message_statement(
+    await mark_pending_message_as_rejected(
+        session=session,
         item_hash=item_hash,
         pending_message_dict=pending_message_dict,
-        reason=reason,
         exception=exception,
     )
-
-    session.execute(upsert_rejected_message_stmt)
 
 
 async def reject_existing_pending_message(
     session: DbSession,
     pending_message: PendingMessageDb,
-    reason: str,
-    exception: Optional[BaseException] = None,
+    exception: BaseException,
 ):
     item_hash = pending_message.item_hash
 
@@ -462,14 +453,12 @@ async def reject_existing_pending_message(
         .values(status=MessageStatus.REJECTED)
         .where(MessageStatusDb.item_hash == item_hash)
     )
-    upsert_rejected_message_stmt = make_upsert_rejected_message_statement(
+    await mark_pending_message_as_rejected(
+        session=session,
         item_hash=item_hash,
         pending_message_dict=pending_message_dict,
-        reason=reason,
         exception=exception,
     )
-
-    session.execute(upsert_rejected_message_stmt)
     session.execute(delete_pending_message_stmt)
 
 

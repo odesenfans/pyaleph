@@ -14,7 +14,6 @@ from aleph.db.accessors.messages import (
     get_message_status,
     append_to_forgotten_by,
     get_forgotten_message,
-    reject_message,
     make_message_upsert_query,
     make_confirmation_upsert_query, get_distinct_channels,
 )
@@ -390,29 +389,3 @@ async def test_forget_message(
             forget_message_hash,
             new_forget_message_hash,
         ]
-
-
-@pytest.mark.asyncio
-async def test_reject_message(
-    session_factory: DbSessionFactory, fixture_message: MessageDb
-):
-    with session_factory() as session:
-        session.add(fixture_message)
-        session.add(
-            MessageStatusDb(
-                item_hash=fixture_message.item_hash,
-                status=MessageStatus.FETCHED,
-                reception_time=fixture_message.time,
-            )
-        )
-        session.commit()
-
-    with session_factory() as session:
-        await reject_message(
-            session=session,
-            message=fixture_message,
-            exception=InvalidSignature("Signature does not match"),
-        )
-        session.commit()
-
-    # TODO: assert message is deleted

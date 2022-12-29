@@ -180,6 +180,7 @@ async def test_program_with_subscriptions(
     with session_factory() as session:
         program: ProgramDb = session.execute(select(ProgramDb)).scalar_one()
         message_triggers = program.message_triggers
+        assert message_triggers
         assert len(message_triggers) == 1
         message_trigger = message_triggers[0]
 

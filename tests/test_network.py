@@ -5,11 +5,11 @@ from configmanager import Config
 
 from aleph.chains.chain_service import ChainService
 from aleph.db.models import PendingMessageDb
-from aleph.exceptions import InvalidMessageError
 from aleph.handlers.message_handler import MessageHandler
 from aleph.schemas.pending_messages import parse_message
 from aleph.storage import StorageService
 from aleph.types.db_session import DbSessionFactory
+from aleph.types.message_status import InvalidMessageException
 
 
 @pytest.mark.skip("TODO: NULS signature verification does not work with the fixture.")
@@ -46,7 +46,7 @@ async def test_invalid_chain_message():
         "signature": "2103041b0b357446927d2c8c62fdddd27910d82f665f16a4907a2be927b5901f5e6c004730450221009a54ecaff6869664e94ad68554520c79c21d4f63822864bd910f9916c32c1b5602201576053180d225ec173fb0b6e4af5efb2dc474ce6aa77a3bdd67fd14e1d806b4",
     }
 
-    with pytest.raises(InvalidMessageError):
+    with pytest.raises(InvalidMessageException):
         _ = parse_message(sample_message_dict)
 
 
@@ -68,7 +68,7 @@ async def test_invalid_signature_message(mocker):
     )
 
     sample_message = parse_message(sample_message_dict)
-    with pytest.raises(InvalidMessageError):
+    with pytest.raises(InvalidMessageException):
         _ = await chain_service.verify_signature(sample_message)
 
 
@@ -89,7 +89,7 @@ async def test_invalid_signature_message_2(mocker):
     )
 
     sample_message = parse_message(sample_message_dict)
-    with pytest.raises(InvalidMessageError):
+    with pytest.raises(InvalidMessageException):
         _ = await chain_service.verify_signature(sample_message)
 
 

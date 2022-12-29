@@ -34,9 +34,9 @@ from aleph.toolkit.timestamp import timestamp_to_datetime
 from aleph.types.db_session import DbSessionFactory, DbSession
 from aleph.types.files import FileTag, FileType
 from aleph.types.message_status import (
-    MessageUnavailable,
-    InvalidMessageException,
     PermissionDenied,
+    FileUnavailable,
+    InvalidMessageFormat,
 )
 from aleph.utils import item_type_from_hash
 
@@ -46,7 +46,7 @@ LOGGER = logging.getLogger(__name__)
 def _get_store_content(message: MessageDb) -> StoreContent:
     content = message.parsed_content
     if not isinstance(content, StoreContent):
-        raise InvalidMessageException(
+        raise InvalidMessageFormat(
             f"Unexpected content type for store message: {message.item_hash}"
         )
     return content
@@ -137,7 +137,7 @@ class StoreMessageHandler(ContentHandler):
                         f"Invalid IPFS hash from API: '{item_hash}'"
                     ) from e
                 if stats is None:
-                    raise MessageUnavailable(
+                    raise FileUnavailable(
                         "Could not retrieve IPFS content at this time"
                     )
 
@@ -155,7 +155,7 @@ class StoreMessageHandler(ContentHandler):
                     async for status in ipfs_client.pin.add(item_hash):
                         timer += 1
                         if timer > 30 and "Pins" not in status:
-                            raise MessageUnavailable(
+                            raise FileUnavailable(
                                 "Could not pin IPFS content at this time"
                             )
                     do_standard_lookup = False
@@ -185,7 +185,7 @@ class StoreMessageHandler(ContentHandler):
                     store_value=True,
                 )
             except AlephStorageException:
-                raise MessageUnavailable(
+                raise FileUnavailable(
                     "Could not retrieve file from storage at this time"
                 )
 
@@ -204,7 +204,9 @@ class StoreMessageHandler(ContentHandler):
             return
 
         owner = content.address
-        file_tag = make_file_tag(owner=owner, ref=content.ref, item_hash=message.item_hash)
+        file_tag = make_file_tag(
+            owner=owner, ref=content.ref, item_hash=message.item_hash
+        )
         file_tag_db = await get_file_tag(session=session, tag=file_tag)
 
         if not file_tag_db:

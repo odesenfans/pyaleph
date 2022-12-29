@@ -1,21 +1,19 @@
-import json
 import logging
 from typing import Coroutine, List, Any, Dict
 from urllib.parse import unquote
 
 from aleph_p2p_client import AlephP2PServiceClient
 
+import aleph.toolkit.json as aleph_json
 from aleph.chains.chain_service import ChainService
-from aleph.exceptions import InvalidMessageError
 from aleph.handlers.message_handler import MessageHandler
-from aleph.schemas.pending_messages import BasePendingMessage, parse_message
 from aleph.services.ipfs import IpfsService
 from aleph.services.ipfs.common import make_ipfs_client
 from aleph.services.ipfs.pubsub import incoming_channel as incoming_ipfs_channel
 from aleph.services.storage.fileystem_engine import FileSystemStorageEngine
 from aleph.storage import StorageService
 from aleph.types.db_session import DbSessionFactory
-import aleph.toolkit.json as aleph_json
+from aleph.types.message_status import InvalidMessageFormat
 
 LOGGER = logging.getLogger(__name__)
 
@@ -30,7 +28,7 @@ async def decode_pubsub_message(message_data: bytes) -> Dict[str, Any]:
     try:
         message_dict = aleph_json.loads(unquote(message_data.decode("utf-8")))
     except aleph_json.DecodeError:
-        raise InvalidMessageError("Data is not JSON: {!r}".format(message_data))
+        raise InvalidMessageFormat("Data is not JSON: {!r}".format(message_data))
 
     LOGGER.debug("New message! %r" % message_dict)
 

@@ -3,12 +3,12 @@ import logging
 
 from aleph_p2p_client import AlephP2PServiceClient
 
-from aleph.exceptions import InvalidMessageError
 from aleph.handlers.message_handler import MessageHandler
 from aleph.network import decode_pubsub_message
 from aleph.toolkit.timestamp import utc_now
+from aleph.types.message_status import InvalidMessageException
 
-LOGGER = logging.getLogger("P2P.protocol")
+LOGGER = logging.getLogger(__name__)
 
 
 async def incoming_channel(
@@ -34,7 +34,7 @@ async def incoming_channel(
                     # and such things...
                     try:
                         message_dict = await decode_pubsub_message(message.body)
-                    except InvalidMessageError:
+                    except InvalidMessageException:
                         LOGGER.warning(
                             "Received invalid message on P2P topic %s from %s",
                             topic,

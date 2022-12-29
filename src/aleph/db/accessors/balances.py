@@ -39,7 +39,7 @@ async def update_balances(
     """
 
     session.execute(
-        "CREATE TEMPORARY TABLE temp_balances AS SELECT * FROM balances WITH NO DATA"
+        "CREATE TEMPORARY TABLE temp_balances AS SELECT * FROM balances WITH NO DATA"  # type: ignore[arg-type]
     )
 
     conn = session.connection().connection
@@ -65,10 +65,10 @@ async def update_balances(
             ON CONFLICT ON CONSTRAINT balances_address_chain_dapp_uindex DO UPDATE 
             SET balance = excluded.balance, eth_height = excluded.eth_height 
             WHERE excluded.eth_height > balances.eth_height
-        """
+        """  # type: ignore[arg-type]
     )
 
     # Temporary tables are dropped at the same time as the connection, but SQLAlchemy
     # tends to reuse connections. Dropping the table here guarantees it will not be present
     # on the next run.
-    session.execute("DROP TABLE temp_balances")
+    session.execute("DROP TABLE temp_balances")  # type: ignore[arg-type]

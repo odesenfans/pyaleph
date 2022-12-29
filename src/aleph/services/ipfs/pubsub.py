@@ -1,11 +1,11 @@
 import asyncio
 import logging
 
-from aleph.exceptions import InvalidMessageError
 from .service import IpfsService
-from ...toolkit.timestamp import utc_now
+from aleph.toolkit.timestamp import utc_now
+from aleph.types.message_status import InvalidMessageException
 
-LOGGER = logging.getLogger("IPFS.PUBSUB")
+LOGGER = logging.getLogger(__name__)
 
 
 # TODO: add type hint for message_processor, it currently causes a cyclical import
@@ -22,7 +22,7 @@ async def incoming_channel(
                     await message_handler.add_pending_message(
                         message_dict=message_dict, reception_time=utc_now()
                     )
-                except InvalidMessageError:
+                except InvalidMessageException:
                     LOGGER.warning(f"Invalid message {mvalue}")
         except Exception:
             LOGGER.exception("Exception in IPFS pubsub, reconnecting in 2 seconds...")
