@@ -1,10 +1,10 @@
 import datetime as dt
-from collections import defaultdict
 from typing import Dict, List, Set
 
 import pytest
 import pytz
 from aleph_message.models import Chain
+from configmanager import Config
 from sqlalchemy import select
 
 from aleph.db.models import PendingMessageDb, MessageStatusDb
@@ -29,7 +29,10 @@ async def get_fixture_chaindata_messages(
 
 @pytest.mark.asyncio
 async def test_process_pending_tx(
-    mocker, session_factory: DbSessionFactory, test_storage_service: StorageService
+    mocker,
+    mock_config: Config,
+    session_factory: DbSessionFactory,
+    test_storage_service: StorageService,
 ):
     chain_data_service = mocker.AsyncMock()
     chain_data_service.get_chaindata_messages = get_fixture_chaindata_messages
@@ -40,6 +43,7 @@ async def test_process_pending_tx(
             session_factory=session_factory,
             chain_service=mocker.AsyncMock(),
             storage_service=test_storage_service,
+            config=mock_config,
         ),
     )
     pending_tx_processor.chain_data_service = chain_data_service

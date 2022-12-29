@@ -23,7 +23,10 @@ import datetime as dt
 
 @pytest.mark.asyncio
 async def test_process_aggregate_first_element(
-    mocker, session_factory: DbSessionFactory, fixture_aggregate_messages: List[Dict]
+    mocker,
+    mock_config: Config,
+    session_factory: DbSessionFactory,
+    fixture_aggregate_messages: List[Dict],
 ):
     storage_service = StorageService(
         storage_engine=mocker.AsyncMock(), ipfs_service=mocker.AsyncMock()
@@ -33,6 +36,7 @@ async def test_process_aggregate_first_element(
         session_factory=session_factory,
         chain_service=chain_service,
         storage_service=storage_service,
+        config=mock_config,
     )
 
     item_hash = "a87004aa03f8ae63d2c4bbe84b93b9ce70ca6482ce36c82ab0b0f689fc273f34"

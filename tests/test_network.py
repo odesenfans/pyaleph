@@ -1,6 +1,7 @@
 import datetime as dt
 
 import pytest
+from configmanager import Config
 
 from aleph.chains.chain_service import ChainService
 from aleph.db.models import PendingMessageDb
@@ -94,7 +95,9 @@ async def test_invalid_signature_message_2(mocker):
 
 @pytest.mark.asyncio
 async def test_incoming_inline_content(
-    session_factory: DbSessionFactory, test_storage_service: StorageService
+    mock_config: Config,
+    session_factory: DbSessionFactory,
+    test_storage_service: StorageService,
 ):
     message_dict = {
         "chain": "NULS",
@@ -114,6 +117,7 @@ async def test_incoming_inline_content(
             session_factory=session_factory, storage_service=test_storage_service
         ),
         storage_service=test_storage_service,
+        config=mock_config,
     )
 
     # Signature validation fails for this fixture

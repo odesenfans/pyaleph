@@ -5,6 +5,7 @@ from typing import Any, Dict, Sequence
 
 import pytest
 import pytest_asyncio
+from configmanager import Config
 
 from aleph.chains.chain_service import ChainService
 from aleph.db.models import ChainTxDb, PendingMessageDb
@@ -72,7 +73,7 @@ async def fixture_post_messages(
 
 
 @pytest.fixture
-def message_processor(mocker, session_factory: DbSessionFactory):
+def message_processor(mocker, mock_config: Config, session_factory: DbSessionFactory):
     storage_engine = InMemoryStorageEngine(files={})
     storage_service = StorageService(
         storage_engine=storage_engine, ipfs_service=mocker.AsyncMock()
@@ -84,6 +85,7 @@ def message_processor(mocker, session_factory: DbSessionFactory):
         session_factory=session_factory,
         chain_service=chain_service,
         storage_service=storage_service,
+        config=mock_config,
     )
     message_processor = PendingMessageProcessor(
         session_factory=session_factory,

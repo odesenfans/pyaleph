@@ -99,14 +99,9 @@ class ProgramDb(Base):
 
     type: MachineType = Column(ChoiceType(MachineType), nullable=False)
     allow_amend: bool = Column(Boolean, nullable=False)
-    # code_volume_id: int = Column(ForeignKey(CodeVolumeDb.id), nullable=False)
     # Note: metadata is a reserved keyword for SQLAlchemy
     metadata_: Optional[Dict[str, Any]] = Column("metadata", JSONB, nullable=True)
     variables: Optional[Dict[str, Any]] = Column(JSONB, nullable=True)
-    # data_volume_id: Optional[int] = Column(ForeignKey(DataVolumeDb.id), nullable=True)
-    # export_volume_id: Optional[int] = Column(
-    #     ForeignKey(ExportVolumeDb.id), nullable=True
-    # )
     http_trigger: bool = Column(Boolean, nullable=False)
     message_triggers: Optional[List[Dict[str, Any]]] = Column(JSONB, nullable=True)
     persistent: bool = Column(Boolean, nullable=False)

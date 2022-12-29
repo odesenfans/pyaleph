@@ -5,6 +5,7 @@ from typing import Optional, Dict, Any, Mapping
 import psycopg2
 import sqlalchemy.exc
 from aleph_message.models import MessageType, ItemType
+from configmanager import Config
 from pydantic import ValidationError
 from sqlalchemy import delete, insert
 
@@ -54,6 +55,7 @@ class MessageHandler:
         session_factory: DbSessionFactory,
         chain_service: ChainService,
         storage_service: StorageService,
+        config: Config,
     ):
         self.session_factory = session_factory
         self.chain_service = chain_service
@@ -66,7 +68,10 @@ class MessageHandler:
             MessageType.forget: ForgetMessageHandler(
                 session_factory=session_factory, storage_service=storage_service
             ),
-            MessageType.post: PostMessageHandler(),
+            MessageType.post: PostMessageHandler(
+                balances_address=config.aleph.balances.address.value,
+                balances_post_type=config.aleph.balances.post_type.value,
+            ),
             MessageType.program: ProgramMessageHandler(),
             MessageType.store: StoreMessageHandler(
                 session_factory=session_factory, storage_service=storage_service

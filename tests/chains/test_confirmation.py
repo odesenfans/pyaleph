@@ -5,6 +5,7 @@ from typing import Dict, Mapping
 import pytest
 import pytz
 from aleph_message.models import Chain
+from configmanager import Config
 
 from aleph.chains.chain_service import ChainService
 from aleph.db.accessors.messages import get_message_by_item_hash
@@ -55,6 +56,7 @@ def compare_chain_txs(expected: ChainTxDb, actual: ChainTxDb):
 
 @pytest.mark.asyncio
 async def test_confirm_message(
+    mock_config: Config,
     session_factory: DbSessionFactory,
     test_storage_service: StorageService,
     chain_tx: ChainTxDb,
@@ -79,6 +81,7 @@ async def test_confirm_message(
             session_factory=session_factory, storage_service=test_storage_service
         ),
         storage_service=test_storage_service,
+        config=mock_config,
     )
 
     pending_message = PendingMessageDb.from_message_dict(
@@ -123,6 +126,7 @@ async def test_confirm_message(
 
 @pytest.mark.asyncio
 async def test_process_confirmed_message(
+    mock_config: Config,
     session_factory: DbSessionFactory,
     test_storage_service: StorageService,
     chain_tx: ChainTxDb,
@@ -141,6 +145,7 @@ async def test_process_confirmed_message(
             session_factory=session_factory, storage_service=test_storage_service
         ),
         storage_service=test_storage_service,
+        config=mock_config,
     )
 
     # Insert a transaction in the DB to validate the foreign key constraint

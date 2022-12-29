@@ -1,7 +1,8 @@
 import logging
-from typing import List, Tuple
+from decimal import Decimal
+from typing import List, Tuple, Any, Dict, Mapping
 
-from aleph_message.models import PostContent, ChainRef
+from aleph_message.models import PostContent, ChainRef, Chain
 from sqlalchemy import update
 
 from aleph.db.accessors.posts import get_matching_posts, get_original_post
@@ -11,8 +12,36 @@ from aleph.toolkit.timestamp import timestamp_to_datetime
 from aleph.types.db_session import DbSession
 from aleph.types.message_status import InvalidMessageException, MissingDependency
 from .content_handler import ContentHandler
+from ...db.accessors.balances import update_balance
 
 LOGGER = logging.getLogger(__name__)
+
+
+def get_post_content(message: MessageDb) -> PostContent:
+    content = message.parsed_content
+    if not isinstance(content, PostContent):
+        raise InvalidMessageException(
+            f"Unexpected content type for post message: {message.item_hash}"
+        )
+    return content
+
+
+async def update_balances(session: DbSession, content: Mapping[str, Any]):
+
+    chain = Chain(content["chain"])
+    height = content["main_height"]
+    dapp = content.get("dapp")
+
+    balances: Dict[str, Decimal] = content["balances"]
+    for address, balance in balances.items():
+        await update_balance(
+            session=session,
+            address=address,
+            chain=chain,
+            dapp=dapp,
+            eth_height=height,
+            balance=balance,
+        )
 
 
 class PostMessageHandler(ContentHandler):
@@ -32,12 +61,12 @@ class PostMessageHandler(ContentHandler):
     in case a user decides to delete a version with a FORGET.
     """
 
+    def __init__(self, balances_address: str, balances_post_type: str):
+        self.balances_address = balances_address
+        self.balances_post_type = balances_post_type
+
     async def check_dependencies(self, session: DbSession, message: MessageDb):
-        content = message.parsed_content
-        if not isinstance(content, PostContent):
-            raise InvalidMessageException(
-                f"Unexpected content type for post message: {message.item_hash}"
-            )
+        content = get_post_content(message)
 
         # For amends, ensure that the original message exists
         if content.type == "amend":
@@ -59,38 +88,46 @@ class PostMessageHandler(ContentHandler):
                     f"Post {message.item_hash} is invalid: cannot amend an amend"
                 )
 
+    async def process_post(self, session: DbSession, message: MessageDb):
+        content = get_post_content(message)
+
+        creation_datetime = timestamp_to_datetime(content.time)
+
+        post = PostDb(
+            item_hash=message.item_hash,
+            owner=content.address,
+            type=content.type,
+            ref=content.ref,
+            amends=content.ref if content.type == "amend" else None,
+            channel=message.channel,
+            content=content.content,
+            creation_datetime=creation_datetime,
+        )
+        session.add(post)
+
+        if content.type == "amend":
+            [amended_post] = await get_matching_posts(
+                session=session, hashes=[content.ref]
+            )
+
+            if amended_post.last_updated < creation_datetime:
+                session.execute(
+                    update(PostDb)
+                    .where(PostDb.item_hash == content.ref)
+                    .values(latest_amend=message.item_hash)
+                )
+
+        if (
+            content.type == self.balances_post_type
+            and content.address == self.balances_address
+        ):
+            await update_balances(session=session, content=content.content)
+
     async def process(
         self, session: DbSession, messages: List[MessageDb]
     ) -> Tuple[List[MessageDb], List[MessageDb]]:
 
         for message in messages:
-            content = message.parsed_content
-            assert isinstance(content, PostContent)
-
-            creation_datetime = timestamp_to_datetime(content.time)
-
-            post = PostDb(
-                item_hash=message.item_hash,
-                owner=content.address,
-                type=content.type,
-                ref=content.ref,
-                amends=content.ref if content.type == "amend" else None,
-                channel=message.channel,
-                content=content.content,
-                creation_datetime=creation_datetime,
-            )
-            session.add(post)
-
-            if content.type == "amend":
-                [amended_post] = await get_matching_posts(
-                    session=session, hashes=[content.ref]
-                )
-
-                if amended_post.last_updated < creation_datetime:
-                    session.execute(
-                        update(PostDb)
-                        .where(PostDb.item_hash == content.ref)
-                        .values(latest_amend=message.item_hash)
-                    )
+            await self.process_post(session=session, message=message)
 
         return messages, []

@@ -1,6 +1,7 @@
 from .base import Base
 
 from .aggregates import *
+from .balances import *
 from .chains import *
 from .files import *
 from .messages import *

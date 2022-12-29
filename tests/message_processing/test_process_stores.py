@@ -2,6 +2,7 @@ from typing import Optional, Dict, Mapping
 
 import pytest
 from aleph_message.models import Chain, MessageType, ItemType
+from configmanager import Config
 
 from aleph.db.models import PendingMessageDb
 from aleph.handlers.message_handler import MessageHandler
@@ -50,7 +51,7 @@ class MockStorageEngine(StorageEngine):
 
 @pytest.mark.asyncio
 async def test_process_store(
-    mocker, session_factory: DbSessionFactory, fixture_store_message: PendingMessageDb
+    mocker, mock_config: Config, session_factory: DbSessionFactory, fixture_store_message: PendingMessageDb
 ):
     storage_service = StorageService(
         storage_engine=MockStorageEngine(
@@ -65,6 +66,7 @@ async def test_process_store(
         session_factory=session_factory,
         chain_service=chain_service,
         storage_service=storage_service,
+        config=mock_config,
     )
 
     await message_handler.fetch_and_process_one_message_db(fixture_store_message)

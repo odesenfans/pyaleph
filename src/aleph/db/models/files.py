@@ -81,7 +81,7 @@ class TxFilePinDb(FilePinDb):
 
 class MessageFilePinDb(FilePinDb):
     owner = Column(String, nullable=True)
-    item_hash = Column(String, nullable=True)
+    item_hash = Column(String, nullable=True, unique=True)
     ref = Column(String, nullable=True)
 
     __mapper_args__ = {

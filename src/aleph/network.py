@@ -56,6 +56,7 @@ def listener_tasks(
         session_factory=session_factory,
         chain_service=chain_service,
         storage_service=storage_service,
+        config=config,
     )
 
     # for now (1st milestone), we only listen on a single global topic...

@@ -172,6 +172,7 @@ async def fetch_and_process_messages_task(config: Config, shared_stats: Dict):
         session_factory=session_factory,
         chain_service=chain_service,
         storage_service=storage_service,
+        config=config,
     )
     pending_message_processor = PendingMessageProcessor(
         session_factory=session_factory,

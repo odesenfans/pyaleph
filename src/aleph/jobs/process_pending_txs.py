@@ -145,6 +145,7 @@ async def handle_txs_task(config: Config):
         session_factory=session_factory,
         chain_service=chain_service,
         storage_service=storage_service,
+        config=config,
     )
     pending_tx_processor = PendingTxProcessor(
         session_factory=session_factory,

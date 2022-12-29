@@ -228,6 +228,7 @@ async def fetch_messages_task(config: Config, shared_stats: Dict):
         session_factory=session_factory,
         chain_service=chain_service,
         storage_service=storage_service,
+        config=config,
     )
     fetcher = PendingMessageFetcher(
         session_factory=session_factory,
