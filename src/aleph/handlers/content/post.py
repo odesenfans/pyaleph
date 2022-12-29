@@ -1,6 +1,6 @@
 import logging
 from decimal import Decimal
-from typing import List, Tuple, Any, Dict, Mapping
+from typing import List, Tuple, Any, Dict, Mapping, Union, Optional
 
 from aleph_message.models import PostContent, ChainRef, Chain
 from sqlalchemy import update
@@ -44,6 +44,10 @@ async def update_balances(session: DbSession, content: Mapping[str, Any]):
         )
 
 
+def get_post_content_ref(ref: Optional[Union[ChainRef, str]]) -> Optional[str]:
+    return ref.item_hash if isinstance(ref, ChainRef) else ref
+
+
 class PostMessageHandler(ContentHandler):
     """
     Handler for POST messages. Posts are simple JSON objects posted by users.
@@ -70,17 +74,17 @@ class PostMessageHandler(ContentHandler):
 
         # For amends, ensure that the original message exists
         if content.type == "amend":
+            ref = get_post_content_ref(content.ref)
 
-            ref_hash = (
-                content.ref.item_hash
-                if isinstance(content.ref, ChainRef)
-                else content.ref
-            )
+            if ref is None:
+                raise InvalidMessageException(
+                    f"Amend post {message.item_hash} does not specify a ref"
+                )
 
-            original_post = await get_original_post(session=session, item_hash=ref_hash)
+            original_post = await get_original_post(session=session, item_hash=ref)
             if not original_post:
                 raise MissingDependency(
-                    f"Post {content.ref} referenced by {message.item_hash} is not yet processed"
+                    f"Post {ref} referenced by {message.item_hash} is not yet processed"
                 )
 
             if original_post.type == "amend":
@@ -92,13 +96,14 @@ class PostMessageHandler(ContentHandler):
         content = get_post_content(message)
 
         creation_datetime = timestamp_to_datetime(content.time)
+        ref = get_post_content_ref(content.ref)
 
         post = PostDb(
             item_hash=message.item_hash,
             owner=content.address,
             type=content.type,
-            ref=content.ref,
-            amends=content.ref if content.type == "amend" else None,
+            ref=ref,
+            amends=ref if content.type == "amend" else None,
             channel=message.channel,
             content=content.content,
             creation_datetime=creation_datetime,
@@ -106,14 +111,12 @@ class PostMessageHandler(ContentHandler):
         session.add(post)
 
         if content.type == "amend":
-            [amended_post] = await get_matching_posts(
-                session=session, hashes=[content.ref]
-            )
+            [amended_post] = await get_matching_posts(session=session, hashes=[ref])
 
             if amended_post.last_updated < creation_datetime:
                 session.execute(
                     update(PostDb)
-                    .where(PostDb.item_hash == content.ref)
+                    .where(PostDb.item_hash == ref)
                     .values(latest_amend=message.item_hash)
                 )
 
