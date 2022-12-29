@@ -102,7 +102,7 @@ def program_message_to_db(message: MessageDb):
         metadata_=content.metadata,
         variables=content.variables,
         http_trigger=content.on.http,
-        message_triggers=content.on.message,
+        message_triggers=[subscription.dict() for subscription in content.on.message],
         persistent=bool(content.on.persistent),
         environment_reproducible=content.environment.reproducible,
         environment_internet=content.environment.internet,
