@@ -124,7 +124,9 @@ class PostMessageHandler(ContentHandler):
             content.type == self.balances_post_type
             and content.address == self.balances_address
         ):
+            LOGGER.info("Updating balances...")
             await update_balances(session=session, content=content.content)
+            LOGGER.info("Done updating balances")
 
     async def process(
         self, session: DbSession, messages: List[MessageDb]
