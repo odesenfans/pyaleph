@@ -113,6 +113,14 @@ class MessageDb(Base):
     def confirmed(self) -> bool:
         return bool(self.confirmations)
 
+    def to_dict(self, include_confirmations: bool=False) -> Dict[str, Any]:
+        columns = super().to_dict()
+        if include_confirmations:
+            columns["confirmed"] = self.confirmed
+            columns["confirmations"] = [c.to_dict() for c in self.confirmations]
+        return columns
+
+
     @property
     def parsed_content(self):
         if self._parsed_content is None:

@@ -78,6 +78,7 @@ class PendingTxProcessor:
                 await self.message_handler.add_pending_message(
                     message_dict=message_dict,
                     reception_time=utc_now(),
+                    tx_hash=tx_context.tx_hash,
                 )
 
         else:

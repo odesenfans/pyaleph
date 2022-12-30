@@ -172,6 +172,7 @@ class MessageHandler:
         self,
         message_dict: Mapping[str, Any],
         reception_time: dt.datetime,
+        tx_hash: Optional[str] = None,
     ) -> Optional[PendingMessageDb]:
 
         with self.session_factory() as session:
@@ -189,7 +190,9 @@ class MessageHandler:
             # we add it to the message queue... bad idea? should we process it asap?
             try:
                 pending_message = PendingMessageDb.from_obj(
-                    message, reception_time=reception_time
+                    message,
+                    reception_time=reception_time,
+                    tx_hash=tx_hash,
                 )
             except ValueError as e:
                 LOGGER.warning("Invalid message: %s - %s", message.item_hash, str(e))

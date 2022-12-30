@@ -145,11 +145,10 @@ async def view_messages_list(request):
 
     session_factory: DbSessionFactory = request.app["session_factory"]
     with session_factory() as session:
-        results = await get_matching_messages(session, **find_filters)
-        messages = [
-            message.to_dict()
-            for message in results
-        ]
+        results = await get_matching_messages(
+            session, include_confirmations=True, **find_filters
+        )
+        messages = [message.to_dict(include_confirmations=True) for message in results]
 
         context = {"messages": messages}
 

@@ -4,7 +4,6 @@ from typing import Optional, Mapping
 
 from aleph_message.models import Chain
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert
 
 from aleph.db.models import AlephBalanceDb
 from aleph.types.db_session import DbSession

@@ -1,9 +1,9 @@
 import datetime as dt
 import traceback
-from typing import Optional, Sequence, Union, Iterable, Any, Mapping, overload, List, Dict
+from typing import Optional, Sequence, Union, Iterable, Any, Mapping, overload
 
 from aleph_message.models import ItemHash, Chain, MessageType
-from sqlalchemy import func, select, update, text, delete
+from sqlalchemy import func, select, update, text, delete, extract
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql import Insert, Select
@@ -14,7 +14,6 @@ from aleph.types.channel import Channel
 from aleph.types.db_session import DbSession
 from aleph.types.message_status import (
     MessageStatus,
-    InvalidMessageException,
     MessageProcessingException,
     ErrorCode,
 )
@@ -28,6 +27,7 @@ from ..models.messages import (
     RejectedMessageDb,
 )
 from ..models.pending_messages import PendingMessageDb
+from ...types.datetime_format import DatetimeFormat
 
 
 async def get_message_by_item_hash(
@@ -63,12 +63,41 @@ def make_matching_messages_query(
     content_hashes: Optional[Sequence[ItemHash]] = None,
     channels: Optional[Sequence[str]] = None,
     sort_order: SortOrder = SortOrder.DESCENDING,
-    page: int = 0,
+    page: int = 1,
     pagination: int = 20,
+    include_confirmations: bool = False,
+    time_format: DatetimeFormat = DatetimeFormat.EPOCH,
     # TODO: remove once all filters are supported
     **kwargs,
 ) -> Select:
+
+    time_col = (
+        MessageDb.time
+        if time_format == DatetimeFormat.DATETIME
+        else extract("EPOCH", MessageDb.time)
+    )
+
+    # select_stmt = select(
+    #     MessageDb.item_hash,
+    #     MessageDb.type,
+    #     MessageDb.chain,
+    #     MessageDb.sender,
+    #     MessageDb.signature,
+    #     MessageDb.item_type,
+    #     MessageDb.item_content,
+    #     MessageDb.content,
+    #     time_col.label("time"),
+    #     MessageDb.channel,
+    #     MessageDb.size,
+    # )
     select_stmt = select(MessageDb)
+
+    if include_confirmations:
+        select_stmt = select_stmt.options(
+            selectinload(MessageDb.confirmations).options(
+                selectinload(MessageConfirmationDb.tx)
+            )
+        )
 
     start_datetime = coerce_to_datetime(start_date)
     end_datetime = coerce_to_datetime(end_date)
@@ -110,13 +139,26 @@ def make_matching_messages_query(
 
 
 async def count_matching_messages(
-    session: DbSession, page: int = 1, pagination: int = 0, **kwargs
+    session: DbSession,
+    start_date: float = 0.0,
+    end_date: float = 0.0,
+    sort_order: SortOrder = SortOrder.DESCENDING,
+    page: int = 1,
+    pagination: int = 0,
+    **kwargs,
 ) -> int:
     # Note that we deliberately ignore the pagination parameters so that users can pass
     # the same parameters as get_matching_messages and get the total number of messages,
     # not just the number on a page.
-    if kwargs:
-        select_stmt = make_matching_messages_query(**kwargs, page=1, pagination=0)
+    if kwargs or start_date or end_date:
+        select_stmt = make_matching_messages_query(
+            **kwargs,
+            start_date=start_date,
+            end_date=end_date,
+            include_confirmations=False,
+            page=1,
+            pagination=0,
+        )
         select_count_stmt = select(func.count()).select_from(select_stmt)
         return session.execute(select_count_stmt).scalar_one()
 
