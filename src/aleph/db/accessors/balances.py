@@ -1,5 +1,6 @@
 from decimal import Decimal
-from typing import Optional
+from io import StringIO
+from typing import Optional, Mapping
 
 from aleph_message.models import Chain
 from sqlalchemy import select
@@ -21,20 +22,53 @@ async def get_balance_by_chain(
     ).scalar()
 
 
-async def update_balance(
+async def update_balances(
     session: DbSession,
-    address: str,
     chain: Chain,
     dapp: Optional[str],
     eth_height: int,
-    balance: Decimal,
+    balances: Mapping[str, float],
 ):
-    insert_stmt = insert(AlephBalanceDb).values(
-        address=address, chain=chain, dapp=dapp, eth_height=eth_height, balance=balance
+    """
+    Updates multiple balances at the same time, efficiently.
+
+    Upserting balances one by one takes too much time if done naively.
+    The alternative, implemented here, is to bulk insert balances in a temporary
+    table using the COPY operator and then upserting records into the main balances
+    table from the temporary one.
+    """
+
+    session.execute(
+        "CREATE TEMPORARY TABLE temp_balances AS SELECT * FROM balances WITH NO DATA"
     )
-    upsert_stmt = insert_stmt.on_conflict_do_update(
-        constraint="balances_address_chain_dapp_uindex",
-        set_={"eth_height": eth_height, "balance": balance},
-        where=AlephBalanceDb.eth_height < eth_height,
+
+    conn = session.connection().connection
+    cursor = conn.cursor()
+
+    # Prepare an in-memory CSV file for use with the COPY operator
+    csv_balances = StringIO(
+        "\n".join(
+            [
+                f"{address};{chain};{dapp or ''};{balance};{eth_height}"
+                for address, balance in balances.items()
+            ]
+        )
     )
-    session.execute(upsert_stmt)
+    cursor.copy_expert(
+        "COPY temp_balances(address, chain, dapp, balance, eth_height) FROM STDIN WITH CSV DELIMITER ';'",
+        csv_balances,
+    )
+    session.execute(
+        """
+        INSERT INTO balances(address, chain, dapp, balance, eth_height)
+            (SELECT address, chain, dapp, balance, eth_height FROM temp_balances) 
+            ON CONFLICT ON CONSTRAINT balances_address_chain_dapp_uindex DO UPDATE 
+            SET balance = excluded.balance, eth_height = excluded.eth_height 
+            WHERE excluded.eth_height > balances.eth_height
+        """
+    )
+
+    # Temporary tables are dropped at the same time as the connection, but SQLAlchemy
+    # tends to reuse connections. Dropping the table here guarantees it will not be present
+    # on the next run.
+    session.execute("DROP TABLE temp_balances")

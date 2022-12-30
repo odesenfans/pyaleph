@@ -1,3 +1,5 @@
+import json
+from pathlib import Path
 from typing import Optional, Mapping, Any
 
 import pytest
@@ -20,6 +22,23 @@ BALANCES_CONTENT_SOL: Mapping[str, Any] = {
     },
     "platform": "ALEPH_SOL",
     "main_height": 14270470,
+    "token_symbol": "ALEPH",
+    "token_contract": "CsZ5LZkDS7h9TDKjrbL7VAwQZ9nsRu8vJLhRYfmGaN8K",
+}
+
+BALANCES_CONTENT_SOL_UPDATE: Mapping[str, Any] = {
+    "tags": ["SOL", "SPL", "CsZ5LZkDS7h9TDKjrbL7VAwQZ9nsRu8vJLhRYfmGaN8K", "mainnet"],
+    "chain": "SOL",
+    "balances": {
+        "18qhTFQujXfKpQERMsagphko8mnuKycvZGZcGfKX1V9": 4.0,
+        "1DvJzfHTPmTj4EVf4Rf4iHWPTRRR4jUpgm5HaXJhYBd": 3.0,
+        "1Q7bSc4ZKqGeGeRhHSN6ATeVkRm6oWDbrLvmMFLjNTc": 2.0,
+        "1nc1nerator11111111111111111111111111111111": 1.0,
+        "1seeWthuL3XEGT9VY6bThgeSA9mfSpWyy9xAYtQYGwP": 0.0,
+        "aU64L8cyqcZpPhGsSsgtQGinH2sF4sTmFpoMmL9t2f": 0.129155,
+    },
+    "platform": "ALEPH_SOL",
+    "main_height": 14270471,
     "token_symbol": "ALEPH",
     "token_contract": "CsZ5LZkDS7h9TDKjrbL7VAwQZ9nsRu8vJLhRYfmGaN8K",
 }
@@ -86,3 +105,46 @@ async def test_process_balances_sablier(session_factory: DbSessionFactory):
         await compare_balances(
             session=session, balances=balances, chain=Chain.ETH, dapp="SABLIER"
         )
+
+
+@pytest.mark.asyncio
+async def test_update_balances(session_factory: DbSessionFactory):
+    content = BALANCES_CONTENT_SOL
+
+    with session_factory() as session:
+        await update_balances(session=session, content=content)
+        session.commit()
+
+    new_content = BALANCES_CONTENT_SOL_UPDATE
+    with session_factory() as session:
+        await update_balances(session=session, content=new_content)
+        session.commit()
+        session.expire_all()
+
+        await compare_balances(
+            session=session,
+            balances=new_content["balances"],
+            chain=Chain.SOL,
+            dapp=None,
+        )
+
+
+# @pytest.mark.asyncio
+# async def test_update_large_files(session_factory: DbSessionFactory):
+#     fixtures_dir = Path(__file__).parent / "fixtures"
+#     file_1 = fixtures_dir / "large_balance_file_1.json"
+#     file_2 = fixtures_dir / "large_balance_file_2.json"
+#
+#     with file_1.open() as f:
+#         content_1 = json.load(f)
+#
+#     with file_2.open() as f:
+#         content_2 = json.load(f)
+#
+#     with session_factory() as session:
+#         await update_balances(session, content_1)
+#         session.commit()
+#
+#     with session_factory() as session:
+#         await update_balances(session, content_2)
+#         session.commit()

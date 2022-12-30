@@ -33,6 +33,10 @@ def session_factory(mock_config):
         # TODO: run migrations instead
         Base.metadata.create_all(conn)
 
+        # Here go all the annoying patchworks that are required because we do not run
+        # the migration scripts. Address the todo above and these can all disappear!
+
+        # Aggregates are not described in SQLAlchemy, so we need to create them manually.
         conn.execute("DROP AGGREGATE IF EXISTS jsonb_merge(jsonb)")
         conn.execute(
             """
@@ -41,6 +45,14 @@ def session_factory(mock_config):
             STYPE = jsonb,
             INITCOND = '{}'
         )"""
+        )
+
+        # Indexes with NULLS NOT DISTINCT are not yet supported in SQLA.
+        conn.execute(
+            "ALTER TABLE balances DROP CONSTRAINT balances_address_chain_dapp_uindex"
+        )
+        conn.execute(
+            "ALTER TABLE balances ADD CONSTRAINT balances_address_chain_dapp_uindex UNIQUE NULLS NOT DISTINCT (address, chain, dapp)"
         )
 
     return make_session_factory(engine)

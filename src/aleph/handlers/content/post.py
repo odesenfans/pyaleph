@@ -1,18 +1,19 @@
 import logging
 from decimal import Decimal
+from io import StringIO
 from typing import List, Tuple, Any, Dict, Mapping, Union, Optional
 
 from aleph_message.models import PostContent, ChainRef, Chain
-from sqlalchemy import update
+from sqlalchemy import update, delete
 
 from aleph.db.accessors.posts import get_matching_posts, get_original_post
-from aleph.db.models import MessageDb
+from aleph.db.models import MessageDb, AlephBalanceDb
 from aleph.db.models.posts import PostDb
 from aleph.toolkit.timestamp import timestamp_to_datetime
 from aleph.types.db_session import DbSession
 from aleph.types.message_status import InvalidMessageException, MissingDependency
 from .content_handler import ContentHandler
-from ...db.accessors.balances import update_balance
+from ...db.accessors.balances import update_balances as update_balances_db
 
 LOGGER = logging.getLogger(__name__)
 
@@ -32,16 +33,14 @@ async def update_balances(session: DbSession, content: Mapping[str, Any]):
     height = content["main_height"]
     dapp = content.get("dapp")
 
-    balances: Dict[str, Decimal] = content["balances"]
-    for address, balance in balances.items():
-        await update_balance(
-            session=session,
-            address=address,
-            chain=chain,
-            dapp=dapp,
-            eth_height=height,
-            balance=balance,
-        )
+    balances: Dict[str, float] = content["balances"]
+    await update_balances_db(
+        session=session,
+        chain=chain,
+        dapp=dapp,
+        eth_height=height,
+        balances=balances,
+    )
 
 
 def get_post_content_ref(ref: Optional[Union[ChainRef, str]]) -> Optional[str]:

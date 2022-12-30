@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import Any, Dict, Sequence, Mapping, cast
+from typing import Any, Dict, Sequence, cast
 
 import pytest_asyncio
 from aleph_message.models import AggregateContent, PostContent
@@ -11,12 +11,10 @@ from aleph.db.models import (
     ChainTxDb,
     MessageConfirmationDb,
     AggregateElementDb,
-    MessageStatusDb,
 )
 from aleph.db.models.posts import PostDb
 from aleph.toolkit.timestamp import timestamp_to_datetime
-from aleph.types.db_session import DbSessionFactory, DbSession
-from aleph.types.message_status import MessageStatus
+from aleph.types.db_session import DbSessionFactory
 
 
 # TODO: remove the raw parameter, it's just to avoid larger refactorings
