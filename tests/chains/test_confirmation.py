@@ -121,7 +121,7 @@ async def test_confirm_message(
     assert message_in_db.confirmed
     assert len(message_in_db.confirmations) == 1
     confirmation = message_in_db.confirmations[0]
-    compare_chain_txs(expected=chain_tx, actual=confirmation.tx)
+    compare_chain_txs(expected=chain_tx, actual=confirmation)
 
 
 @pytest.mark.asyncio
@@ -171,4 +171,4 @@ async def test_process_confirmed_message(
     assert message_in_db.confirmed
     assert len(message_in_db.confirmations) == 1
     confirmation = message_in_db.confirmations[0]
-    compare_chain_txs(expected=chain_tx, actual=confirmation.tx)
+    compare_chain_txs(expected=chain_tx, actual=confirmation)

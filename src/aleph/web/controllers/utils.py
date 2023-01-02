@@ -1,5 +1,6 @@
 import json
 from math import ceil
+from typing import Optional
 
 import aiohttp_jinja2
 from aiohttp import web
@@ -8,6 +9,22 @@ from bson import json_util
 DEFAULT_MESSAGES_PER_PAGE = 20
 DEFAULT_PAGE = 1
 LIST_FIELD_SEPARATOR = ","
+
+
+def get_path_page(request: web.Request) -> Optional[int]:
+    page_str = request.match_info.get("page")
+    if page_str is None:
+        return None
+
+    try:
+        page = int(page_str)
+    except ValueError:
+        raise web.HTTPBadRequest(text=f"Invalid page value in path: {page_str}")
+
+    if page < 1:
+        raise web.HTTPUnprocessableEntity(text=f"Page number must be greater than 1.")
+
+    return page
 
 
 class Pagination(object):

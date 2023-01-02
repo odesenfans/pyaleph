@@ -6,12 +6,13 @@ from pydantic import BaseModel, Field, root_validator, validator, ValidationErro
 
 from aleph.db.accessors.posts import get_matching_posts, MergedPost, count_matching_posts
 from aleph.types.db_session import DbSessionFactory
+from aleph.types.sort_order import SortOrder
 from aleph.web.controllers.utils import (
     DEFAULT_MESSAGES_PER_PAGE,
     DEFAULT_PAGE,
     LIST_FIELD_SEPARATOR,
     Pagination,
-    cond_output,
+    cond_output, get_path_page,
 )
 
 
@@ -56,6 +57,11 @@ class PostQueryParams(BaseModel):
     page: int = Field(
         default=DEFAULT_PAGE, ge=1, description="Offset in pages. Starts at 1."
     )
+    sort_order: SortOrder = Field(
+        default=SortOrder.DESCENDING,
+        description="Order in which messages should be listed: "
+        "-1 means most recent messages first, 1 means older messages first.",
+    )
 
     @root_validator
     def validate_field_dependencies(cls, values):
@@ -96,7 +102,6 @@ def merged_post_to_dict(merged_post: MergedPost) -> Dict[str, Any]:
 
 async def view_posts_list(request):
     """Posts list view with filters
-    TODO: return state with amended posts
     """
 
     query_string = request.query_string
@@ -105,6 +110,10 @@ async def view_posts_list(request):
         query_params = PostQueryParams.parse_obj(request.query)
     except ValidationError as e:
         raise web.HTTPUnprocessableEntity(body=e.json(indent=4))
+
+    path_page = get_path_page(request)
+    if path_page:
+        query_params.page = path_page
 
     find_filters = query_params.dict(exclude_none=True)
 

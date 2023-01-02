@@ -6,12 +6,12 @@ from aleph_message.models import MessageType, ItemHash, Chain
 from pydantic import BaseModel, Field, validator, ValidationError, root_validator
 
 from aleph.db.accessors.messages import get_matching_messages, count_matching_messages
+from aleph.schemas.api.messages import format_message, MessageListResponse
 from aleph.types.db_session import DbSessionFactory
 from aleph.types.sort_order import SortOrder
 from aleph.web.controllers.utils import (
     LIST_FIELD_SEPARATOR,
     Pagination,
-    cond_output,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -145,36 +145,43 @@ async def view_messages_list(request):
 
     session_factory: DbSessionFactory = request.app["session_factory"]
     with session_factory() as session:
-        results = await get_matching_messages(
+        messages = await get_matching_messages(
             session, include_confirmations=True, **find_filters
         )
-        messages = [message.to_dict(include_confirmations=True) for message in results]
 
-        context = {"messages": messages}
+        formatted_messages = [
+            format_message(message).dict(exclude_defaults=True) for message in messages
+        ]
 
-        if pagination_per_page is not None:
-            total_msgs = await count_matching_messages(session, **find_filters)
+        total_msgs = await count_matching_messages(session, **find_filters)
 
-            query_string = request.query_string
-            pagination = Pagination(
-                pagination_page,
-                pagination_per_page,
-                total_msgs,
-                url_base="/messages/posts/page/",
-                query_string=query_string,
-            )
+        query_string = request.query_string
+        pagination = Pagination(
+            pagination_page,
+            pagination_per_page,
+            total_msgs,
+            url_base="/messages/posts/page/",
+            query_string=query_string,
+        )
 
-            context.update(
-                {
-                    "pagination": pagination,
-                    "pagination_page": pagination_page,
-                    "pagination_total": total_msgs,
-                    "pagination_per_page": pagination_per_page,
-                    "pagination_item": "messages",
-                }
-            )
+        response = MessageListResponse.construct(
+            messages=formatted_messages,
+            pagination_page=pagination_page,
+            pagination_total=total_msgs,
+            pagination_per_page=pagination_per_page,
+        )
 
-    return cond_output(request, context, "TODO.html")
+        # context.update(
+        #     {
+        #         "pagination": pagination,
+        #         "pagination_page": pagination_page,
+        #         "pagination_total": total_msgs,
+        #         "pagination_per_page": pagination_per_page,
+        #         "pagination_item": "messages",
+        #     }
+        # )
+
+    return web.json_response(text=response.json())
 
 
 # TODO: reactivate/reimplement messages WS

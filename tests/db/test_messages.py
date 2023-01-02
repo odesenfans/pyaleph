@@ -4,7 +4,7 @@ from copy import copy
 import pytest
 import pytz
 from aleph_message.models import Chain, MessageType, ItemType
-from sqlalchemy import select
+from sqlalchemy import select, insert
 
 from aleph.db.accessors.messages import (
     get_message_by_item_hash,
@@ -15,19 +15,20 @@ from aleph.db.accessors.messages import (
     append_to_forgotten_by,
     get_forgotten_message,
     make_message_upsert_query,
-    make_confirmation_upsert_query, get_distinct_channels,
+    make_confirmation_upsert_query,
+    get_distinct_channels,
 )
 from aleph.db.models import (
     MessageDb,
-    MessageConfirmationDb,
     ChainTxDb,
     MessageStatusDb,
+    message_confirmations,
 )
 from aleph.toolkit.timestamp import timestamp_to_datetime
 from aleph.types.chain_sync import ChainSyncProtocol
 from aleph.types.channel import Channel
 from aleph.types.db_session import DbSessionFactory
-from aleph.types.message_status import MessageStatus, InvalidSignature
+from aleph.types.message_status import MessageStatus
 
 
 @pytest.fixture
@@ -94,31 +95,25 @@ async def test_get_message_with_confirmations(
     session_factory: DbSessionFactory, fixture_message: MessageDb
 ):
     confirmations = [
-        MessageConfirmationDb(
-            item_hash=fixture_message.item_hash,
-            tx=ChainTxDb(
-                hash="0xdeadbeef",
-                chain=Chain.ETH,
-                height=1000,
-                datetime=pytz.utc.localize(dt.datetime(2022, 10, 1)),
-                publisher="0xabadbabe",
-                protocol=ChainSyncProtocol.OFF_CHAIN,
-                protocol_version=1,
-                content="tx-content-1",
-            ),
+        ChainTxDb(
+            hash="0xdeadbeef",
+            chain=Chain.ETH,
+            height=1000,
+            datetime=pytz.utc.localize(dt.datetime(2022, 10, 1)),
+            publisher="0xabadbabe",
+            protocol=ChainSyncProtocol.OFF_CHAIN,
+            protocol_version=1,
+            content="tx-content-1",
         ),
-        MessageConfirmationDb(
-            item_hash=fixture_message.item_hash,
-            tx=ChainTxDb(
-                hash="0x8badf00d",
-                chain=Chain.ETH,
-                height=1020,
-                datetime=pytz.utc.localize(dt.datetime(2022, 10, 2)),
-                publisher="0x0bobafed",
-                protocol=ChainSyncProtocol.OFF_CHAIN,
-                protocol_version=1,
-                content="tx-content-2",
-            ),
+        ChainTxDb(
+            hash="0x8badf00d",
+            chain=Chain.ETH,
+            height=1020,
+            datetime=pytz.utc.localize(dt.datetime(2022, 10, 2)),
+            publisher="0x0bobafed",
+            protocol=ChainSyncProtocol.OFF_CHAIN,
+            protocol_version=1,
+            content="tx-content-2",
         ),
     ]
 
@@ -139,17 +134,15 @@ async def test_get_message_with_confirmations(
     assert fetched_message.confirmed
 
     confirmations_by_hash = {
-        confirmation.tx.hash: confirmation for confirmation in confirmations
+        confirmation.hash: confirmation for confirmation in confirmations
     }
     for confirmation in fetched_message.confirmations:
-        original = confirmations_by_hash[confirmation.tx.hash]
-        assert confirmation.item_hash == original.item_hash
-        assert confirmation.tx_hash == original.tx_hash
-        assert confirmation.tx.hash == original.tx.hash
-        assert confirmation.tx.chain == original.tx.chain
-        assert confirmation.tx.height == original.tx.height
-        assert confirmation.tx.datetime == original.tx.datetime
-        assert confirmation.tx.publisher == original.tx.publisher
+        original = confirmations_by_hash[confirmation.hash]
+        assert confirmation.hash == original.hash
+        assert confirmation.chain == original.chain
+        assert confirmation.height == original.height
+        assert confirmation.datetime == original.datetime
+        assert confirmation.publisher == original.publisher
 
 
 @pytest.mark.asyncio
@@ -199,10 +192,10 @@ async def test_upsert_query_confirmation(
         session.commit()
 
         confirmation_db = session.execute(
-            select(MessageConfirmationDb).where(
-                MessageConfirmationDb.item_hash == item_hash
+            select(message_confirmations).where(
+                message_confirmations.c.item_hash == item_hash
             )
-        ).scalar_one()
+        ).one()
         assert confirmation_db.tx_hash == chain_tx.hash
 
     # Upsert
@@ -211,10 +204,10 @@ async def test_upsert_query_confirmation(
         session.commit()
 
         confirmation_db = session.execute(
-            select(MessageConfirmationDb).where(
-                MessageConfirmationDb.item_hash == item_hash
+            select(message_confirmations).where(
+                message_confirmations.c.item_hash == item_hash
             )
-        ).scalar_one()
+        ).one()
         assert confirmation_db.tx_hash == chain_tx.hash
 
 
@@ -270,8 +263,11 @@ async def test_get_unconfirmed_messages(
     )
     with session_factory() as session:
         session.add(tx)
-        session.add(
-            MessageConfirmationDb(item_hash=fixture_message.item_hash, tx_hash=tx.hash)
+        session.flush()
+        session.execute(
+            insert(message_confirmations).values(
+                item_hash=fixture_message.item_hash, tx_hash=tx.hash
+            )
         )
         session.commit()
 
@@ -301,7 +297,9 @@ async def test_get_unconfirmed_messages(
 
 
 @pytest.mark.asyncio
-async def test_get_distinct_channels(session_factory: DbSessionFactory, fixture_message: MessageDb):
+async def test_get_distinct_channels(
+    session_factory: DbSessionFactory, fixture_message: MessageDb
+):
     # TODO: improve this test
     #       * use several messages
     #       * test if None if considered as a channel

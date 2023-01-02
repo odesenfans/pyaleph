@@ -21,8 +21,9 @@ from sqlalchemy import (
     String,
     Integer,
     ForeignKey,
-    UniqueConstraint,
     ARRAY,
+    Table,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
@@ -34,6 +35,7 @@ from aleph.types.message_status import MessageStatus
 from .base import Base
 from .chains import ChainTxDb
 from .pending_messages import PendingMessageDb
+from ...types.datetime_format import DatetimeFormat
 
 
 # TODO: remove once aleph-message is updated
@@ -56,6 +58,16 @@ CONTENT_TYPE_MAP: Dict[MessageType, Type[BaseContent]] = {
     MessageType.program: ProgramContent,
     MessageType.store: StoreContent,
 }
+
+
+message_confirmations = Table(
+    "message_confirmations",
+    Base.metadata,
+    Column("id", Integer, primary_key=True),
+    Column("item_hash", ForeignKey("messages.item_hash"), nullable=False, index=True),
+    Column("tx_hash", ForeignKey("chain_txs.hash", ondelete="CASCADE"), nullable=False),
+    UniqueConstraint("item_hash", "tx_hash"),
+)
 
 
 def validate_message_content(
@@ -103,8 +115,8 @@ class MessageDb(Base):
     channel: Optional[Channel] = Column(String, nullable=True, index=True)
     size: int = Column(Integer, nullable=False)
 
-    confirmations: "List[MessageConfirmationDb]" = relationship(
-        "MessageConfirmationDb", back_populates="message"
+    confirmations: "List[ChainTxDb]" = relationship(
+        "ChainTxDb", secondary=message_confirmations
     )
 
     _parsed_content: Optional[BaseContent] = None
@@ -112,14 +124,6 @@ class MessageDb(Base):
     @property
     def confirmed(self) -> bool:
         return bool(self.confirmations)
-
-    def to_dict(self, include_confirmations: bool=False) -> Dict[str, Any]:
-        columns = super().to_dict()
-        if include_confirmations:
-            columns["confirmed"] = self.confirmed
-            columns["confirmations"] = [c.to_dict() for c in self.confirmations]
-        return columns
-
 
     @property
     def parsed_content(self):
@@ -220,15 +224,15 @@ class RejectedMessageDb(Base):
     traceback: Optional[str] = Column(String, nullable=True)
 
 
-class MessageConfirmationDb(Base):
-    __tablename__ = "message_confirmations"
-    __table_args__ = (UniqueConstraint("item_hash", "tx_hash"),)
-
-    id = Column(Integer, primary_key=True)
-    item_hash: str = Column(ForeignKey(MessageDb.item_hash), nullable=False, index=True)
-    tx_hash: str = Column(
-        ForeignKey("chain_txs.hash", ondelete="CASCADE"), nullable=False
-    )
-
-    message: MessageDb = relationship(MessageDb, back_populates="confirmations")
-    tx: ChainTxDb = relationship("ChainTxDb")
+# class MessageConfirmationDb(Base):
+#     __tablename__ = "message_confirmations"
+#     __table_args__ = (UniqueConstraint("item_hash", "tx_hash"),)
+#
+#     id = Column(Integer, primary_key=True)
+#     item_hash: str = Column(ForeignKey(MessageDb.item_hash), nullable=False, index=True)
+#     tx_hash: str = Column(
+#         ForeignKey("chain_txs.hash", ondelete="CASCADE"), nullable=False
+#     )
+#
+#     message: MessageDb = relationship(MessageDb, back_populates="confirmations")
+#     tx: ChainTxDb = relationship("ChainTxDb")

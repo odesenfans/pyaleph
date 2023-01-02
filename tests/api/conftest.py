@@ -4,13 +4,13 @@ from typing import Any, Dict, Sequence, cast
 
 import pytest_asyncio
 from aleph_message.models import AggregateContent, PostContent
+from sqlalchemy import insert
 
 from aleph.db.accessors.aggregates import refresh_aggregate
 from aleph.db.models import (
     MessageDb,
     ChainTxDb,
-    MessageConfirmationDb,
-    AggregateElementDb,
+    AggregateElementDb, message_confirmations,
 )
 from aleph.db.models.posts import PostDb
 from aleph.toolkit.timestamp import timestamp_to_datetime
@@ -28,26 +28,26 @@ async def _load_fixtures(
         messages_json = json.load(f)
 
     messages = []
-    confirmations = []
-    chain_txs = []
     tx_hashes = set()
-    for message_dict in messages_json:
-        messages.append(MessageDb.from_message_dict(message_dict))
-        for confirmation in message_dict.get("confirmations", []):
-            if (tx_hash := confirmation["hash"]) not in tx_hashes:
-                chain_txs.append(ChainTxDb.from_dict(confirmation))
-                tx_hashes.add(tx_hash)
-
-            confirmations.append(
-                MessageConfirmationDb(
-                    item_hash=message_dict["item_hash"], tx_hash=tx_hash
-                )
-            )
 
     with session_factory() as session:
-        session.add_all(messages)
-        session.add_all(chain_txs)
-        session.add_all(confirmations)
+
+        for message_dict in messages_json:
+            message_db = MessageDb.from_message_dict(message_dict)
+            messages.append(message_db)
+            session.add(message_db)
+            for confirmation in message_dict.get("confirmations", []):
+                if (tx_hash := confirmation["hash"]) not in tx_hashes:
+                    chain_tx_db = ChainTxDb.from_dict(confirmation)
+                    tx_hashes.add(tx_hash)
+                    session.add(chain_tx_db)
+
+                session.flush()
+                session.execute(
+                    insert(message_confirmations).values(
+                        item_hash=message_db.item_hash, tx_hash=tx_hash
+                    )
+                )
         session.commit()
 
     return messages_json if raw else messages
