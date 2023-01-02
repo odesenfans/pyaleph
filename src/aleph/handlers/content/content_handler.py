@@ -1,19 +1,9 @@
 import abc
-from dataclasses import dataclass
 from typing import List, Tuple
 
-from aleph.db.bulk_operations import DbBulkOperation
 from aleph.db.models import MessageDb
 from aleph.permissions import check_sender_authorization
 from aleph.types.db_session import DbSession
-from aleph.types.message_status import MessageProcessingStatus, PermissionDenied
-
-
-# TODO: use this class as returned value for fetch?
-@dataclass
-class MessageProcessingResult:
-    status: MessageProcessingStatus
-    ops: List[DbBulkOperation]
 
 
 class ContentHandler(abc.ABC):
