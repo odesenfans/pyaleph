@@ -1,9 +1,7 @@
+from aleph_message.models import MessageType
+
 from aleph.db.accessors.aggregates import get_aggregate_by_key
 from aleph.db.models import MessageDb
-from aleph.schemas.validated_message import (
-    ValidatedPostMessage,
-    ValidatedAggregateMessage,
-)
 from aleph.types.db_session import DbSession
 
 
@@ -49,11 +47,11 @@ async def check_sender_authorization(session: DbSession, message: MessageDb) -> 
         if len(mtypes) and message.type not in mtypes:
             continue
 
-        if isinstance(message, ValidatedPostMessage):
+        if message.type == MessageType.post:
             if len(ptypes) and message.content.type not in ptypes:
                 continue
 
-        if isinstance(message, ValidatedAggregateMessage):
+        if message.type == MessageType.aggregate:
             if len(akeys) and message.content.key not in akeys:
                 continue
 

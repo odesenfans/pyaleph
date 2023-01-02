@@ -91,7 +91,6 @@ async def test_forget_post_message(
                 message_processor=message_processor,
                 pending_messages=[pending_message],
                 session=session,
-                config=mock_config,
             )
         )
 
@@ -105,7 +104,6 @@ async def test_forget_post_message(
                 message_processor=message_processor,
                 pending_messages=[pending_forget_message],
                 session=session,
-                config=mock_config,
             )
         )
 
@@ -183,7 +181,6 @@ async def test_forget_store_message(
                 message_processor=message_processor,
                 pending_messages=[pending_message],
                 session=session,
-                config=mock_config,
             )
         )
 
@@ -198,7 +195,6 @@ async def test_forget_store_message(
                 message_processor=message_processor,
                 pending_messages=[pending_forget_message],
                 session=session,
-                config=mock_config,
             )
         )
 
@@ -282,7 +278,6 @@ async def test_forget_forget_message(
                 message_processor=message_processor,
                 pending_messages=[pending_forget_message],
                 session=session,
-                config=mock_config,
             )
         )
 
@@ -432,7 +427,6 @@ async def test_forget_store_multi_users(
                 message_processor=message_processor,
                 pending_messages=[pending_forget_message],
                 session=session,
-                config=mock_config,
             )
         )
 

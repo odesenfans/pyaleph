@@ -93,11 +93,7 @@ async def test_process_aggregates(
     message_processor: PendingMessageProcessor,
     fixture_aggregate_messages: List[Dict],
 ):
-    pipeline = message_processor.make_pipeline(
-        config=mock_config,
-        shared_stats={"message_jobs": {}},
-        loop=False,
-    )
+    pipeline = message_processor.make_pipeline()
     messages = [message async for message in pipeline]
 
     # TODO: improve this test
@@ -156,7 +152,6 @@ async def process_aggregates_one_by_one(
                 message_processor=message_processor,
                 pending_messages=[pending_aggregate],
                 session=session,
-                config=config,
             )
         )
         messages.append(message)

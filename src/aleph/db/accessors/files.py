@@ -1,9 +1,11 @@
+import datetime as dt
 from typing import Optional
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
-import datetime as dt
 
+from aleph.types.db_session import DbSession
+from aleph.types.files import FileTag
 from ..models.files import (
     FilePinDb,
     FileTagDb,
@@ -12,8 +14,6 @@ from ..models.files import (
     MessageFilePinDb,
     FilePinType,
 )
-from aleph.types.db_session import DbSession
-from ...types.files import FileTag
 
 
 async def is_pinned_file(session: DbSession, file_hash: str) -> bool:
@@ -66,14 +66,6 @@ async def delete_file_pin(session: DbSession, item_hash: str):
         MessageFilePinDb.item_hash == item_hash
     )
     session.execute(delete_stmt)
-
-
-def make_upsert_stored_file_query(file: StoredFileDb):
-    return (
-        insert(StoredFileDb)
-        .values(file.to_dict())
-        .on_conflict_do_nothing(constraint="files_pkey")
-    )
 
 
 async def upsert_stored_file(session: DbSession, file: StoredFileDb):
@@ -133,8 +125,6 @@ async def refresh_file_tag(session: DbSession, tag: FileTag):
         (coalesced_ref == select_latest_file_pin_stmt.c.computed_ref)
         & (MessageFilePinDb.created == select_latest_file_pin_stmt.c.created),
     )
-
-    file_tags = session.execute(select_file_tag_stmt).all()
 
     insert_stmt = insert(FileTagDb).from_select(
         ["tag", "owner", "file_hash", "last_updated"], select_file_tag_stmt

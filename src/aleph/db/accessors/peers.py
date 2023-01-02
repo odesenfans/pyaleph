@@ -3,10 +3,9 @@ from typing import Optional, Sequence
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..models.peers import PeerDb, PeerType
 from aleph.types.db_session import DbSession
+from ..models.peers import PeerDb, PeerType
 
 
 async def get_all_addresses_by_peer_type(session: DbSession, peer_type: PeerType) -> Sequence[str]:

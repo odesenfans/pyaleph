@@ -1,8 +1,8 @@
 from typing import Optional, Iterable, Any, Dict, Sequence, Collection
 
-from aleph_message.models import Chain, MessageType
+from aleph_message.models import Chain
 from sqlalchemy import select, func, update, delete
-from sqlalchemy.orm import selectinload, aliased
+from sqlalchemy.orm import selectinload
 from sqlalchemy.sql import Update
 
 from aleph.db.models import PendingMessageDb, ChainTxDb

@@ -5,7 +5,7 @@ import asyncio
 import json
 import logging
 from hashlib import sha256
-from typing import Any, AnyStr, IO, Optional, cast, Union, Final
+from typing import Any, IO, Optional, cast, Final
 
 from aleph_message.models import ItemType
 

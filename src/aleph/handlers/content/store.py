@@ -17,18 +17,13 @@ from aleph_message.models import ItemType, StoreContent, ItemHash
 
 from aleph.config import get_config
 from aleph.db.accessors.files import (
-    make_upsert_stored_file_query,
     insert_message_file_pin,
     get_file_tag,
-    upsert_file_tag,
+    upsert_file_tag, upsert_stored_file,
 )
 from aleph.db.models import MessageDb, StoredFileDb
 from aleph.exceptions import AlephStorageException, UnknownHashError
 from aleph.handlers.content.content_handler import ContentHandler
-from aleph.schemas.validated_message import (
-    StoreContentWithMetadata,
-    EngineInfo,
-)
 from aleph.storage import StorageService
 from aleph.toolkit.timestamp import timestamp_to_datetime
 from aleph.types.db_session import DbSessionFactory, DbSession
@@ -111,7 +106,6 @@ class StoreMessageHandler(ContentHandler):
         assert isinstance(content, StoreContent)
 
         engine = content.item_type
-        output_content = StoreContentWithMetadata.from_content(content)
 
         is_folder = False
         item_hash = content.item_hash
@@ -149,7 +143,6 @@ class StoreMessageHandler(ContentHandler):
                     do_standard_lookup = True
                 else:
                     size = stats["CumulativeSize"]
-                    output_content.engine_info = EngineInfo(**stats)
                     timer = 0
                     is_folder = stats["Type"] == "directory"
                     async for status in ipfs_client.pin.add(item_hash):
@@ -196,7 +189,7 @@ class StoreMessageHandler(ContentHandler):
             type=FileType.DIRECTORY if is_folder else FileType.FILE,
             size=size,
         )
-        session.execute(make_upsert_stored_file_query(stored_file))
+        await upsert_stored_file(session=session, file=stored_file)
 
     async def check_permissions(self, session: DbSession, message: MessageDb):
         content = _get_store_content(message)

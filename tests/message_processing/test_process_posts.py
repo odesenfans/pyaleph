@@ -17,20 +17,19 @@ async def test_process_post_and_amend(
     message_processor: PendingMessageProcessor,
     fixture_post_messages: List[Dict],
 ):
-    pipeline = message_processor.make_pipeline(
-        config=mock_config,
-        shared_stats={"message_jobs": {}},
-        loop=False,
-    )
+    pipeline = message_processor.make_pipeline()
     # Exhaust the iterator
     _ = [message async for message in pipeline]
 
     with session_factory() as session:
         # We should now have one post
-        original_item_hash = "9f02e3b5efdbdc0b487359117ae3af40db654892487feae452689a0b84dc1025"
-        amend_item_hash = "93776ad67063b955869a7fa705ea2987add39486e1ed5951e9842291cf0f566c"
+        original_item_hash = (
+            "9f02e3b5efdbdc0b487359117ae3af40db654892487feae452689a0b84dc1025"
+        )
+        amend_item_hash = (
+            "93776ad67063b955869a7fa705ea2987add39486e1ed5951e9842291cf0f566c"
+        )
         post = await get_post(session=session, item_hash=original_item_hash)
-
 
     fixtures_by_item_hash = {m["item_hash"]: m for m in fixture_post_messages}
     original = fixtures_by_item_hash[original_item_hash]

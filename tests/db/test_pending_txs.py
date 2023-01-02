@@ -3,7 +3,7 @@ from typing import Sequence
 import pytest
 from aleph_message.models import Chain
 
-from aleph.db.accessors.pending_txs import get_pending_txs_stream, count_pending_txs
+from aleph.db.accessors.pending_txs import get_pending_txs, count_pending_txs
 from aleph.db.models import ChainTxDb, PendingTxDb
 from aleph.types.chain_sync import ChainSyncProtocol
 import datetime as dt
@@ -66,14 +66,14 @@ async def test_get_pending_txs(
         session.commit()
 
     with session_factory() as session:
-        pending_txs = list(await get_pending_txs_stream(session=session))
+        pending_txs = list(await get_pending_txs(session=session))
 
     for expected_tx, actual_tx in zip(pending_txs, fixture_txs):
         assert_pending_txs_equal(expected_tx, actual_tx)
 
     # Test the limit parameter
     with session_factory() as session:
-        pending_txs = list(await get_pending_txs_stream(session=session, limit=1))
+        pending_txs = list(await get_pending_txs(session=session, limit=1))
 
     assert pending_txs
     assert len(pending_txs) == 1

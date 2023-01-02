@@ -7,7 +7,7 @@ import sqlalchemy.exc
 from aleph_message.models import MessageType, ItemType
 from configmanager import Config
 from pydantic import ValidationError
-from sqlalchemy import delete, insert
+from sqlalchemy import insert
 
 from aleph.chains.chain_service import ChainService
 from aleph.db.accessors.messages import (
@@ -17,6 +17,7 @@ from aleph.db.accessors.messages import (
     make_message_status_upsert_query,
     reject_new_pending_message,
 )
+from aleph.db.accessors.pending_messages import delete_pending_message
 from aleph.db.models import (
     PendingMessageDb,
     MessageDb,
@@ -141,9 +142,7 @@ class MessageHandler:
         if pending_message.signature != existing_message.signature:
             raise InvalidSignature(f"Invalid signature for {pending_message.item_hash}")
 
-        session.execute(
-            delete(PendingMessageDb).where(PendingMessageDb.id == pending_message.id)
-        )
+        await delete_pending_message(session=session, pending_message=pending_message)
         if tx_hash := pending_message.tx_hash:
             session.execute(
                 make_confirmation_upsert_query(
@@ -250,9 +249,7 @@ class MessageHandler:
         self, session: DbSession, pending_message: PendingMessageDb, message: MessageDb
     ):
         session.execute(make_message_upsert_query(message))
-        session.execute(
-            delete(PendingMessageDb).where(PendingMessageDb.id == pending_message.id)
-        )
+        await delete_pending_message(session=session, pending_message=pending_message)
         session.execute(
             make_message_status_upsert_query(
                 item_hash=message.item_hash,

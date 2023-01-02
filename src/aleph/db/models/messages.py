@@ -35,7 +35,6 @@ from aleph.types.message_status import MessageStatus
 from .base import Base
 from .chains import ChainTxDb
 from .pending_messages import PendingMessageDb
-from ...types.datetime_format import DatetimeFormat
 
 
 # TODO: remove once aleph-message is updated

@@ -14,7 +14,7 @@ from sqlalchemy import delete
 from aleph.chains.chain_service import ChainService
 from aleph.chains.chaindata import ChainDataService
 from aleph.chains.tx_context import TxContext
-from aleph.db.accessors.pending_txs import get_pending_txs_stream
+from aleph.db.accessors.pending_txs import get_pending_txs
 from aleph.db.connection import make_engine, make_session_factory
 from aleph.db.models.pending_txs import PendingTxDb
 from aleph.handlers.message_handler import MessageHandler
@@ -105,7 +105,7 @@ class PendingTxProcessor:
         seen_ids: Set[str] = set()
         LOGGER.info("handling TXs")
         with self.session_factory() as session:
-            for pending_tx in await get_pending_txs_stream(session):
+            for pending_tx in await get_pending_txs(session):
                 if pending_tx.tx.content in seen_offchain_hashes:
                     continue
 

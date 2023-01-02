@@ -3,16 +3,14 @@ from typing import Optional, Iterable, Any, Dict, Tuple, Sequence
 
 from aleph_message.models import ItemHash
 from sqlalchemy import (
-    cast as sqla_cast,
     select,
     delete,
     update,
     func,
-    text,
     literal_column,
 )
-from sqlalchemy.dialects.postgresql import insert, JSONB, aggregate_order_by
-from sqlalchemy.orm import selectinload, load_only, defer
+from sqlalchemy.dialects.postgresql import insert, aggregate_order_by
+from sqlalchemy.orm import selectinload, defer
 
 from aleph.db.models import AggregateDb, AggregateElementDb
 from aleph.types.db_session import DbSession
@@ -147,27 +145,6 @@ async def insert_aggregate_element(
         creation_datetime=creation_datetime,
     )
     session.execute(insert_stmt)
-
-
-async def get_message_hashes_for_aggregate(
-    session: DbSession, owner: str, key: str
-) -> Iterable[ItemHash]:
-    select_stmt = select(AggregateElementDb.item_hash).where(
-        (AggregateElementDb.key == key) & (AggregateElementDb.owner == owner)
-    )
-    return (ItemHash(result) for result in (session.execute(select_stmt)).scalars())
-
-
-async def delete_aggregate(session: DbSession, owner: str, key: str):
-    delete_aggregate_stmt = delete(AggregateDb).where(
-        (AggregateDb.key == key) & (AggregateDb.owner == owner)
-    )
-    delete_elements_stmt = delete(AggregateElementDb).where(
-        (AggregateDb.key == key) & (AggregateDb.owner == owner)
-    )
-
-    session.execute(delete_aggregate_stmt)
-    session.execute(delete_elements_stmt)
 
 
 async def count_aggregate_elements(session: DbSession, owner: str, key: str) -> int:

@@ -45,7 +45,6 @@ async def process_pending_messages(
     message_processor: PendingMessageProcessor,
     pending_messages: Sequence[PendingMessageDb],
     session: DbSession,
-    config: Config,
 ) -> Iterable[MessageDb]:
 
     for pending_message in pending_messages:
@@ -60,10 +59,6 @@ async def process_pending_messages(
     session.add_all(pending_messages)
     session.commit()
 
-    pipeline = message_processor.make_pipeline(
-        config=config,
-        shared_stats={"message_jobs": {}},
-        loop=False,
-    )
+    pipeline = message_processor.make_pipeline()
 
     return itertools.chain.from_iterable([messages async for messages in pipeline])

@@ -23,22 +23,19 @@ from nuls2.model.data import (
 from nuls2.model.transaction import Transaction
 
 from aleph.chains.common import get_verification_buffer
-from aleph.types.db_session import DbSessionFactory
-from aleph.utils import run_in_executor
-from .chaindata import ChainDataService
-from .connector import Verifier, ChainWriter
-from .tx_context import TxContext
 from aleph.db.accessors.chains import get_last_height, upsert_chain_sync_status
 from aleph.db.accessors.messages import get_unconfirmed_messages
 from aleph.db.accessors.pending_messages import count_pending_messages
 from aleph.db.accessors.pending_txs import count_pending_txs
 from aleph.schemas.pending_messages import BasePendingMessage
+from aleph.types.db_session import DbSessionFactory
+from aleph.utils import run_in_executor
+from .chaindata import ChainDataService
+from .connector import Verifier, ChainWriter
+from .tx_context import TxContext
 
 LOGGER = logging.getLogger("chains.nuls2")
 CHAIN_NAME = "NULS2"
-PAGINATION = 500
-
-DECIMALS = None  # will get populated later... bad?
 
 
 class Nuls2Connector(Verifier, ChainWriter):

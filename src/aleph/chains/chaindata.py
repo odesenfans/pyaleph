@@ -8,7 +8,7 @@ from aleph_message.models import Chain
 from aleph.chains.common import LOGGER
 from aleph.chains.tx_context import TxContext
 from aleph.config import get_config
-from aleph.db.accessors.files import upsert_tx_file_pin, make_upsert_stored_file_query
+from aleph.db.accessors.files import upsert_tx_file_pin, upsert_stored_file
 from aleph.db.models import ChainTxDb, MessageDb, StoredFileDb
 from aleph.db.models.pending_txs import PendingTxDb
 from aleph.exceptions import (
@@ -19,7 +19,6 @@ from aleph.exceptions import (
 from aleph.storage import StorageService
 from aleph.toolkit.timestamp import timestamp_to_datetime
 from aleph.types.chain_sync import ChainSyncProtocol
-from aleph.types.datetime_format import DatetimeFormat
 from aleph.types.db_session import DbSessionFactory, DbSession
 from aleph.types.files import FileType
 
@@ -143,7 +142,7 @@ class ChainDataService:
                             type=FileType.FILE,
                             size=len(content.raw_value),
                         )
-                        session.execute(make_upsert_stored_file_query(stored_file))
+                        await upsert_stored_file(session=session, file=stored_file)
                         await upsert_tx_file_pin(
                             session=session,
                             file_hash=chaindata["content"],

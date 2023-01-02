@@ -8,7 +8,7 @@ from aleph.db.models import PendingTxDb, ChainTxDb
 from aleph.types.db_session import DbSession
 
 
-async def get_pending_txs_stream(
+async def get_pending_txs(
     session: DbSession, limit: int = 200
 ) -> Iterable[PendingTxDb]:
     select_stmt = (

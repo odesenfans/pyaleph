@@ -3,7 +3,7 @@ import traceback
 from typing import Optional, Sequence, Union, Iterable, Any, Mapping, overload
 
 from aleph_message.models import ItemHash, Chain, MessageType
-from sqlalchemy import func, select, update, text, delete, extract
+from sqlalchemy import func, select, update, text, delete
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import selectinload, load_only
 from sqlalchemy.sql import Insert, Select
@@ -18,6 +18,7 @@ from aleph.types.message_status import (
     ErrorCode,
 )
 from aleph.types.sort_order import SortOrder
+from .pending_messages import delete_pending_message
 from ..models.chains import ChainTxDb
 from ..models.messages import (
     MessageDb,
@@ -27,7 +28,6 @@ from ..models.messages import (
     message_confirmations,
 )
 from ..models.pending_messages import PendingMessageDb
-from ...types.datetime_format import DatetimeFormat
 
 
 async def get_message_by_item_hash(
@@ -62,7 +62,6 @@ def make_matching_messages_query(
     page: int = 1,
     pagination: int = 20,
     include_confirmations: bool = False,
-    time_format: DatetimeFormat = DatetimeFormat.EPOCH,
     # TODO: remove once all filters are supported
     **kwargs,
 ) -> Select:
@@ -444,16 +443,14 @@ async def reject_existing_pending_message(
 ):
     item_hash = pending_message.item_hash
 
-    delete_pending_message_stmt = delete(PendingMessageDb).where(
-        PendingMessageDb.id == pending_message.id
-    )
-
     # The message may already be processed and someone is sending invalid copies.
     # Just drop the pending message.
     message_status = await get_message_status(session=session, item_hash=item_hash)
     if message_status:
         if message_status.status not in (MessageStatus.PENDING, MessageStatus.REJECTED):
-            session.execute(delete_pending_message_stmt)
+            await delete_pending_message(
+                session=session, pending_message=pending_message
+            )
             return
 
     # TODO: use Pydantic schema
@@ -480,7 +477,7 @@ async def reject_existing_pending_message(
         pending_message_dict=pending_message_dict,
         exception=exception,
     )
-    session.execute(delete_pending_message_stmt)
+    await delete_pending_message(session=session, pending_message=pending_message)
 
 
 async def get_programs_triggered_by_messages(session: DbSession, sort_order: SortOrder):

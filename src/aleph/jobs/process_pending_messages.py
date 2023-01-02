@@ -176,23 +176,19 @@ class PendingMessageProcessor:
                     session.commit()
 
     async def publish_to_mq(
-        self,  message_iterator: AsyncIterator[Sequence[MessageDb]]
+        self, message_iterator: AsyncIterator[Sequence[MessageDb]]
     ) -> AsyncIterator[Sequence[MessageDb]]:
         async for messages in message_iterator:
             for message in messages:
                 body = {"item_hash": message.item_hash}
-                mq_message = aio_pika.Message(body=aleph_json.dumps(body).encode("utf-8"))
+                mq_message = aio_pika.Message(
+                    body=aleph_json.dumps(body).encode("utf-8")
+                )
                 await self.mq_message_exchange.publish(mq_message, routing_key="")
 
             yield messages
 
-    def make_pipeline(
-        self,
-        config: Config,
-        shared_stats: Dict,
-        loop: bool = True,
-        batch_during_sync: bool = False,
-    ) -> AsyncIterator[Sequence[MessageDb]]:
+    def make_pipeline(self) -> AsyncIterator[Sequence[MessageDb]]:
 
         message_processor = self.process_messages()
         return self.publish_to_mq(message_iterator=message_processor)
@@ -234,9 +230,7 @@ async def fetch_and_process_messages_task(config: Config, shared_stats: Dict):
     while True:
         with session_factory() as session:
             try:
-                message_processing_pipeline = pending_message_processor.make_pipeline(
-                    config=config, shared_stats=shared_stats
-                )
+                message_processing_pipeline = pending_message_processor.make_pipeline()
                 async for processed_messages in message_processing_pipeline:
                     for processed_message in processed_messages:
                         LOGGER.info(

@@ -94,11 +94,7 @@ async def test_process_program(
     fixture_program_message: PendingMessageDb,
 ):
 
-    pipeline = message_processor.make_pipeline(
-        config=mock_config,
-        shared_stats={"message_jobs": {}},
-        loop=False,
-    )
+    pipeline = message_processor.make_pipeline()
     # Exhaust the iterator
     _ = [message async for message in pipeline]
 
@@ -166,11 +162,7 @@ async def test_program_with_subscriptions(
 ):
     program_message = fixture_program_message_with_subscriptions
 
-    pipeline = message_processor.make_pipeline(
-        config=mock_config,
-        shared_stats={"message_jobs": {}},
-        loop=False,
-    )
+    pipeline = message_processor.make_pipeline()
     # Exhaust the iterator
     _ = [message async for message in pipeline]
 
