@@ -41,7 +41,7 @@ def register_routes(app: web.Application):
     app.router.add_get("/api/v0/messages.json", messages.view_messages_list)
     app.router.add_get("/api/v0/messages/page/{page}.json", messages.view_messages_list)
     # TODO: reactivate message WS
-    # app.router.add_get("/api/ws0/messages", messages.messages_ws)
+    app.router.add_get("/api/ws0/messages", messages.messages_ws)
 
     app.router.add_post("/api/v0/ipfs/pubsub/pub", p2p.pub_json)
     app.router.add_post("/api/v0/p2p/pubsub/pub", p2p.pub_json)

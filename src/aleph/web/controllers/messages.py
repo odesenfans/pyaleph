@@ -1,18 +1,18 @@
 import logging
 from typing import List, Optional
 
+import aio_pika.abc
 from aiohttp import web
 from aleph_message.models import MessageType, ItemHash, Chain
+from configmanager import Config
 from pydantic import BaseModel, Field, validator, ValidationError, root_validator
 
+import aleph.toolkit.json as aleph_json
 from aleph.db.accessors.messages import get_matching_messages, count_matching_messages
+from aleph.schemas.api.messages import format_message, MessageListResponse
 from aleph.types.db_session import DbSessionFactory
 from aleph.types.sort_order import SortOrder
-from aleph.web.controllers.utils import (
-    LIST_FIELD_SEPARATOR,
-    Pagination,
-    cond_output,
-)
+from aleph.web.controllers.utils import LIST_FIELD_SEPARATOR
 
 LOGGER = logging.getLogger(__name__)
 
@@ -119,9 +119,9 @@ class MessageQueryParams(BaseMessageQueryParams):
 class WsMessageQueryParams(BaseMessageQueryParams):
     history: Optional[int] = Field(
         DEFAULT_WS_HISTORY,
-        ge=10,
+        ge=0,
         lt=200,
-        description="Accepted values for the 'item_hash' field.",
+        description="Historical elements to send through the websocket.",
     )
 
 
@@ -145,92 +145,85 @@ async def view_messages_list(request):
 
     session_factory: DbSessionFactory = request.app["session_factory"]
     with session_factory() as session:
-        results = await get_matching_messages(
+        messages = await get_matching_messages(
             session, include_confirmations=True, **find_filters
         )
-        messages = [message.to_dict(include_confirmations=True) for message in results]
 
-        context = {"messages": messages}
+        formatted_messages = [
+            format_message(message).dict(exclude_defaults=True) for message in messages
+        ]
 
-        if pagination_per_page is not None:
-            total_msgs = await count_matching_messages(session, **find_filters)
+        total_msgs = await count_matching_messages(session, **find_filters)
 
-            query_string = request.query_string
-            pagination = Pagination(
-                pagination_page,
-                pagination_per_page,
-                total_msgs,
-                url_base="/messages/posts/page/",
-                query_string=query_string,
-            )
+        response = MessageListResponse.construct(
+            messages=formatted_messages,
+            pagination_page=pagination_page,
+            pagination_total=total_msgs,
+            pagination_per_page=pagination_per_page,
+        )
 
-            context.update(
-                {
-                    "pagination": pagination,
-                    "pagination_page": pagination_page,
-                    "pagination_total": total_msgs,
-                    "pagination_per_page": pagination_per_page,
-                    "pagination_item": "messages",
-                }
-            )
+    return web.json_response(text=response.json())
 
-    return cond_output(request, context, "TODO.html")
+
+async def declare_mq_queue(
+    mq_conn: aio_pika.abc.AbstractConnection, config: Config
+) -> aio_pika.abc.AbstractQueue:
+    channel = await mq_conn.channel()
+    mq_message_exchange = await channel.declare_exchange(
+        name=config.rabbitmq.message_exchange.value,
+        type=aio_pika.ExchangeType.FANOUT,
+        auto_delete=False,
+    )
+    mq_queue = await channel.declare_queue(auto_delete=True)
+    await mq_queue.bind(mq_message_exchange)
+    return mq_queue
 
 
 # TODO: reactivate/reimplement messages WS
-# async def messages_ws(request: web.Request):
-#     ws = web.WebSocketResponse()
-#     await ws.prepare(request)
-#
-#     collection = CappedMessage.collection
-#     last_id = None
-#
-#     query_params = WsMessageQueryParams.parse_obj(request.query)
-#     find_filters = query_params.to_mongodb_filters()
-#
-#     initial_count = query_params.history
-#
-#     items = [
-#         item
-#         async for item in collection.find(find_filters)
-#         .sort([("$natural", -1)])
-#         .limit(initial_count)
-#     ]
-#     for item in reversed(items):
-#         item["_id"] = str(item["_id"])
-#
-#         last_id = item["_id"]
-#         await ws.send_json(item)
-#
-#     closing = False
-#
-#     while not closing:
-#         try:
-#             cursor = collection.find(
-#                 {"_id": {"$gt": ObjectId(last_id)}},
-#                 cursor_type=CursorType.TAILABLE_AWAIT,
-#             )
-#             while cursor.alive:
-#                 async for item in cursor:
-#                     if ws.closed:
-#                         closing = True
-#                         break
-#                     item["_id"] = str(item["_id"])
-#
-#                     last_id = item["_id"]
-#                     await ws.send_json(item)
-#
-#                 await asyncio.sleep(1)
-#
-#                 if closing:
-#                     break
-#
-#         except ConnectionResetError:
-#             break
-#
-#         except Exception:
-#             if ws.closed:
-#                 break
-#
-#             LOGGER.exception("Error processing")
-#             await asyncio.sleep(1)
+async def messages_ws(request: web.Request):
+    ws = web.WebSocketResponse()
+    await ws.prepare(request)
+
+    mq_conn: aio_pika.abc.AbstractConnection = request.app["mq_conn"]
+    session_factory: DbSessionFactory = request.app["session_factory"]
+    config = request.app["config"]
+    mq_queue = await declare_mq_queue(mq_conn, config)
+
+    query_params = WsMessageQueryParams.parse_obj(request.query)
+    find_filters = query_params.dict(exclude_none=True)
+
+    history = query_params.history
+
+    if history:
+        with session_factory() as session:
+            messages = await get_matching_messages(
+                session=session,
+                pagination=history,
+                include_confirmations=True,
+                **find_filters,
+            )
+            for message in messages:
+                await ws.send_str(format_message(message).json())
+
+    try:
+        async with mq_queue.iterator() as queue_iter:
+            async for mq_message in queue_iter:
+                if ws.closed:
+                    break
+
+                await mq_message.ack()
+                item_hash = aleph_json.loads(mq_message.body)["item_hash"]
+                # A bastardized way to apply the filters on the message as well.
+                # TODO: put the filter key/values in the RabbitMQ message?
+                with session_factory() as session:
+                    matching_messages = await get_matching_messages(
+                        session=session,
+                        hashes=[item_hash],
+                        include_confirmations=True,
+                        **find_filters,
+                    )
+                    for message in matching_messages:
+                        await ws.send_str(format_message(message).json())
+
+    except ConnectionResetError:
+        pass

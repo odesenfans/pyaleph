@@ -105,6 +105,8 @@ async def run_server(
     app["extra_config"] = extra_web_config
     app["shared_stats"] = shared_stats
     app["p2p_client"] = p2p_client
+    # Reuse the connection of the P2P client to avoid opening two connections
+    app["mq_conn"] = p2p_client.mq_client.connection
     app["storage_service"] = storage_service
     app["session_factory"] = session_factory
 

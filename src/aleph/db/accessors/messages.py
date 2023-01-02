@@ -5,7 +5,7 @@ from typing import Optional, Sequence, Union, Iterable, Any, Mapping, overload
 from aleph_message.models import ItemHash, Chain, MessageType
 from sqlalchemy import func, select, update, text, delete, extract
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, load_only
 from sqlalchemy.sql import Insert, Select
 from sqlalchemy.sql.elements import literal
 
@@ -21,10 +21,10 @@ from aleph.types.sort_order import SortOrder
 from ..models.chains import ChainTxDb
 from ..models.messages import (
     MessageDb,
-    MessageConfirmationDb,
     MessageStatusDb,
     ForgottenMessageDb,
     RejectedMessageDb,
+    message_confirmations,
 )
 from ..models.pending_messages import PendingMessageDb
 from ...types.datetime_format import DatetimeFormat
@@ -36,11 +36,7 @@ async def get_message_by_item_hash(
     select_stmt = (
         select(MessageDb)
         .where(MessageDb.item_hash == item_hash)
-        .options(
-            selectinload(MessageDb.confirmations).options(
-                selectinload(MessageConfirmationDb.tx)
-            )
-        )
+        .options(selectinload(MessageDb.confirmations))
     )
     return (session.execute(select_stmt)).scalar()
 
@@ -70,32 +66,15 @@ def make_matching_messages_query(
     # TODO: remove once all filters are supported
     **kwargs,
 ) -> Select:
-
-    time_col = (
-        MessageDb.time
-        if time_format == DatetimeFormat.DATETIME
-        else extract("EPOCH", MessageDb.time)
-    )
-
-    # select_stmt = select(
-    #     MessageDb.item_hash,
-    #     MessageDb.type,
-    #     MessageDb.chain,
-    #     MessageDb.sender,
-    #     MessageDb.signature,
-    #     MessageDb.item_type,
-    #     MessageDb.item_content,
-    #     MessageDb.content,
-    #     time_col.label("time"),
-    #     MessageDb.channel,
-    #     MessageDb.size,
-    # )
     select_stmt = select(MessageDb)
 
     if include_confirmations:
+        # Note: we assume this is only used for the API, so we only load the fields
+        # returned by the API. If additional fields are required, add them here to
+        # avoid additional queries.
         select_stmt = select_stmt.options(
             selectinload(MessageDb.confirmations).options(
-                selectinload(MessageConfirmationDb.tx)
+                load_only(ChainTxDb.hash, ChainTxDb.chain, ChainTxDb.height)
             )
         )
 
@@ -195,7 +174,7 @@ async def get_unconfirmed_messages(
     session: DbSession, limit: int = 100, chain: Optional[Chain] = None
 ) -> Iterable[MessageDb]:
 
-    where_clause = MessageConfirmationDb.item_hash == MessageDb.item_hash
+    where_clause = message_confirmations.c.item_hash == MessageDb.item_hash
     if chain:
         where_clause = where_clause & (ChainTxDb.chain == chain)
 
@@ -211,7 +190,7 @@ async def get_unconfirmed_messages(
     #         MessageDb.time,
     #         MessageDb.channel,)
     select_stmt = select(MessageDb).where(
-        ~select(MessageConfirmationDb.item_hash).where(where_clause).exists()
+        ~select(message_confirmations.c.item_hash).where(where_clause).exists()
     )
 
     return (session.execute(select_stmt.limit(limit))).scalars()
@@ -230,7 +209,7 @@ def make_message_upsert_query(message: MessageDb) -> Insert:
 
 def make_confirmation_upsert_query(item_hash: str, tx_hash: str) -> Insert:
     return (
-        insert(MessageConfirmationDb)
+        insert(message_confirmations)
         .values(item_hash=item_hash, tx_hash=tx_hash)
         .on_conflict_do_nothing()
     )

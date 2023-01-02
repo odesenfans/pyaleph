@@ -11,11 +11,13 @@ from typing import (
     Sequence,
 )
 
+import aio_pika.abc
 import sentry_sdk
 from configmanager import Config
 from setproctitle import setproctitle
 from sqlalchemy import update
 
+import aleph.toolkit.json as aleph_json
 from aleph.chains.chain_service import ChainService
 from aleph.db.accessors.messages import (
     reject_existing_pending_message,
@@ -35,7 +37,6 @@ from aleph.storage import StorageService
 from aleph.toolkit.logging import setup_logging
 from aleph.types.db_session import DbSession, DbSessionFactory
 from aleph.types.message_status import (
-    MessageContentUnavailable,
     InvalidMessageException,
     RetryMessageException,
     FileNotFoundException,
@@ -51,10 +52,46 @@ class PendingMessageProcessor:
         session_factory: DbSessionFactory,
         message_handler: MessageHandler,
         max_retries: int,
+        mq_conn: aio_pika.abc.AbstractConnection,
+        mq_message_exchange: aio_pika.abc.AbstractExchange,
     ):
         self.session_factory = session_factory
         self.message_handler = message_handler
         self.max_retries = max_retries
+        self.mq_conn = mq_conn
+        self.mq_message_exchange = mq_message_exchange
+
+    @classmethod
+    async def new(
+        cls,
+        session_factory: DbSessionFactory,
+        message_handler: MessageHandler,
+        max_retries: int,
+        mq_host: str,
+        mq_port: int,
+        mq_username: str,
+        mq_password: str,
+        message_exchange_name: str,
+    ):
+        mq_conn = await aio_pika.connect_robust(
+            host=mq_host, port=mq_port, login=mq_username, password=mq_password
+        )
+        channel = await mq_conn.channel()
+        mq_message_exchange = await channel.declare_exchange(
+            name=message_exchange_name,
+            type=aio_pika.ExchangeType.FANOUT,
+            auto_delete=False,
+        )
+        return cls(
+            session_factory=session_factory,
+            message_handler=message_handler,
+            max_retries=max_retries,
+            mq_conn=mq_conn,
+            mq_message_exchange=mq_message_exchange,
+        )
+
+    async def close(self):
+        await self.mq_conn.close()
 
     async def handle_processing_error(
         self,
@@ -113,7 +150,7 @@ class PendingMessageProcessor:
                     session=session, pending_message=pending_message
                 )
 
-    async def process_messages(self):
+    async def process_messages(self) -> AsyncIterator[Sequence[MessageDb]]:
         while True:
             with self.session_factory() as session:
                 pending_message = await get_next_pending_message(
@@ -138,6 +175,17 @@ class PendingMessageProcessor:
                     )
                     session.commit()
 
+    async def publish_to_mq(
+        self,  message_iterator: AsyncIterator[Sequence[MessageDb]]
+    ) -> AsyncIterator[Sequence[MessageDb]]:
+        async for messages in message_iterator:
+            for message in messages:
+                body = {"item_hash": message.item_hash}
+                mq_message = aio_pika.Message(body=aleph_json.dumps(body).encode("utf-8"))
+                await self.mq_message_exchange.publish(mq_message, routing_key="")
+
+            yield messages
+
     def make_pipeline(
         self,
         config: Config,
@@ -145,7 +193,9 @@ class PendingMessageProcessor:
         loop: bool = True,
         batch_during_sync: bool = False,
     ) -> AsyncIterator[Sequence[MessageDb]]:
-        return self.process_messages()
+
+        message_processor = self.process_messages()
+        return self.publish_to_mq(message_iterator=message_processor)
 
 
 async def fetch_and_process_messages_task(config: Config, shared_stats: Dict):
@@ -170,10 +220,15 @@ async def fetch_and_process_messages_task(config: Config, shared_stats: Dict):
         storage_service=storage_service,
         config=config,
     )
-    pending_message_processor = PendingMessageProcessor(
+    pending_message_processor = await PendingMessageProcessor.new(
         session_factory=session_factory,
         message_handler=message_handler,
         max_retries=config.aleph.jobs.pending_messages.max_retries.value,
+        mq_host=config.p2p.mq_host.value,
+        mq_port=config.rabbitmq.port.value,
+        mq_username=config.rabbitmq.username.value,
+        mq_password=config.rabbitmq.password.value,
+        message_exchange_name=config.rabbitmq.message_exchange.value,
     )
 
     while True:

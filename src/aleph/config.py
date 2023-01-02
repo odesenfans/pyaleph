@@ -113,6 +113,7 @@ def get_defaults():
             "password": "guest",
             "pub_exchange": "p2p-publish",
             "sub_exchange": "p2p-subscribe",
+            "message_exchange": "aleph-messages",
         },
         "sentry": {
             "dsn": None,

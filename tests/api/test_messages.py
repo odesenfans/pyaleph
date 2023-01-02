@@ -34,7 +34,8 @@ def assert_messages_equal(messages: Iterable[Dict], expected_messages: Iterable[
 
         assert message["chain"] == expected_message["chain"]
         assert message["channel"] == expected_message["channel"]
-        assert message["content"] == expected_message["content"]
+        for key, value in expected_message["content"].items():
+            assert message["content"][key] == value
         assert message["item_content"] == expected_message["item_content"]
         assert message["sender"] == expected_message["sender"]
         assert message["signature"] == expected_message["signature"]
@@ -43,7 +44,6 @@ def assert_messages_equal(messages: Iterable[Dict], expected_messages: Iterable[
 @pytest.mark.asyncio
 async def test_get_messages(fixture_messages: Sequence[Dict[str, Any]], ccn_api_client):
     response = await ccn_api_client.get(MESSAGES_URI)
-    print(await response.text())
     assert response.status == 200, await response.text()
 
     data = await response.json()
