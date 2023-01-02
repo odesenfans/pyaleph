@@ -9,7 +9,7 @@ from aleph.db.models import PendingMessageDb, ChainTxDb
 from aleph.types.db_session import DbSession
 
 
-async def get_next_pending_message(
+def get_next_pending_message(
     session: DbSession,
     offset: int = 0,
     fetched: Optional[bool] = None,
@@ -34,7 +34,7 @@ async def get_next_pending_message(
     return (session.execute(select_stmt)).scalar()
 
 
-async def get_pending_messages(
+def get_pending_messages(
     session: DbSession,
     limit: int = 10000,
     offset: int = 0,
@@ -60,9 +60,7 @@ async def get_pending_messages(
     return (session.execute(select_stmt)).scalars()
 
 
-async def count_pending_messages(
-    session: DbSession, chain: Optional[Chain] = None
-) -> int:
+def count_pending_messages(session: DbSession, chain: Optional[Chain] = None) -> int:
     """
     Counts pending messages.
 
@@ -90,9 +88,9 @@ def make_pending_message_fetched_statement(
     return update_stmt
 
 
-async def increase_pending_message_retry_count(
+def increase_pending_message_retry_count(
     session: DbSession, pending_message: PendingMessageDb
-):
+) -> None:
     update_stmt = (
         update(PendingMessageDb)
         .where(PendingMessageDb.id == pending_message.id)
@@ -101,7 +99,9 @@ async def increase_pending_message_retry_count(
     session.execute(update_stmt)
 
 
-async def delete_pending_message(session: DbSession, pending_message: PendingMessageDb):
+def delete_pending_message(
+    session: DbSession, pending_message: PendingMessageDb
+) -> None:
     session.execute(
         delete(PendingMessageDb).where(PendingMessageDb.id == pending_message.id)
     )

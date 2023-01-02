@@ -54,11 +54,11 @@ async def address_aggregate(request):
         ).scalars()
         for key in dirty_aggregates:
             LOGGER.info("Refreshing dirty aggregate %s/%s", address, key)
-            await refresh_aggregate(session=session, owner=address, key=key)
+            refresh_aggregate(session=session, owner=address, key=key)
             session.commit()
 
         aggregates: List[Tuple[str, Dict[str, Any]]] = list(
-            await get_aggregates_by_owner(
+            get_aggregates_by_owner(
                 session=session, owner=address, keys=query_params.keys
             )
         )

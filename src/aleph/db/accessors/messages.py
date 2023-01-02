@@ -30,9 +30,7 @@ from ..models.messages import (
 from ..models.pending_messages import PendingMessageDb
 
 
-async def get_message_by_item_hash(
-    session: DbSession, item_hash: str
-) -> Optional[MessageDb]:
+def get_message_by_item_hash(session: DbSession, item_hash: str) -> Optional[MessageDb]:
     select_stmt = (
         select(MessageDb)
         .where(MessageDb.item_hash == item_hash)
@@ -41,8 +39,8 @@ async def get_message_by_item_hash(
     return (session.execute(select_stmt)).scalar()
 
 
-async def message_exists(session: DbSession, item_hash: str) -> bool:
-    return await MessageDb.exists(
+def message_exists(session: DbSession, item_hash: str) -> bool:
+    return MessageDb.exists(
         session=session,
         where=MessageDb.item_hash == item_hash,
     )
@@ -116,7 +114,7 @@ def make_matching_messages_query(
     return select_stmt
 
 
-async def count_matching_messages(
+def count_matching_messages(
     session: DbSession,
     start_date: float = 0.0,
     end_date: float = 0.0,
@@ -140,10 +138,10 @@ async def count_matching_messages(
         select_count_stmt = select(func.count()).select_from(select_stmt)
         return session.execute(select_count_stmt).scalar_one()
 
-    return await MessageDb.count(session=session)
+    return MessageDb.count(session=session)
 
 
-async def get_matching_messages(
+def get_matching_messages(
     session: DbSession,
     **kwargs,  # Same as make_matching_messages_query
 ) -> Iterable[MessageDb]:
@@ -154,7 +152,7 @@ async def get_matching_messages(
     return (session.execute(select_stmt)).scalars()
 
 
-async def get_message_stats_by_sender(
+def get_message_stats_by_sender(
     session: DbSession,
     addresses: Optional[Sequence[str]] = None,
 ):
@@ -169,7 +167,7 @@ async def get_message_stats_by_sender(
 
 # TODO: declare a type that will match the result (something like UnconfirmedMessageDb)
 #       and translate the time field to epoch.
-async def get_unconfirmed_messages(
+def get_unconfirmed_messages(
     session: DbSession, limit: int = 100, chain: Optional[Chain] = None
 ) -> Iterable[MessageDb]:
 
@@ -214,9 +212,7 @@ def make_confirmation_upsert_query(item_hash: str, tx_hash: str) -> Insert:
     )
 
 
-async def get_message_status(
-    session: DbSession, item_hash: str
-) -> Optional[MessageStatusDb]:
+def get_message_status(session: DbSession, item_hash: str) -> Optional[MessageStatusDb]:
     return (
         session.execute(
             select(MessageStatusDb).where(MessageStatusDb.item_hash == item_hash)
@@ -227,7 +223,7 @@ async def get_message_status(
 # TODO typing: Find a correct type for `where`
 def make_message_status_upsert_query(
     item_hash: str, new_status: MessageStatus, reception_time: dt.datetime, where
-):
+) -> Insert:
     return (
         insert(MessageStatusDb)
         .values(item_hash=item_hash, status=new_status, reception_time=reception_time)
@@ -244,12 +240,12 @@ def make_message_status_upsert_query(
     )
 
 
-async def get_distinct_channels(session: DbSession) -> Iterable[Channel]:
+def get_distinct_channels(session: DbSession) -> Iterable[Channel]:
     select_stmt = select(MessageDb.channel).distinct().order_by(MessageDb.channel)
     return (session.execute(select_stmt)).scalars()
 
 
-async def get_forgotten_message(
+def get_forgotten_message(
     session: DbSession, item_hash: str
 ) -> Optional[ForgottenMessageDb]:
     return session.execute(
@@ -257,9 +253,11 @@ async def get_forgotten_message(
     ).scalar()
 
 
-async def forget_message(session: DbSession, item_hash: str, forget_message_hash: str):
+def forget_message(
+    session: DbSession, item_hash: str, forget_message_hash: str
+) -> None:
     """
-    Marks a processed message as validated.
+    Marks a processed message as forgotten.
 
     Expects the caller to perform checks to determine whether the message is
     in the proper state.
@@ -302,9 +300,9 @@ async def forget_message(session: DbSession, item_hash: str, forget_message_hash
     session.execute(delete(MessageDb).where(MessageDb.item_hash == item_hash))
 
 
-async def append_to_forgotten_by(
+def append_to_forgotten_by(
     session: DbSession, forgotten_message_hash: str, forget_message_hash: str
-):
+) -> None:
     update_stmt = (
         update(ForgottenMessageDb)
         .where(ForgottenMessageDb.item_hash == forgotten_message_hash)
@@ -323,7 +321,7 @@ def make_upsert_rejected_message_statement(
     error_code: int,
     details: Optional[Mapping[str, Any]] = None,
     exc_traceback: Optional[str] = None,
-):
+) -> Insert:
     insert_rejected_message_stmt = insert(RejectedMessageDb).values(
         item_hash=item_hash,
         message=pending_message_dict,
@@ -342,12 +340,12 @@ def make_upsert_rejected_message_statement(
     return upsert_rejected_message_stmt
 
 
-async def mark_pending_message_as_rejected(
+def mark_pending_message_as_rejected(
     session: DbSession,
     item_hash: str,
     pending_message_dict: Mapping[str, Any],
     exception: BaseException,
-):
+) -> None:
     if isinstance(exception, MessageProcessingException):
         error_code = exception.error_code
         details = exception.details()
@@ -371,28 +369,28 @@ async def mark_pending_message_as_rejected(
 
 
 @overload
-async def reject_new_pending_message(
+def reject_new_pending_message(
     session: DbSession,
     pending_message: Mapping[str, Any],
     exception: BaseException,
-):
+) -> None:
     ...
 
 
 @overload
-async def reject_new_pending_message(
+def reject_new_pending_message(
     session: DbSession,
     pending_message: PendingMessageDb,
     exception: BaseException,
-):
+) -> None:
     ...
 
 
-async def reject_new_pending_message(
+def reject_new_pending_message(
     session: DbSession,
     pending_message: Union[Mapping[str, Any], PendingMessageDb],
     exception: BaseException,
-):
+) -> None:
     """
     Reject a pending message that is not yet in the DB.
     """
@@ -423,12 +421,12 @@ async def reject_new_pending_message(
     # Just do nothing if that is the case. We just consider the case where a previous
     # message with the same item hash was already sent to replace the error message
     # (ex: someone is retrying a message after fixing an error).
-    message_status = await get_message_status(session=session, item_hash=item_hash)
+    message_status = get_message_status(session=session, item_hash=item_hash)
     if message_status:
         if message_status.status != MessageStatus.REJECTED:
             return
 
-    await mark_pending_message_as_rejected(
+    mark_pending_message_as_rejected(
         session=session,
         item_hash=item_hash,
         pending_message_dict=pending_message_dict,
@@ -436,21 +434,19 @@ async def reject_new_pending_message(
     )
 
 
-async def reject_existing_pending_message(
+def reject_existing_pending_message(
     session: DbSession,
     pending_message: PendingMessageDb,
     exception: BaseException,
-):
+) -> None:
     item_hash = pending_message.item_hash
 
     # The message may already be processed and someone is sending invalid copies.
     # Just drop the pending message.
-    message_status = await get_message_status(session=session, item_hash=item_hash)
+    message_status = get_message_status(session=session, item_hash=item_hash)
     if message_status:
         if message_status.status not in (MessageStatus.PENDING, MessageStatus.REJECTED):
-            await delete_pending_message(
-                session=session, pending_message=pending_message
-            )
+            delete_pending_message(session=session, pending_message=pending_message)
             return
 
     # TODO: use Pydantic schema
@@ -471,16 +467,16 @@ async def reject_existing_pending_message(
         .values(status=MessageStatus.REJECTED)
         .where(MessageStatusDb.item_hash == item_hash)
     )
-    await mark_pending_message_as_rejected(
+    mark_pending_message_as_rejected(
         session=session,
         item_hash=item_hash,
         pending_message_dict=pending_message_dict,
         exception=exception,
     )
-    await delete_pending_message(session=session, pending_message=pending_message)
+    delete_pending_message(session=session, pending_message=pending_message)
 
 
-async def get_programs_triggered_by_messages(session: DbSession, sort_order: SortOrder):
+def get_programs_triggered_by_messages(session: DbSession, sort_order: SortOrder):
     time_column = MessageDb.time
     order_by_column = (
         time_column.desc() if sort_order == SortOrder.DESCENDING else time_column.asc()

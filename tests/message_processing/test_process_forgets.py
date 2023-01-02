@@ -15,7 +15,8 @@ from aleph.db.models import (
     MessageDb,
     MessageStatusDb,
     FileTagDb,
-    FilePinDb, MessageFilePinDb,
+    FilePinDb,
+    MessageFilePinDb,
 )
 from aleph.handlers.content.forget import ForgetMessageHandler
 from aleph.jobs.process_pending_messages import PendingMessageProcessor
@@ -95,7 +96,7 @@ async def test_forget_post_message(
         )
 
         # Sanity check
-        post = await get_post(session=session, item_hash=target_message.item_hash)
+        post = get_post(session=session, item_hash=target_message.item_hash)
         assert post
 
         # Now process, the forget message
@@ -107,13 +108,13 @@ async def test_forget_post_message(
             )
         )
 
-        target_message_status = await get_message_status(
+        target_message_status = get_message_status(
             session=session, item_hash=target_message.item_hash
         )
         assert target_message_status
         assert target_message_status.status == MessageStatus.FORGOTTEN
 
-        forget_message_status = await get_message_status(
+        forget_message_status = get_message_status(
             session=session, item_hash=forget_message.item_hash
         )
         assert forget_message_status
@@ -125,7 +126,7 @@ async def test_forget_post_message(
         assert forgotten_message
 
         # Check that the post was deleted
-        post = await get_post(session=session, item_hash=target_message.item_hash)
+        post = get_post(session=session, item_hash=target_message.item_hash)
         assert post is None
 
 
@@ -185,9 +186,7 @@ async def test_forget_store_message(
         )
 
         # Sanity check
-        nb_references = await count_file_pins(
-            session=session, file_hash=file_hash
-        )
+        nb_references = count_file_pins(session=session, file_hash=file_hash)
         assert nb_references == 1
 
         _forget_message = one(
@@ -202,9 +201,7 @@ async def test_forget_store_message(
         content = await storage_engine.read(filename=file_hash)
         assert content is None
 
-        nb_references = await count_file_pins(
-            session=session, file_hash=file_hash
-        )
+        nb_references = count_file_pins(session=session, file_hash=file_hash)
         assert nb_references == 0
 
         # Check that the file does not appear in the files table anymore
@@ -284,13 +281,13 @@ async def test_forget_forget_message(
         # The message should have been rejected
         assert processed_messages == []
 
-        target_message_status = await get_message_status(
+        target_message_status = get_message_status(
             session=session, item_hash=target_message.item_hash
         )
         assert target_message_status
         assert target_message_status.status == MessageStatus.PROCESSED
 
-        forget_message_status = await get_message_status(
+        forget_message_status = get_message_status(
             session=session, item_hash=pending_forget_message.item_hash
         )
         assert forget_message_status
@@ -417,7 +414,6 @@ async def test_forget_store_multi_users(
                 owner=store_message_user2.sender,
                 item_hash=store_message_user2.item_hash,
                 created=store_message_user2.time,
-
             )
         )
 
@@ -430,14 +426,14 @@ async def test_forget_store_multi_users(
             )
         )
 
-        message1_status = await get_message_status(
+        message1_status = get_message_status(
             session=session, item_hash=store_message_user1.item_hash
         )
         assert message1_status
         assert message1_status.status == MessageStatus.FORGOTTEN
 
         # Check that the second message and its linked objects are still there
-        message2_status = await get_message_status(
+        message2_status = get_message_status(
             session=session, item_hash=store_message_user2.item_hash
         )
         assert message2_status

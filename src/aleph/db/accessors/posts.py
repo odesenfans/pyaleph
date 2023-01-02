@@ -1,5 +1,5 @@
 import datetime as dt
-from typing import Optional, Protocol, Dict, Any, Sequence, Union, Iterable, List, cast
+from typing import Optional, Protocol, Dict, Any, Sequence, Union, List, cast
 
 from aleph_message.models import ItemHash
 from sqlalchemy import func, select, literal_column, TIMESTAMP, String, delete
@@ -54,13 +54,13 @@ def make_select_merged_post_stmt() -> Select:
     return select_merged_post_stmt
 
 
-async def get_post(session: DbSession, item_hash: str) -> Optional[MergedPost]:
+def get_post(session: DbSession, item_hash: str) -> Optional[MergedPost]:
     select_stmt = make_select_merged_post_stmt()
     select_stmt = select_stmt.where(Original.item_hash == str(item_hash))
     return session.execute(select_stmt).one_or_none()
 
 
-async def get_original_post(session: DbSession, item_hash: str) -> Optional[PostDb]:
+def get_original_post(session: DbSession, item_hash: str) -> Optional[PostDb]:
     select_stmt = select(PostDb).where(PostDb.item_hash == item_hash)
     return session.execute(select_stmt).scalar()
 
@@ -124,7 +124,7 @@ def make_matching_posts_query(
     return select_stmt
 
 
-async def count_matching_posts(
+def count_matching_posts(
     session: DbSession,
     page: int = 1,
     pagination: int = 0,
@@ -151,7 +151,7 @@ async def count_matching_posts(
     return session.execute(select_count_stmt).scalar_one()
 
 
-async def get_matching_posts(
+def get_matching_posts(
     session: DbSession,
     # Same as make_matching_posts_query
     **kwargs,
@@ -160,5 +160,5 @@ async def get_matching_posts(
     return cast(List[MergedPost], session.execute(select_stmt).all())
 
 
-async def delete_post(session: DbSession, item_hash: str):
+def delete_post(session: DbSession, item_hash: str) -> None:
     session.execute(delete(PostDb).where(PostDb.item_hash == item_hash))

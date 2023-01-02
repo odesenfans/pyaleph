@@ -45,7 +45,7 @@ class AggregateMessageHandler(ContentHandler):
             creation_datetime=timestamp_to_datetime(message.parsed_content.time),
         )
 
-        await insert_aggregate_element(
+        insert_aggregate_element(
             session=session,
             item_hash=aggregate_element.item_hash,
             key=aggregate_element.key,
@@ -64,7 +64,7 @@ class AggregateMessageHandler(ContentHandler):
     ):
         new_content = merge_aggregate_elements(elements)
 
-        await update_aggregate(
+        update_aggregate(
             session=session,
             key=aggregate.key,
             owner=aggregate.owner,
@@ -81,7 +81,7 @@ class AggregateMessageHandler(ContentHandler):
     ):
         new_content = merge_aggregate_elements(elements)
 
-        await update_aggregate(
+        update_aggregate(
             session=session,
             key=aggregate.key,
             owner=aggregate.owner,
@@ -114,7 +114,7 @@ class AggregateMessageHandler(ContentHandler):
 
         dirty_threshold = 1000
 
-        aggregate_metadata = await get_aggregate_by_key(
+        aggregate_metadata = get_aggregate_by_key(
             session=session, owner=owner, key=key, with_content=False
         )
 
@@ -122,7 +122,7 @@ class AggregateMessageHandler(ContentHandler):
             LOGGER.info("%s/%s does not exist, creating it", key, owner)
 
             content = merge_aggregate_elements(elements)
-            await insert_aggregate(
+            insert_aggregate(
                 session=session,
                 key=key,
                 owner=owner,
@@ -161,7 +161,7 @@ class AggregateMessageHandler(ContentHandler):
         # Last chance before a full refresh, check the keys of the aggregate
         # and determine if there's a conflict.
         keys = set(
-            await get_aggregate_content_keys(session=session, key=key, owner=owner)
+            get_aggregate_content_keys(session=session, key=key, owner=owner)
         )
         new_keys = set(itertools.chain(element.content.keys for element in elements))
         conflicting_keys = keys & new_keys
@@ -183,11 +183,11 @@ class AggregateMessageHandler(ContentHandler):
             return
 
         if (
-            await count_aggregate_elements(session=session, owner=owner, key=key)
+            count_aggregate_elements(session=session, owner=owner, key=key)
             > dirty_threshold
         ):
             LOGGER.info("%s/%s: too many elements, marking as dirty")
-            await mark_aggregate_as_dirty(session=session, owner=owner, key=key)
+            mark_aggregate_as_dirty(session=session, owner=owner, key=key)
             return
 
         # Out of order insertions. Here, we need to get all the elements in the database
@@ -196,7 +196,7 @@ class AggregateMessageHandler(ContentHandler):
         # Expect the new elements to already be added to the current session.
         # We flush it to make them accessible from the current transaction.
         session.flush()
-        await refresh_aggregate(session=session, owner=owner, key=key)
+        refresh_aggregate(session=session, owner=owner, key=key)
 
     async def process(
         self, session: DbSession, messages: List[MessageDb]

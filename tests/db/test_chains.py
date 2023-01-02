@@ -23,7 +23,7 @@ async def test_get_last_height(session_factory: DbSessionFactory):
         session.commit()
 
     with session_factory() as session:
-        height = await get_last_height(session=session, chain=Chain.ETH)
+        height = get_last_height(session=session, chain=Chain.ETH)
 
     assert height == eth_sync_status.height
 
@@ -31,7 +31,7 @@ async def test_get_last_height(session_factory: DbSessionFactory):
 @pytest.mark.asyncio
 async def test_get_last_height_no_data(session_factory: DbSessionFactory):
     with session_factory() as session:
-        height = await get_last_height(session=session, chain=Chain.NULS2)
+        height = get_last_height(session=session, chain=Chain.NULS2)
 
     assert height is None
 
@@ -43,7 +43,7 @@ async def test_upsert_chain_sync_status_insert(session_factory: DbSessionFactory
     height = 10
 
     with session_factory() as session:
-        await upsert_chain_sync_status(
+        upsert_chain_sync_status(
             session=session,
             chain=chain,
             height=height,
@@ -80,7 +80,7 @@ async def test_upsert_peer_replace(session_factory: DbSessionFactory):
     new_update_datetime = pytz.utc.localize(dt.datetime(2023, 2, 7))
 
     with session_factory() as session:
-        await upsert_chain_sync_status(
+        upsert_chain_sync_status(
             session=session,
             chain=existing_entry.chain,
             height=new_height,

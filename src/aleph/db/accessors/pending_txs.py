@@ -8,9 +8,7 @@ from aleph.db.models import PendingTxDb, ChainTxDb
 from aleph.types.db_session import DbSession
 
 
-async def get_pending_txs(
-    session: DbSession, limit: int = 200
-) -> Iterable[PendingTxDb]:
+def get_pending_txs(session: DbSession, limit: int = 200) -> Iterable[PendingTxDb]:
     select_stmt = (
         select(PendingTxDb)
         .join(ChainTxDb, PendingTxDb.tx_hash == ChainTxDb.hash)
@@ -21,7 +19,7 @@ async def get_pending_txs(
     return (session.execute(select_stmt)).scalars()
 
 
-async def count_pending_txs(session: DbSession, chain: Optional[Chain] = None) -> int:
+def count_pending_txs(session: DbSession, chain: Optional[Chain] = None) -> int:
     select_stmt = select(func.count(PendingTxDb.tx_hash))
     if chain:
         select_stmt = select_stmt.join(

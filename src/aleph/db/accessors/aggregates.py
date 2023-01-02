@@ -1,7 +1,6 @@
 import datetime as dt
 from typing import Optional, Iterable, Any, Dict, Tuple, Sequence
 
-from aleph_message.models import ItemHash
 from sqlalchemy import (
     select,
     delete,
@@ -16,14 +15,14 @@ from aleph.db.models import AggregateDb, AggregateElementDb
 from aleph.types.db_session import DbSession
 
 
-async def aggregate_exists(session: DbSession, key: str, owner: str) -> bool:
-    return await AggregateDb.exists(
+def aggregate_exists(session: DbSession, key: str, owner: str) -> bool:
+    return AggregateDb.exists(
         session=session,
         where=(AggregateDb.key == key) & (AggregateDb.owner == owner),
     )
 
 
-async def get_aggregates_by_owner(
+def get_aggregates_by_owner(
     session: DbSession, owner: str, keys: Optional[Sequence[str]] = None
 ) -> Iterable[Tuple[str, Dict[str, Any]]]:
 
@@ -39,7 +38,7 @@ async def get_aggregates_by_owner(
     return session.execute(select_stmt).all()  # type: ignore
 
 
-async def get_aggregate_by_key(
+def get_aggregate_by_key(
     session: DbSession,
     owner: str,
     key: str,
@@ -64,17 +63,17 @@ async def get_aggregate_by_key(
     ).scalar()
 
 
-async def get_aggregate_content_keys(
+def get_aggregate_content_keys(
     session: DbSession, owner: str, key: str
 ) -> Iterable[str]:
-    return await AggregateDb.jsonb_keys(
+    return AggregateDb.jsonb_keys(
         session=session,
         column=AggregateDb.content,
         where=(AggregateDb.key == key) & (AggregateDb.owner == owner),
     )
 
 
-async def get_aggregate_elements(
+def get_aggregate_elements(
     session: DbSession, owner: str, key: str
 ) -> Iterable[AggregateElementDb]:
     select_stmt = (
@@ -85,14 +84,14 @@ async def get_aggregate_elements(
     return (session.execute(select_stmt)).scalars()
 
 
-async def insert_aggregate(
+def insert_aggregate(
     session: DbSession,
     key: str,
     owner: str,
     content: Dict[str, Any],
     creation_datetime: dt.datetime,
     last_revision_hash: str,
-):
+) -> None:
     insert_stmt = insert(AggregateDb).values(
         key=key,
         owner=owner,
@@ -104,7 +103,7 @@ async def insert_aggregate(
     session.execute(insert_stmt)
 
 
-async def update_aggregate(
+def update_aggregate(
     session: DbSession,
     key: str,
     owner: str,
@@ -112,7 +111,7 @@ async def update_aggregate(
     creation_datetime: dt.datetime,
     last_revision_hash: str,
     prepend: bool = False,
-):
+) -> None:
     merged_content = (
         content + AggregateDb.content if prepend else AggregateDb.content + content
     )
@@ -129,14 +128,14 @@ async def update_aggregate(
     session.execute(update_stmt)
 
 
-async def insert_aggregate_element(
+def insert_aggregate_element(
     session: DbSession,
     item_hash: str,
     key: str,
     owner: str,
     content: Dict[str, Any],
     creation_datetime: dt.datetime,
-):
+) -> None:
     insert_stmt = insert(AggregateElementDb).values(
         item_hash=item_hash,
         key=key,
@@ -147,7 +146,7 @@ async def insert_aggregate_element(
     session.execute(insert_stmt)
 
 
-async def count_aggregate_elements(session: DbSession, owner: str, key: str) -> int:
+def count_aggregate_elements(session: DbSession, owner: str, key: str) -> int:
     select_stmt = select(AggregateElementDb).where(
         (AggregateElementDb.key == key) & (AggregateElementDb.owner == owner)
     )
@@ -161,7 +160,7 @@ def merge_aggregate_elements(elements: Iterable[AggregateElementDb]) -> Dict:
     return content
 
 
-async def mark_aggregate_as_dirty(session: DbSession, owner: str, key: str):
+def mark_aggregate_as_dirty(session: DbSession, owner: str, key: str) -> None:
     update_stmt = (
         update(AggregateDb)
         .values(dirty=True)
@@ -170,7 +169,7 @@ async def mark_aggregate_as_dirty(session: DbSession, owner: str, key: str):
     session.execute(update_stmt)
 
 
-async def refresh_aggregate(session: DbSession, owner: str, key: str):
+def refresh_aggregate(session: DbSession, owner: str, key: str) -> None:
 
     # Step 1: use a group by to retrieve the aggregate content. This uses a custom
     # aggregate function (see 78dd67881db4_jsonb_merge_aggregate.py).
@@ -232,7 +231,7 @@ async def refresh_aggregate(session: DbSession, owner: str, key: str):
     session.execute(upsert_aggregate_stmt)
 
 
-async def delete_aggregate_element(session: DbSession, item_hash: str):
+def delete_aggregate_element(session: DbSession, item_hash: str) -> None:
     delete_element_stmt = delete(AggregateElementDb).where(
         AggregateElementDb.item_hash == item_hash
     )

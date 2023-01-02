@@ -9,7 +9,7 @@ from aleph.db.models import AlephBalanceDb
 from aleph.types.db_session import DbSession
 
 
-async def get_balance_by_chain(
+def get_balance_by_chain(
     session: DbSession, address: str, chain: Chain, dapp: Optional[str] = None
 ) -> Optional[Decimal]:
     return session.execute(
@@ -21,13 +21,13 @@ async def get_balance_by_chain(
     ).scalar()
 
 
-async def update_balances(
+def update_balances(
     session: DbSession,
     chain: Chain,
     dapp: Optional[str],
     eth_height: int,
     balances: Mapping[str, float],
-):
+) -> None:
     """
     Updates multiple balances at the same time, efficiently.
 

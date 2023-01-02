@@ -29,7 +29,7 @@ async def test_process_post_and_amend(
         amend_item_hash = (
             "93776ad67063b955869a7fa705ea2987add39486e1ed5951e9842291cf0f566c"
         )
-        post = await get_post(session=session, item_hash=original_item_hash)
+        post = get_post(session=session, item_hash=original_item_hash)
 
     fixtures_by_item_hash = {m["item_hash"]: m for m in fixture_post_messages}
     original = fixtures_by_item_hash[original_item_hash]

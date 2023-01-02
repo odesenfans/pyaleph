@@ -20,7 +20,7 @@ async def check_sender_authorization(session: DbSession, message: MessageDb) -> 
     if sender == address:
         return True
 
-    aggregate = await get_aggregate_by_key(
+    aggregate = get_aggregate_by_key(
         session=session, key="security", owner=address
     )  # do we need anything else here?
 

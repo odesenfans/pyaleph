@@ -35,7 +35,7 @@ async def reconnect_ipfs_job(
                     LOGGER.warning("Can't reconnect to %s" % peer)
 
             with session_factory() as session:
-                peers = await get_all_addresses_by_peer_type(
+                peers = get_all_addresses_by_peer_type(
                     session=session, peer_type=PeerType.IPFS
                 )
 

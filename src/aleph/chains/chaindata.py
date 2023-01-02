@@ -142,8 +142,8 @@ class ChainDataService:
                             type=FileType.FILE,
                             size=len(content.raw_value),
                         )
-                        await upsert_stored_file(session=session, file=stored_file)
-                        await upsert_tx_file_pin(
+                        upsert_stored_file(session=session, file=stored_file)
+                        upsert_tx_file_pin(
                             session=session,
                             file_hash=chaindata["content"],
                             tx_hash=context.tx_hash,

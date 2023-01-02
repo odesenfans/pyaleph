@@ -17,9 +17,9 @@ from aleph.types.files import FileType, FileTag
 
 @pytest.mark.asyncio
 async def test_is_pinned_file(session_factory: DbSessionFactory):
-    async def is_pinned(_session_factory, _file_hash) -> bool:
+    def is_pinned(_session_factory, _file_hash) -> bool:
         with session_factory() as session:
-            return await is_pinned_file(session=session, file_hash=_file_hash)
+            return is_pinned_file(session=session, file_hash=_file_hash)
 
     file = StoredFileDb(
         hash="QmTm7g1Mh3BhrQPjnedVQ5g67DR7cwhyMN3MvFt1JPPdWd",
@@ -32,7 +32,7 @@ async def test_is_pinned_file(session_factory: DbSessionFactory):
 
     # We check for equality with True/False to determine that the function does indeed
     # return a boolean value
-    assert await is_pinned(session_factory, file.hash) is False
+    assert is_pinned(session_factory, file.hash) is False
 
     with session_factory() as session:
         session.add(
@@ -42,7 +42,7 @@ async def test_is_pinned_file(session_factory: DbSessionFactory):
         )
         session.commit()
 
-    assert await is_pinned(session_factory, file.hash) is True
+    assert is_pinned(session_factory, file.hash) is True
 
 
 @pytest.mark.asyncio
@@ -66,7 +66,7 @@ async def test_upsert_file_tag(session_factory: DbSessionFactory):
         session.commit()
 
     with session_factory() as session:
-        await upsert_file_tag(
+        upsert_file_tag(
             session=session,
             tag=tag,
             owner=owner,
@@ -75,7 +75,7 @@ async def test_upsert_file_tag(session_factory: DbSessionFactory):
         )
         session.commit()
 
-        file_tag_db = await get_file_tag(session=session, tag=tag)
+        file_tag_db = get_file_tag(session=session, tag=tag)
         assert file_tag_db is not None
         assert file_tag_db.owner == owner
         assert file_tag_db.file_hash == original_file.hash
@@ -84,7 +84,7 @@ async def test_upsert_file_tag(session_factory: DbSessionFactory):
     # Update the tag
     with session_factory() as session:
         new_version_datetime = pytz.utc.localize(dt.datetime(2022, 1, 1))
-        await upsert_file_tag(
+        upsert_file_tag(
             session=session,
             tag=tag,
             owner=owner,
@@ -93,7 +93,7 @@ async def test_upsert_file_tag(session_factory: DbSessionFactory):
         )
         session.commit()
 
-        file_tag_db = await get_file_tag(session=session, tag=tag)
+        file_tag_db = get_file_tag(session=session, tag=tag)
         assert file_tag_db is not None
         assert file_tag_db.owner == owner
         assert file_tag_db.file_hash == new_version.hash
@@ -101,7 +101,7 @@ async def test_upsert_file_tag(session_factory: DbSessionFactory):
 
     # Try to update the tag to an older version and check it has no effect
     with session_factory() as session:
-        await upsert_file_tag(
+        upsert_file_tag(
             session=session,
             tag=tag,
             owner=owner,
@@ -110,7 +110,7 @@ async def test_upsert_file_tag(session_factory: DbSessionFactory):
         )
         session.commit()
 
-        file_tag_db = await get_file_tag(session=session, tag=tag)
+        file_tag_db = get_file_tag(session=session, tag=tag)
         assert file_tag_db is not None
         assert file_tag_db.owner == owner
         assert file_tag_db.file_hash == new_version.hash
@@ -152,10 +152,10 @@ async def test_refresh_file_tag(session_factory: DbSessionFactory):
         session.commit()
 
     with session_factory() as session:
-        await refresh_file_tag(session=session, tag=tag)
+        refresh_file_tag(session=session, tag=tag)
         session.commit()
 
-        file_tag_db = await get_file_tag(session=session, tag=tag)
+        file_tag_db = get_file_tag(session=session, tag=tag)
         assert file_tag_db
         assert file_tag_db.file_hash == second_pin.file_hash
         assert file_tag_db.last_updated == second_pin.created

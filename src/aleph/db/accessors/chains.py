@@ -9,7 +9,7 @@ from aleph.types.db_session import DbSession
 from ..models.chains import ChainSyncStatusDb
 
 
-async def get_last_height(session: DbSession, chain: Chain) -> Optional[int]:
+def get_last_height(session: DbSession, chain: Chain) -> Optional[int]:
     height = (
         session.execute(
             select(ChainSyncStatusDb.height).where(ChainSyncStatusDb.chain == chain)
@@ -18,12 +18,12 @@ async def get_last_height(session: DbSession, chain: Chain) -> Optional[int]:
     return height
 
 
-async def upsert_chain_sync_status(
+def upsert_chain_sync_status(
     session: DbSession,
     chain: Chain,
     height: int,
     update_datetime: dt.datetime,
-):
+) -> None:
     upsert_stmt = (
         insert(ChainSyncStatusDb)
         .values(chain=chain, height=height, last_update=update_datetime)

@@ -124,5 +124,5 @@ async def get_file_pins_count(request):
     item_hash = request.match_info.get("hash", None)
     session_factory: DbSessionFactory = request.app["session_factory"]
     with session_factory() as session:
-        count = await count_file_pins(session=session, file_hash=item_hash)
+        count = count_file_pins(session=session, file_hash=item_hash)
     return web.json_response(data=count)

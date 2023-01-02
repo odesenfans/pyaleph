@@ -105,7 +105,7 @@ class PendingMessageProcessor:
                 pending_message.item_hash,
                 str(exception),
             )
-            await reject_existing_pending_message(
+            reject_existing_pending_message(
                 session=session,
                 pending_message=pending_message,
                 exception=exception,
@@ -128,7 +128,7 @@ class PendingMessageProcessor:
                     pending_message.item_hash,
                     str(exception),
                 )
-                await increase_pending_message_retry_count(
+                increase_pending_message_retry_count(
                     session=session, pending_message=pending_message
                 )
             else:
@@ -140,20 +140,20 @@ class PendingMessageProcessor:
                     "Rejecting pending message: %s - too many retries",
                     pending_message.item_hash,
                 )
-                await reject_existing_pending_message(
+                reject_existing_pending_message(
                     session=session,
                     pending_message=pending_message,
                     exception=exception,
                 )
             else:
-                await increase_pending_message_retry_count(
+                increase_pending_message_retry_count(
                     session=session, pending_message=pending_message
                 )
 
     async def process_messages(self) -> AsyncIterator[Sequence[MessageDb]]:
         while True:
             with self.session_factory() as session:
-                pending_message = await get_next_pending_message(
+                pending_message = get_next_pending_message(
                     session=session, fetched=True
                 )
                 if not pending_message:

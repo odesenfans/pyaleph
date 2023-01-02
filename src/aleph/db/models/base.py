@@ -20,21 +20,21 @@ class AugmentedBase:
         }
 
     @classmethod
-    async def count(cls, session: DbSession):
+    def count(cls, session: DbSession) -> int:
         return (
             session.execute(f"SELECT COUNT(*) FROM {cls.__tablename__}")  # type: ignore
         ).scalar_one()
 
     # TODO: set type of "where" to the SQLA boolean expression class
     @classmethod
-    async def exists(cls, session: DbSession, where):
+    def exists(cls, session: DbSession, where) -> bool:
 
         exists_stmt = exists(text("1")).select().where(where)
         result = (session.execute(exists_stmt)).scalar()
         return result is not None
 
     @classmethod
-    async def jsonb_keys(
+    def jsonb_keys(
         cls, session: DbSession, column: Column, where
     ) -> Iterable[str]:
         select_stmt = select(func.jsonb_object_keys(column)).where(where)

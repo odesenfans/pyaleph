@@ -89,7 +89,7 @@ async def fixture_aggregate_messages(
         session.commit()
 
         for (owner, key) in aggregate_keys:
-            await refresh_aggregate(session=session, owner=owner, key=key)
+            refresh_aggregate(session=session, owner=owner, key=key)
 
         session.commit()
 

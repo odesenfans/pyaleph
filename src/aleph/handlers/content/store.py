@@ -189,7 +189,7 @@ class StoreMessageHandler(ContentHandler):
             type=FileType.DIRECTORY if is_folder else FileType.FILE,
             size=size,
         )
-        await upsert_stored_file(session=session, file=stored_file)
+        upsert_stored_file(session=session, file=stored_file)
 
     async def check_permissions(self, session: DbSession, message: MessageDb):
         content = _get_store_content(message)
@@ -200,7 +200,7 @@ class StoreMessageHandler(ContentHandler):
         file_tag = make_file_tag(
             owner=owner, ref=content.ref, item_hash=message.item_hash
         )
-        file_tag_db = await get_file_tag(session=session, tag=file_tag)
+        file_tag_db = get_file_tag(session=session, tag=file_tag)
 
         if not file_tag_db:
             return
@@ -216,7 +216,7 @@ class StoreMessageHandler(ContentHandler):
         file_hash = content.item_hash
         owner = content.address
 
-        await insert_message_file_pin(
+        insert_message_file_pin(
             session=session,
             file_hash=file_hash,
             owner=owner,
@@ -228,7 +228,7 @@ class StoreMessageHandler(ContentHandler):
         file_tag = make_file_tag(
             owner=content.address, ref=content.ref, item_hash=message.item_hash
         )
-        await upsert_file_tag(
+        upsert_file_tag(
             session=session,
             tag=file_tag,
             owner=owner,

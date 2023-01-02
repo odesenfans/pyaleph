@@ -142,7 +142,7 @@ class MessageHandler:
         if pending_message.signature != existing_message.signature:
             raise InvalidSignature(f"Invalid signature for {pending_message.item_hash}")
 
-        await delete_pending_message(session=session, pending_message=pending_message)
+        delete_pending_message(session=session, pending_message=pending_message)
         if tx_hash := pending_message.tx_hash:
             session.execute(
                 make_confirmation_upsert_query(
@@ -180,7 +180,7 @@ class MessageHandler:
                 message = parse_message(message_dict)
             except InvalidMessageException as e:
                 LOGGER.warning(e)
-                await reject_new_pending_message(
+                reject_new_pending_message(
                     session=session, pending_message=message_dict, exception=e
                 )
                 session.commit()
@@ -195,7 +195,7 @@ class MessageHandler:
                 )
             except ValueError as e:
                 LOGGER.warning("Invalid message: %s - %s", message.item_hash, str(e))
-                await reject_new_pending_message(
+                reject_new_pending_message(
                     session=session, pending_message=message_dict, exception=e
                 )
                 session.commit()
@@ -208,7 +208,7 @@ class MessageHandler:
                     )
             except InvalidMessageException as e:
                 LOGGER.warning("Invalid message: %s - %s", message.item_hash, str(e))
-                await reject_new_pending_message(
+                reject_new_pending_message(
                     session=session, pending_message=message_dict, exception=e
                 )
                 session.commit()
@@ -237,7 +237,7 @@ class MessageHandler:
                     str(e),
                 )
                 session.rollback()
-                await reject_new_pending_message(
+                reject_new_pending_message(
                     session=session,
                     pending_message=message_dict,
                     exception=e,
@@ -249,7 +249,7 @@ class MessageHandler:
         self, session: DbSession, pending_message: PendingMessageDb, message: MessageDb
     ):
         session.execute(make_message_upsert_query(message))
-        await delete_pending_message(session=session, pending_message=pending_message)
+        delete_pending_message(session=session, pending_message=pending_message)
         session.execute(
             make_message_status_upsert_query(
                 item_hash=message.item_hash,
@@ -277,7 +277,7 @@ class MessageHandler:
         return validated_message
 
     async def process(self, session: DbSession, pending_message: PendingMessageDb):
-        existing_message = await get_message_by_item_hash(
+        existing_message = get_message_by_item_hash(
             session=session, item_hash=pending_message.item_hash
         )
         if existing_message:

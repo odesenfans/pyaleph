@@ -145,7 +145,7 @@ async def view_messages_list(request):
 
     session_factory: DbSessionFactory = request.app["session_factory"]
     with session_factory() as session:
-        messages = await get_matching_messages(
+        messages = get_matching_messages(
             session, include_confirmations=True, **find_filters
         )
 
@@ -153,7 +153,7 @@ async def view_messages_list(request):
             format_message(message).dict(exclude_defaults=True) for message in messages
         ]
 
-        total_msgs = await count_matching_messages(session, **find_filters)
+        total_msgs = count_matching_messages(session, **find_filters)
 
         response = MessageListResponse.construct(
             messages=formatted_messages,
@@ -179,7 +179,6 @@ async def declare_mq_queue(
     return mq_queue
 
 
-# TODO: reactivate/reimplement messages WS
 async def messages_ws(request: web.Request):
     ws = web.WebSocketResponse()
     await ws.prepare(request)
@@ -196,7 +195,7 @@ async def messages_ws(request: web.Request):
 
     if history:
         with session_factory() as session:
-            messages = await get_matching_messages(
+            messages = get_matching_messages(
                 session=session,
                 pagination=history,
                 include_confirmations=True,
@@ -216,7 +215,7 @@ async def messages_ws(request: web.Request):
                 # A bastardized way to apply the filters on the message as well.
                 # TODO: put the filter key/values in the RabbitMQ message?
                 with session_factory() as session:
-                    matching_messages = await get_matching_messages(
+                    matching_messages = get_matching_messages(
                         session=session,
                         hashes=[item_hash],
                         include_confirmations=True,

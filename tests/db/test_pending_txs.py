@@ -66,14 +66,14 @@ async def test_get_pending_txs(
         session.commit()
 
     with session_factory() as session:
-        pending_txs = list(await get_pending_txs(session=session))
+        pending_txs = list(get_pending_txs(session=session))
 
     for expected_tx, actual_tx in zip(pending_txs, fixture_txs):
         assert_pending_txs_equal(expected_tx, actual_tx)
 
     # Test the limit parameter
     with session_factory() as session:
-        pending_txs = list(await get_pending_txs(session=session, limit=1))
+        pending_txs = list(get_pending_txs(session=session, limit=1))
 
     assert pending_txs
     assert len(pending_txs) == 1
@@ -89,6 +89,6 @@ async def test_count_pending_txs(
         session.commit()
 
     with session_factory() as session:
-        nb_txs = await count_pending_txs(session=session)
+        nb_txs = count_pending_txs(session=session)
 
     assert nb_txs == len(fixture_txs)

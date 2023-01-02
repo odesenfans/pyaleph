@@ -40,7 +40,6 @@ from aleph.handlers.content.store import make_file_tag
 from aleph.storage import StorageService
 from aleph.types.db_session import DbSessionFactory, DbSession
 from aleph.types.message_status import (
-    MessageContentUnavailable,
     MessageStatus,
     PermissionDenied,
     CannotForgetForgetMessage,
@@ -75,7 +74,7 @@ class ForgetMessageHandler(ContentHandler):
             raise NoForgetTarget()
 
         for item_hash in content.hashes:
-            if not await message_exists(session=session, item_hash=item_hash):
+            if not message_exists(session=session, item_hash=item_hash):
                 raise ForgetTargetNotFound(item_hash)
 
         for aggregate_key in content.aggregates:
@@ -90,21 +89,21 @@ class ForgetMessageHandler(ContentHandler):
     ):
         content = cast(AggregateContent, aggregate_message.parsed_content)
         logger.debug("Deleting aggregate element %s...", aggregate_message.item_hash)
-        await delete_aggregate_element(
+        delete_aggregate_element(
             session=session, item_hash=aggregate_message.item_hash
         )
         logger.debug("Refreshing aggregate %s/%s...", content.address, content.key)
-        await refresh_aggregate(session=session, owner=content.address, key=content.key)
+        refresh_aggregate(session=session, owner=content.address, key=content.key)
 
     @staticmethod
     async def delete_post(session: DbSession, post_message: MessageDb):
         logger.debug("Deleting post %s...", post_message.item_hash)
-        await delete_post(session=session, item_hash=post_message.item_hash)
+        delete_post(session=session, item_hash=post_message.item_hash)
 
     async def delete_store(self, session: DbSession, store_message: MessageDb):
         store_content = cast(StoreContent, store_message.parsed_content)
-        await delete_file_pin(session=session, item_hash=store_message.item_hash)
-        await refresh_file_tag(
+        delete_file_pin(session=session, item_hash=store_message.item_hash)
+        refresh_file_tag(
             session=session,
             tag=make_file_tag(
                 owner=store_content.address,
@@ -127,7 +126,7 @@ class ForgetMessageHandler(ContentHandler):
         """
         logger.debug(f"Garbage collecting {storage_hash}")
 
-        if await is_pinned_file(session=session, file_hash=storage_hash):
+        if is_pinned_file(session=session, file_hash=storage_hash):
             logger.debug(f"File {storage_hash} has at least one reference left")
             return
 
@@ -140,7 +139,7 @@ class ForgetMessageHandler(ContentHandler):
                 f"for hash '{storage_hash}'"
             )
 
-        await delete_file_db(session=session, file_hash=storage_hash)
+        delete_file_db(session=session, file_hash=storage_hash)
 
         if storage_type == ItemType.ipfs:
             logger.debug(f"Removing from IPFS: {storage_hash}")
@@ -194,7 +193,7 @@ class ForgetMessageHandler(ContentHandler):
             session=session, forget_message=message
         )
         for target_hash in target_hashes:
-            target_status = await get_message_status(
+            target_status = get_message_status(
                 session=session, item_hash=target_hash
             )
             if not target_status:
@@ -209,7 +208,7 @@ class ForgetMessageHandler(ContentHandler):
             if target_status.status != MessageStatus.PROCESSED:
                 raise ForgetTargetNotFound(target_hash=target_hash)
 
-            target_message = await get_message_by_item_hash(
+            target_message = get_message_by_item_hash(
                 session=session, item_hash=target_hash
             )
             if not target_message:
@@ -247,7 +246,7 @@ class ForgetMessageHandler(ContentHandler):
         self, session: DbSession, message: MessageDb, forgotten_by: MessageDb
     ):
         # Mark the message as forgotten
-        await forget_message(
+        forget_message(
             session=session,
             item_hash=message.item_hash,
             forget_message_hash=forgotten_by.item_hash,
@@ -258,7 +257,7 @@ class ForgetMessageHandler(ContentHandler):
     async def _forget_item_hash(
         self, session: DbSession, item_hash: str, forgotten_by: MessageDb
     ):
-        message_status = await get_message_status(session=session, item_hash=item_hash)
+        message_status = get_message_status(session=session, item_hash=item_hash)
         if not message_status:
             raise ForgetTargetNotFound(target_hash=item_hash)
 
@@ -266,7 +265,7 @@ class ForgetMessageHandler(ContentHandler):
             logger.info("Message %s was rejected, nothing to do.", item_hash)
         if message_status.status == MessageStatus.FORGOTTEN:
             logger.info("Message %s is already forgotten, nothing to do.", item_hash)
-            await append_to_forgotten_by(
+            append_to_forgotten_by(
                 session=session,
                 forgotten_message_hash=item_hash,
                 forget_message_hash=forgotten_by.item_hash,
@@ -281,7 +280,7 @@ class ForgetMessageHandler(ContentHandler):
             )
             raise ForgetTargetNotFound(item_hash)
 
-        message = await get_message_by_item_hash(session=session, item_hash=item_hash)
+        message = get_message_by_item_hash(session=session, item_hash=item_hash)
         if not message:
             raise ForgetTargetNotFound(item_hash)
 

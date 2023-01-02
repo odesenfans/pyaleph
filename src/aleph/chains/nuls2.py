@@ -77,7 +77,7 @@ class Nuls2Connector(Verifier, ChainWriter):
     async def get_last_height(self) -> int:
         """Returns the last height for which we already have the nuls data."""
         with self.session_factory() as session:
-            last_height = await get_last_height(session=session, chain=Chain.NULS2)
+            last_height = get_last_height(session=session, chain=Chain.NULS2)
 
         if last_height is None:
             last_height = -1
@@ -118,7 +118,7 @@ class Nuls2Connector(Verifier, ChainWriter):
 
         if last_height:
             with self.session_factory() as session:
-                await upsert_chain_sync_status(
+                upsert_chain_sync_status(
                     session=session,
                     chain=Chain.NULS2,
                     height=last_height,
@@ -161,8 +161,8 @@ class Nuls2Connector(Verifier, ChainWriter):
 
         while True:
             with self.session_factory() as session:
-                if (await count_pending_txs(session=session, chain=Chain.NULS2)) or (
-                    await count_pending_messages(session=session, chain=Chain.NULS2)
+                if (count_pending_txs(session=session, chain=Chain.NULS2)) or (
+                    count_pending_messages(session=session, chain=Chain.NULS2)
                 ):
                     await asyncio.sleep(30)
                     continue
@@ -173,7 +173,7 @@ class Nuls2Connector(Verifier, ChainWriter):
                     i = 0
 
                 messages = list(
-                    await get_unconfirmed_messages(
+                    get_unconfirmed_messages(
                         session=session, limit=10000, chain=Chain.ETH
                     )
                 )

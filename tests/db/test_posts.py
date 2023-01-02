@@ -117,7 +117,7 @@ async def test_get_post_no_amend(
         session.commit()
 
     with session_factory() as session:
-        post = await get_post(session=session, item_hash=original_post.item_hash)
+        post = get_post(session=session, item_hash=original_post.item_hash)
         assert post
         assert_posts_equal(merged_post=post, original=original_post)
 
@@ -136,14 +136,14 @@ async def test_get_post_with_one_amend(
         session.commit()
 
     with session_factory() as session:
-        post = await get_post(session=session, item_hash=original_post.item_hash)
+        post = get_post(session=session, item_hash=original_post.item_hash)
         assert post
         assert_posts_equal(
             merged_post=post, original=original_post, last_amend=first_amend_post
         )
 
         # Check that the query will not return a result when addressing the amend hash
-        amend_post = await get_post(
+        amend_post = get_post(
             session=session, item_hash=first_amend_post.item_hash
         )
         assert amend_post is None
@@ -167,7 +167,7 @@ async def test_get_post_with_two_amends(
         session.commit()
 
     with session_factory() as session:
-        post = await get_post(session=session, item_hash=original_post.item_hash)
+        post = get_post(session=session, item_hash=original_post.item_hash)
         assert post
         assert_posts_equal(
             merged_post=post, original=original_post, last_amend=second_amend_post
@@ -194,13 +194,13 @@ async def test_get_matching_posts(
 
     with session_factory() as session:
         # Get all posts, no filter
-        matching_posts = await get_matching_posts(session=session)
+        matching_posts = get_matching_posts(session=session)
         assert len(matching_posts) == 2
-        nb_posts = await count_matching_posts(session=session)
+        nb_posts = count_matching_posts(session=session)
         assert nb_posts == 2
 
         # Get by hash
-        matching_hash_posts = await get_matching_posts(
+        matching_hash_posts = get_matching_posts(
             session=session, hashes=[original_post.item_hash]
         )
         assert matching_hash_posts
@@ -209,33 +209,33 @@ async def test_get_matching_posts(
             original=original_post,
             last_amend=first_amend_post,
         )
-        nb_matching_hash_posts = await count_matching_posts(
+        nb_matching_hash_posts = count_matching_posts(
             session=session, hashes=[original_post.item_hash]
         )
         assert nb_matching_hash_posts == 1
 
         # Get by owner address
-        matching_address_posts = await get_matching_posts(
+        matching_address_posts = get_matching_posts(
             session=session, addresses=[post_from_second_user.owner]
         )
         assert matching_address_posts
         assert_posts_equal(
             merged_post=one(matching_address_posts), original=post_from_second_user
         )
-        nb_matching_address_posts = await count_matching_posts(
+        nb_matching_address_posts = count_matching_posts(
             session=session, addresses=[post_from_second_user.owner]
         )
         assert nb_matching_address_posts == 1
 
         # Get by channel
-        matching_channel_posts = await get_matching_posts(
+        matching_channel_posts = get_matching_posts(
             session=session, channels=[post_from_second_user.channel]
         )
         assert matching_channel_posts
         assert_posts_equal(
             merged_post=one(matching_channel_posts), original=post_from_second_user
         )
-        nb_matching_channel_posts = await count_matching_posts(
+        nb_matching_channel_posts = count_matching_posts(
             session=session, channels=[post_from_second_user.channel]
         )
         assert nb_matching_channel_posts == 1
@@ -264,7 +264,7 @@ async def test_get_matching_posts_time_filters(
         end_datetime = start_datetime + dt.timedelta(days=1)
         # Sanity check, the amend is supposed to be the latest entry
         assert start_datetime > post_from_second_user.creation_datetime
-        matching_posts = await get_matching_posts(
+        matching_posts = get_matching_posts(
             session=session, start_date=start_datetime, end_date=end_datetime
         )
         assert matching_posts
@@ -295,7 +295,7 @@ async def test_get_matching_posts_sort_order(
 
     with session_factory() as session:
         # Ascending order first
-        asc_posts = await get_matching_posts(
+        asc_posts = get_matching_posts(
             session=session, sort_order=SortOrder.ASCENDING
         )
         assert asc_posts
@@ -307,7 +307,7 @@ async def test_get_matching_posts_sort_order(
         )
 
         # Descending order first
-        asc_posts = await get_matching_posts(
+        asc_posts = get_matching_posts(
             session=session, sort_order=SortOrder.DESCENDING
         )
         assert asc_posts
@@ -328,5 +328,5 @@ async def test_get_matching_posts_no_data(
     """
 
     with session_factory() as session:
-        posts = list(await get_matching_posts(session=session))
+        posts = list(get_matching_posts(session=session))
     assert posts == []

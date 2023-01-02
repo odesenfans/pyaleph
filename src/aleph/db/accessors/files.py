@@ -16,15 +16,15 @@ from ..models.files import (
 )
 
 
-async def is_pinned_file(session: DbSession, file_hash: str) -> bool:
-    return await FilePinDb.exists(
+def is_pinned_file(session: DbSession, file_hash: str) -> bool:
+    return FilePinDb.exists(
         session=session, where=FilePinDb.file_hash == file_hash
     )
 
 
-async def upsert_tx_file_pin(
+def upsert_tx_file_pin(
     session: DbSession, file_hash: str, tx_hash: str, created: dt.datetime
-):
+) -> None:
     upsert_stmt = (
         insert(TxFilePinDb)
         .values(
@@ -35,14 +35,14 @@ async def upsert_tx_file_pin(
     session.execute(upsert_stmt)
 
 
-async def insert_message_file_pin(
+def insert_message_file_pin(
     session: DbSession,
     file_hash: str,
     owner: str,
     item_hash: str,
     ref: Optional[str],
     created: dt.datetime,
-):
+) -> None:
     insert_stmt = insert(MessageFilePinDb).values(
         file_hash=file_hash,
         owner=owner,
@@ -54,21 +54,21 @@ async def insert_message_file_pin(
     session.execute(insert_stmt)
 
 
-async def count_file_pins(session: DbSession, file_hash: str) -> int:
+def count_file_pins(session: DbSession, file_hash: str) -> int:
     select_count_stmt = select(func.count()).select_from(
         select(FilePinDb).where(FilePinDb.file_hash == file_hash)
     )
     return session.execute(select_count_stmt).scalar_one()
 
 
-async def delete_file_pin(session: DbSession, item_hash: str):
+def delete_file_pin(session: DbSession, item_hash: str) -> None:
     delete_stmt = delete(MessageFilePinDb).where(
         MessageFilePinDb.item_hash == item_hash
     )
     session.execute(delete_stmt)
 
 
-async def upsert_stored_file(session: DbSession, file: StoredFileDb):
+def upsert_stored_file(session: DbSession, file: StoredFileDb) -> None:
     upsert_file_stmt = (
         insert(StoredFileDb)
         .values(file.to_dict(exclude={"id"}))
@@ -77,23 +77,23 @@ async def upsert_stored_file(session: DbSession, file: StoredFileDb):
     session.execute(upsert_file_stmt)
 
 
-async def delete_file(session: DbSession, file_hash: str):
+def delete_file(session: DbSession, file_hash: str) -> None:
     delete_stmt = delete(StoredFileDb).where(StoredFileDb.hash == file_hash)
     session.execute(delete_stmt)
 
 
-async def get_file_tag(session: DbSession, tag: FileTag) -> Optional[FileTagDb]:
+def get_file_tag(session: DbSession, tag: FileTag) -> Optional[FileTagDb]:
     select_stmt = select(FileTagDb).where(FileTagDb.tag == tag)
     return session.execute(select_stmt).scalar()
 
 
-async def upsert_file_tag(
+def upsert_file_tag(
     session: DbSession,
     tag: FileTag,
     owner: str,
     file_hash: str,
     last_updated: dt.datetime,
-):
+) -> None:
     insert_stmt = insert(FileTagDb).values(
         tag=tag, owner=owner, file_hash=file_hash, last_updated=last_updated
     )
@@ -105,7 +105,7 @@ async def upsert_file_tag(
     session.execute(upsert_stmt)
 
 
-async def refresh_file_tag(session: DbSession, tag: FileTag):
+def refresh_file_tag(session: DbSession, tag: FileTag) -> None:
     coalesced_ref = func.coalesce(MessageFilePinDb.ref, MessageFilePinDb.item_hash)
     select_latest_file_pin_stmt = (
         select(

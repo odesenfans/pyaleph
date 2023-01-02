@@ -31,7 +31,7 @@ async def get_programs_on_message(request: web.Request) -> web.Response:
                     "on": {"message": result.message_subscriptions},
                 },
             }
-            for result in await get_programs_triggered_by_messages(
+            for result in get_programs_triggered_by_messages(
                 session=session, sort_order=query.sort_order
             )
         ]

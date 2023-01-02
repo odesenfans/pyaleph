@@ -43,14 +43,14 @@ async def test_get_all_addresses_by_peer_type(session_factory: DbSessionFactory)
         session.commit()
 
     with session_factory() as session:
-        http_entries = await get_all_addresses_by_peer_type(
+        http_entries = get_all_addresses_by_peer_type(
             session=session, peer_type=PeerType.HTTP
         )
-        p2p_entries = await get_all_addresses_by_peer_type(
+        p2p_entries = get_all_addresses_by_peer_type(
             session=session, peer_type=PeerType.P2P
         )
 
-        ipfs_entries = await get_all_addresses_by_peer_type(
+        ipfs_entries = get_all_addresses_by_peer_type(
             session=session, peer_type=PeerType.IPFS
         )
 
@@ -65,9 +65,7 @@ async def test_get_all_addresses_by_peer_type_no_match(
     session_factory: DbSessionFactory, peer_type: PeerType
 ):
     with session_factory() as session:
-        entries = await get_all_addresses_by_peer_type(
-            session=session, peer_type=peer_type
-        )
+        entries = get_all_addresses_by_peer_type(session=session, peer_type=peer_type)
 
     assert entries == []
 
@@ -81,7 +79,7 @@ async def test_upsert_peer_insert(session_factory: DbSessionFactory):
     last_seen = pytz.utc.localize(dt.datetime(2022, 10, 1))
 
     with session_factory() as session:
-        await upsert_peer(
+        upsert_peer(
             session=session,
             peer_id=peer_id,
             address=address,
@@ -120,7 +118,7 @@ async def test_upsert_peer_replace(session_factory: DbSessionFactory):
     last_seen = pytz.utc.localize(dt.datetime(2022, 10, 1))
 
     with session_factory() as session:
-        await upsert_peer(
+        upsert_peer(
             session=session,
             peer_id=peer_id,
             peer_type=peer_type,
@@ -135,7 +133,7 @@ async def test_upsert_peer_replace(session_factory: DbSessionFactory):
     new_last_seen = pytz.utc.localize(dt.datetime(2022, 10, 2))
 
     with session_factory() as session:
-        await upsert_peer(
+        upsert_peer(
             session=session,
             peer_id=peer_id,
             peer_type=peer_type,

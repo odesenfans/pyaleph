@@ -60,7 +60,7 @@ async def handle_fetch_error(
             pending_message.item_hash,
             str(exception),
         )
-        await reject_existing_pending_message(
+        reject_existing_pending_message(
             session=session,
             pending_message=pending_message,
             exception=exception,
@@ -81,13 +81,13 @@ async def handle_fetch_error(
                 "Rejecting pending message: %s - too many retries",
                 pending_message.item_hash,
             )
-            await reject_existing_pending_message(
+            reject_existing_pending_message(
                 session=session,
                 pending_message=pending_message,
                 exception=exception,
             )
         else:
-            await increase_pending_message_retry_count(
+            increase_pending_message_retry_count(
                 session=session, pending_message=pending_message
             )
 
@@ -152,7 +152,7 @@ class PendingMessageFetcher:
                         shared_stats["retry_messages_job_tasks"] -= 1
 
                 if len(fetch_tasks) < max_concurrent_tasks:
-                    pending_messages = await get_pending_messages(
+                    pending_messages = get_pending_messages(
                         session=session,
                         limit=max_concurrent_tasks - len(fetch_tasks),
                         offset=len(fetch_tasks),
@@ -182,7 +182,7 @@ class PendingMessageFetcher:
                     yield fetched_messages
                     fetched_messages = []
 
-                if not await PendingMessageDb.count(session):
+                if not PendingMessageDb.count(session):
                     # If not in loop mode, stop if there are no more pending messages
                     if not loop:
                         break

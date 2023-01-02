@@ -10,7 +10,7 @@ from aleph.types.db_session import DbSessionFactory, DbSession
 
 @cached(ttl=60 * 120, cache=SimpleMemoryCache, timeout=120)
 async def get_channels(session: DbSession) -> List[Channel]:
-    channels = await get_distinct_channels(session)
+    channels = get_distinct_channels(session)
     return list(channels)
 
 

@@ -123,8 +123,8 @@ async def view_posts_list(request):
     session_factory: DbSessionFactory = request.app["session_factory"]
     with session_factory() as session:
         # TODO: should return the count of matching posts
-        total_posts = await count_matching_posts(session=session, **find_filters)
-        results = await get_matching_posts(session=session, **find_filters)
+        total_posts = count_matching_posts(session=session, **find_filters)
+        results = get_matching_posts(session=session, **find_filters)
         posts = [
             merged_post_to_dict(post)
             for post in results

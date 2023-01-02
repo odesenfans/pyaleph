@@ -62,7 +62,7 @@ async def test_process_aggregate_first_element(
 
     with session_factory() as session:
         elements = list(
-            await get_aggregate_elements(
+            get_aggregate_elements(
                 session=session, key=expected_key, owner=pending_message.sender
             )
         )
@@ -72,7 +72,7 @@ async def test_process_aggregate_first_element(
         assert element.creation_datetime == expected_creation_datetime
         assert element.content == content["content"]
 
-        aggregate = await get_aggregate_by_key(
+        aggregate = get_aggregate_by_key(
             session=session,
             owner=pending_message.sender,
             key=expected_key,
@@ -180,7 +180,7 @@ async def test_process_aggregates_in_order(
 
         content = original.parsed_content
         assert isinstance(content, AggregateContent)
-        aggregate = await get_aggregate_by_key(
+        aggregate = get_aggregate_by_key(
             session=session, key=content.key, owner=content.address
         )
         assert aggregate
@@ -205,7 +205,7 @@ async def test_process_aggregates_reverse_order(
 
         content = original.parsed_content
         assert isinstance(content, AggregateContent)
-        aggregate = await get_aggregate_by_key(
+        aggregate = get_aggregate_by_key(
             session=session, key=content.key, owner=content.address
         )
         assert aggregate

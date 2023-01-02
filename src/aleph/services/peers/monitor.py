@@ -35,7 +35,7 @@ async def handle_incoming_host(
         # TODO: handle interests and save it
 
         with session_factory() as session:
-            await upsert_peer(
+            upsert_peer(
                 session=session,
                 peer_id=sender,
                 peer_type=peer_type,

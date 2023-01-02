@@ -1,5 +1,3 @@
-import json
-from pathlib import Path
 from typing import Optional, Mapping, Any
 
 import pytest
@@ -64,18 +62,18 @@ BALANCES_CONTENT_SABLIER: Mapping[str, Any] = {
 }
 
 
-async def compare_balances(
+def compare_balances(
     session: DbSession, balances: Mapping[str, float], chain: Chain, dapp: Optional[str]
 ):
     for address, expected_balance in balances.items():
-        balance_db = await get_balance_by_chain(
+        balance_db = get_balance_by_chain(
             session, address=address, chain=chain, dapp=dapp
         )
         assert balance_db is not None
         # Easier to compare decimals and floats as strings
         assert str(balance_db) == str(expected_balance)
 
-    nb_balances_db = await AlephBalanceDb.count(session)
+    nb_balances_db = AlephBalanceDb.count(session)
     assert nb_balances_db == len(balances)
 
 
@@ -84,11 +82,11 @@ async def test_process_balances_solana(session_factory: DbSessionFactory):
     content = BALANCES_CONTENT_SOL
 
     with session_factory() as session:
-        await update_balances(session=session, content=content)
+        update_balances(session=session, content=content)
         session.commit()
 
         balances = content["balances"]
-        await compare_balances(
+        compare_balances(
             session=session, balances=balances, chain=Chain.SOL, dapp=None
         )
 
@@ -98,11 +96,11 @@ async def test_process_balances_sablier(session_factory: DbSessionFactory):
     content = BALANCES_CONTENT_SABLIER
 
     with session_factory() as session:
-        await update_balances(session=session, content=content)
+        update_balances(session=session, content=content)
         session.commit()
 
         balances = content["balances"]
-        await compare_balances(
+        compare_balances(
             session=session, balances=balances, chain=Chain.ETH, dapp="SABLIER"
         )
 
@@ -112,16 +110,16 @@ async def test_update_balances(session_factory: DbSessionFactory):
     content = BALANCES_CONTENT_SOL
 
     with session_factory() as session:
-        await update_balances(session=session, content=content)
+        update_balances(session=session, content=content)
         session.commit()
 
     new_content = BALANCES_CONTENT_SOL_UPDATE
     with session_factory() as session:
-        await update_balances(session=session, content=new_content)
+        update_balances(session=session, content=new_content)
         session.commit()
         session.expire_all()
 
-        await compare_balances(
+        compare_balances(
             session=session,
             balances=new_content["balances"],
             chain=Chain.SOL,

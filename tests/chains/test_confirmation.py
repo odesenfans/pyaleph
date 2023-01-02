@@ -90,7 +90,7 @@ async def test_confirm_message(
     await message_handler.fetch_and_process_one_message_db(pending_message)
 
     with session_factory() as session:
-        message_in_db = await get_message_by_item_hash(
+        message_in_db = get_message_by_item_hash(
             session=session, item_hash=item_hash
         )
 
@@ -113,7 +113,7 @@ async def test_confirm_message(
     )
 
     with session_factory() as session:
-        message_in_db = await get_message_by_item_hash(
+        message_in_db = get_message_by_item_hash(
             session=session, item_hash=item_hash
         )
 
@@ -163,7 +163,7 @@ async def test_process_confirmed_message(
     )
 
     with session_factory() as session:
-        message_in_db = await get_message_by_item_hash(
+        message_in_db = get_message_by_item_hash(
             session=session, item_hash=item_hash
         )
 

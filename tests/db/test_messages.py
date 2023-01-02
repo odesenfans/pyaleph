@@ -78,7 +78,7 @@ async def test_get_message(
         session.commit()
 
     with session_factory() as session:
-        fetched_message = await get_message_by_item_hash(
+        fetched_message = get_message_by_item_hash(
             session=session, item_hash=fixture_message.item_hash
         )
 
@@ -124,7 +124,7 @@ async def test_get_message_with_confirmations(
         session.commit()
 
     with session_factory() as session:
-        fetched_message = await get_message_by_item_hash(
+        fetched_message = get_message_by_item_hash(
             session=session, item_hash=fixture_message.item_hash
         )
 
@@ -148,14 +148,14 @@ async def test_get_message_with_confirmations(
 @pytest.mark.asyncio
 async def test_message_exists(session_factory: DbSessionFactory, fixture_message):
     with session_factory() as session:
-        assert not await message_exists(
+        assert not message_exists(
             session=session, item_hash=fixture_message.item_hash
         )
 
         session.add(fixture_message)
         session.commit()
 
-        assert await message_exists(
+        assert message_exists(
             session=session, item_hash=fixture_message.item_hash
         )
 
@@ -228,7 +228,7 @@ async def test_upsert_query_message(
         session.execute(upsert_stmt)
         session.commit()
 
-        message_db = await get_message_by_item_hash(
+        message_db = get_message_by_item_hash(
             session=session, item_hash=message.item_hash
         )
 
@@ -245,7 +245,7 @@ async def test_get_unconfirmed_messages(
         session.commit()
 
     with session_factory() as session:
-        unconfirmed_messages = list(await get_unconfirmed_messages(session))
+        unconfirmed_messages = list(get_unconfirmed_messages(session))
 
     assert len(unconfirmed_messages) == 1
     assert_messages_equal(fixture_message, unconfirmed_messages[0])
@@ -273,25 +273,25 @@ async def test_get_unconfirmed_messages(
 
     with session_factory() as session:
         # Check that the message is now ignored
-        unconfirmed_messages = list(await get_unconfirmed_messages(session))
+        unconfirmed_messages = list(get_unconfirmed_messages(session))
         assert unconfirmed_messages == []
 
         # Check that it is also ignored when the chain parameter is specified
         unconfirmed_messages = list(
-            await get_unconfirmed_messages(session, chain=tx.chain)
+            get_unconfirmed_messages(session, chain=tx.chain)
         )
         assert unconfirmed_messages == []
 
         # Check that it reappears if we specify a different chain
         unconfirmed_messages = list(
-            await get_unconfirmed_messages(session, chain=Chain.TEZOS)
+            get_unconfirmed_messages(session, chain=Chain.TEZOS)
         )
         assert len(unconfirmed_messages) == 1
         assert_messages_equal(fixture_message, unconfirmed_messages[0])
 
         # Check that the limit parameter is respected
         unconfirmed_messages = list(
-            await get_unconfirmed_messages(session, chain=Chain.TEZOS, limit=0)
+            get_unconfirmed_messages(session, chain=Chain.TEZOS, limit=0)
         )
         assert unconfirmed_messages == []
 
@@ -307,7 +307,7 @@ async def test_get_distinct_channels(
     with session_factory() as session:
         session.add(fixture_message)
         session.commit()
-        channels = list(await get_distinct_channels(session=session))
+        channels = list(get_distinct_channels(session=session))
 
     assert channels == [fixture_message.channel]
 
@@ -332,27 +332,27 @@ async def test_forget_message(
     )
 
     with session_factory() as session:
-        await forget_message(
+        forget_message(
             session=session,
             item_hash=fixture_message.item_hash,
             forget_message_hash=forget_message_hash,
         )
         session.commit()
 
-        message_status = await get_message_status(
+        message_status = get_message_status(
             session=session, item_hash=fixture_message.item_hash
         )
         assert message_status
         assert message_status.status == MessageStatus.FORGOTTEN
 
         # Assert that the message is not present in messages anymore
-        message = await get_message_by_item_hash(
+        message = get_message_by_item_hash(
             session=session, item_hash=fixture_message.item_hash
         )
         assert message is None
 
         # Assert that the metadata was inserted properly in forgotten_messages
-        forgotten_message = await get_forgotten_message(
+        forgotten_message = get_forgotten_message(
             session=session, item_hash=fixture_message.item_hash
         )
         assert forgotten_message
@@ -372,14 +372,14 @@ async def test_forget_message(
             "2aa1f44199181110e0c6b79ccc5e40ceaf20eac791dcfcd1b4f8f2f32b2d8502"
         )
 
-        await append_to_forgotten_by(
+        append_to_forgotten_by(
             session=session,
             forgotten_message_hash=fixture_message.item_hash,
             forget_message_hash=new_forget_message_hash,
         )
         session.commit()
 
-        forgotten_message = await get_forgotten_message(
+        forgotten_message = get_forgotten_message(
             session=session, item_hash=fixture_message.item_hash
         )
         assert forgotten_message

@@ -105,7 +105,7 @@ class PendingTxProcessor:
         seen_ids: Set[str] = set()
         LOGGER.info("handling TXs")
         with self.session_factory() as session:
-            for pending_tx in await get_pending_txs(session):
+            for pending_tx in get_pending_txs(session):
                 if pending_tx.tx.content in seen_offchain_hashes:
                     continue
 

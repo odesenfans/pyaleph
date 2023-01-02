@@ -108,7 +108,7 @@ class EthereumConnector(Verifier, ChainWriter):
     async def get_last_height(self) -> int:
         """Returns the last height for which we already have the ethereum data."""
         with self.session_factory() as session:
-            last_height = await get_last_height(session=session, chain=Chain.ETH)
+            last_height = get_last_height(session=session, chain=Chain.ETH)
 
         if last_height is None:
             last_height = -1
@@ -202,7 +202,7 @@ class EthereumConnector(Verifier, ChainWriter):
             # block height to do next requests from there.
             if last_height:
                 with self.session_factory() as session:
-                    await upsert_chain_sync_status(
+                    upsert_chain_sync_status(
                         session=session,
                         chain=Chain.ETH,
                         height=last_height,
@@ -259,8 +259,8 @@ class EthereumConnector(Verifier, ChainWriter):
             with self.session_factory() as session:
 
                 # Wait for sync operations to complete
-                if (await count_pending_txs(session=session, chain=Chain.ETH)) or (
-                    await count_pending_messages(session=session, chain=Chain.ETH)
+                if (count_pending_txs(session=session, chain=Chain.ETH)) or (
+                    count_pending_messages(session=session, chain=Chain.ETH)
                 ) > 1000:
                     await asyncio.sleep(30)
                     continue
@@ -279,7 +279,7 @@ class EthereumConnector(Verifier, ChainWriter):
                 nonce = web3.eth.getTransactionCount(account.address)
 
                 messages = list(
-                    await get_unconfirmed_messages(
+                    get_unconfirmed_messages(
                         session=session, limit=10000, chain=Chain.ETH
                     )
                 )

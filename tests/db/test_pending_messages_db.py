@@ -96,19 +96,19 @@ async def test_count_pending_messages(
         session.commit()
 
     with session_factory() as session:
-        count_all = await count_pending_messages(session=session)
+        count_all = count_pending_messages(session=session)
         assert count_all == 3
 
         # Only one message is linked to an ETH transaction
-        count_eth = await count_pending_messages(session=session, chain=Chain.ETH)
+        count_eth = count_pending_messages(session=session, chain=Chain.ETH)
         assert count_eth == 1
 
         # Only one message is linked to a TEZOS transaction
-        count_tezos = await count_pending_messages(session=session, chain=Chain.TEZOS)
+        count_tezos = count_pending_messages(session=session, chain=Chain.TEZOS)
         assert count_tezos == 1
 
         # No message should be linked to any Solana transaction
-        count_sol = await count_pending_messages(session=session, chain=Chain.SOL)
+        count_sol = count_pending_messages(session=session, chain=Chain.SOL)
         assert count_sol == 0
 
 
@@ -121,7 +121,7 @@ async def test_get_pending_messages(
         session.commit()
 
     with session_factory() as session:
-        pending_messages = list(await get_pending_messages(session=session))
+        pending_messages = list(get_pending_messages(session=session))
 
         assert len(pending_messages) == 3
         # Check the order of messages
@@ -129,7 +129,7 @@ async def test_get_pending_messages(
 
         # Exclude hashes
         pending_messages = list(
-            await get_pending_messages(
+            get_pending_messages(
                 session=session,
                 exclude_item_hashes={
                     "588ac154509de449b0915844fa1117c72b9136eaaabd078494ea5c5c39cd14b2"

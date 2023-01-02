@@ -40,7 +40,7 @@ async def test_get_aggregate_by_key(session_factory: DbSessionFactory):
         session.commit()
 
     with session_factory() as session:
-        aggregate_db = await get_aggregate_by_key(session=session, owner=owner, key=key)
+        aggregate_db = get_aggregate_by_key(session=session, owner=owner, key=key)
         assert aggregate_db
         assert aggregate_db.key == key
         assert aggregate_db.owner == owner
@@ -49,7 +49,7 @@ async def test_get_aggregate_by_key(session_factory: DbSessionFactory):
 
     # Try not loading the content
     with session_factory() as session:
-        aggregate_db = await get_aggregate_by_key(
+        aggregate_db = get_aggregate_by_key(
             session=session, owner=owner, key=key, with_content=False
         )
 
@@ -61,7 +61,7 @@ async def test_get_aggregate_by_key(session_factory: DbSessionFactory):
 @pytest.mark.asyncio
 async def test_get_aggregate_by_key_no_data(session_factory: DbSessionFactory):
     with session_factory() as session:
-        aggregate = await get_aggregate_by_key(
+        aggregate = get_aggregate_by_key(
             session=session, owner="owner", key="key"
         )
 
@@ -109,7 +109,7 @@ def aggregate_fixtures() -> Tuple[AggregateDb, Sequence[AggregateElementDb]]:
     ]
 
 
-async def _test_refresh_aggregate(
+def _test_refresh_aggregate(
     session_factory: DbSessionFactory,
     aggregate: Optional[AggregateDb],
     expected_aggregate: AggregateDb,
@@ -122,12 +122,12 @@ async def _test_refresh_aggregate(
         session.commit()
 
     with session_factory() as session:
-        await refresh_aggregate(
+        refresh_aggregate(
             session=session, owner=expected_aggregate.owner, key=expected_aggregate.key
         )
         session.commit()
 
-        aggregate_db = await get_aggregate_by_key(
+        aggregate_db = get_aggregate_by_key(
             session=session, owner=expected_aggregate.owner, key=expected_aggregate.key
         )
 
@@ -147,7 +147,7 @@ async def test_refresh_aggregate_insert(
     aggregate_fixtures: Tuple[AggregateDb, Sequence[AggregateElementDb]],
 ):
     aggregate, elements = aggregate_fixtures
-    await _test_refresh_aggregate(
+    _test_refresh_aggregate(
         session_factory=session_factory,
         aggregate=None,
         expected_aggregate=aggregate,
@@ -169,7 +169,7 @@ async def test_refresh_aggregate_update(
         last_revision_hash=elements[0].item_hash,
         dirty=True,
     )
-    await _test_refresh_aggregate(
+    _test_refresh_aggregate(
         session_factory=session_factory,
         aggregate=aggregate,
         expected_aggregate=updated_aggregate,
@@ -183,7 +183,7 @@ async def test_refresh_aggregate_update_no_op(
     aggregate_fixtures: Tuple[AggregateDb, Sequence[AggregateElementDb]],
 ):
     aggregate, elements = aggregate_fixtures
-    await _test_refresh_aggregate(
+    _test_refresh_aggregate(
         session_factory=session_factory,
         aggregate=aggregate,
         expected_aggregate=aggregate,
@@ -205,7 +205,7 @@ async def test_get_content_keys(
 
     with session_factory() as session:
         keys = set(
-            await get_aggregate_content_keys(
+            get_aggregate_content_keys(
                 session=session, key=aggregate.key, owner=aggregate.owner
             )
         )
@@ -214,7 +214,7 @@ async def test_get_content_keys(
     # Test no match
     with session_factory() as session:
         keys = set(
-            await get_aggregate_content_keys(
+            get_aggregate_content_keys(
                 session=session, key="not-a-key", owner="no-one"
             )
         )

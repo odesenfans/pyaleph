@@ -30,7 +30,7 @@ def get_post_content(message: MessageDb) -> PostContent:
     return content
 
 
-async def update_balances(session: DbSession, content: Mapping[str, Any]):
+def update_balances(session: DbSession, content: Mapping[str, Any]) -> None:
     chain = Chain(content["chain"])
     height = content["main_height"]
     dapp = content.get("dapp")
@@ -38,7 +38,7 @@ async def update_balances(session: DbSession, content: Mapping[str, Any]):
     LOGGER.info("Updating balances for %s (dapp: %s)", chain, dapp)
 
     balances: Dict[str, float] = content["balances"]
-    await update_balances_db(
+    update_balances_db(
         session=session,
         chain=chain,
         dapp=dapp,
@@ -82,7 +82,7 @@ class PostMessageHandler(ContentHandler):
             if ref is None:
                 raise NoAmendTarget()
 
-            original_post = await get_original_post(session=session, item_hash=ref)
+            original_post = get_original_post(session=session, item_hash=ref)
             if not original_post:
                 raise AmendTargetNotFound()
 
@@ -108,7 +108,7 @@ class PostMessageHandler(ContentHandler):
         session.add(post)
 
         if content.type == "amend":
-            [amended_post] = await get_matching_posts(session=session, hashes=[ref])
+            [amended_post] = get_matching_posts(session=session, hashes=[ref])
 
             if amended_post.last_updated < creation_datetime:
                 session.execute(
@@ -122,7 +122,7 @@ class PostMessageHandler(ContentHandler):
             and content.address == self.balances_address
         ):
             LOGGER.info("Updating balances...")
-            await update_balances(session=session, content=content.content)
+            update_balances(session=session, content=content.content)
             LOGGER.info("Done updating balances")
 
     async def process(
