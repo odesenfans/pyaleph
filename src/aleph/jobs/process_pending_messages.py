@@ -190,8 +190,9 @@ class PendingMessageProcessor:
 
     def make_pipeline(self) -> AsyncIterator[Sequence[MessageDb]]:
 
-        message_processor = self.process_messages()
-        return self.publish_to_mq(message_iterator=message_processor)
+        # message_processor = self.process_messages()
+        # return self.publish_to_mq(message_iterator=message_processor)
+        return self.process_messages()
 
 
 async def fetch_and_process_messages_task(config: Config, shared_stats: Dict):
