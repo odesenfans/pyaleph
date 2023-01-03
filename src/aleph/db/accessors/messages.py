@@ -306,6 +306,11 @@ def forget_message(
         .values(status=MessageStatus.FORGOTTEN)
         .where(MessageStatusDb.item_hash == item_hash)
     )
+    session.execute(
+        delete(message_confirmations).where(
+            message_confirmations.c.item_hash == item_hash
+        )
+    )
     session.execute(delete(MessageDb).where(MessageDb.item_hash == item_hash))
 
 
