@@ -2,7 +2,7 @@ import datetime as dt
 from typing import Optional, Protocol, Dict, Any, Sequence, Union, List, cast
 
 from aleph_message.models import ItemHash
-from sqlalchemy import func, select, literal_column, TIMESTAMP, String, delete
+from sqlalchemy import func, select, literal_column, TIMESTAMP, String, delete, update
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql import Select
@@ -63,6 +63,36 @@ def get_post(session: DbSession, item_hash: str) -> Optional[MergedPost]:
 def get_original_post(session: DbSession, item_hash: str) -> Optional[PostDb]:
     select_stmt = select(PostDb).where(PostDb.item_hash == item_hash)
     return session.execute(select_stmt).scalar()
+
+
+def refresh_latest_amend(session: DbSession, item_hash: str) -> None:
+    select_latest_amend = (
+        select(
+            PostDb.amends, func.max(PostDb.creation_datetime).label("creation_datetime")
+        )
+        .where(PostDb.amends == item_hash)
+        .group_by(PostDb.amends)
+        .subquery()
+    )
+
+    select_stmt = (
+        select(PostDb.item_hash)
+        .join(
+            select_latest_amend,
+            (PostDb.amends == select_latest_amend.c.amends)
+            & (PostDb.creation_datetime == select_latest_amend.c.creation_datetime),
+        )
+    )
+
+    latest_amend_hash = session.execute(select_stmt).scalar()
+
+    update_stmt = (
+        update(PostDb)
+        .where(PostDb.item_hash == item_hash)
+        .values(latest_amend=latest_amend_hash)
+    )
+
+    session.execute(update_stmt)
 
 
 def make_matching_posts_query(

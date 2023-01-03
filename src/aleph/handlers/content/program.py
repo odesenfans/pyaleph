@@ -8,6 +8,7 @@ from aleph_message.models.program import (
     PersistentVolume,
 )
 
+from aleph.db.accessors.programs import delete_program
 from aleph.db.models import (
     MessageDb,
     CodeVolumeDb,
@@ -144,3 +145,6 @@ class ProgramMessageHandler(ContentHandler):
             await self.process_program_message(session=session, message=message)
 
         return messages, []
+
+    async def forget_message(self, session: DbSession, message: MessageDb):
+        delete_program(session=session, item_hash=message.item_hash)

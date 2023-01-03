@@ -13,13 +13,20 @@ import logging
 from typing import List, Tuple, Optional
 
 import aioipfs
+from aioipfs import NotPinnedError
+from aioipfs.api import RepoAPI
 from aleph_message.models import ItemType, StoreContent, ItemHash
 
 from aleph.config import get_config
 from aleph.db.accessors.files import (
+    delete_file as delete_file_db,
     insert_message_file_pin,
     get_file_tag,
-    upsert_file_tag, upsert_stored_file,
+    upsert_file_tag,
+    upsert_stored_file,
+    delete_file_pin,
+    refresh_file_tag,
+    is_pinned_file,
 )
 from aleph.db.models import MessageDb, StoredFileDb
 from aleph.exceptions import AlephStorageException, UnknownHashError
@@ -78,10 +85,7 @@ def make_file_tag(owner: str, ref: Optional[str], item_hash: str) -> FileTag:
 
 
 class StoreMessageHandler(ContentHandler):
-    def __init__(
-        self, session_factory: DbSessionFactory, storage_service: StorageService
-    ):
-        self.session_factory = session_factory
+    def __init__(self, storage_service: StorageService):
         self.storage_service = storage_service
 
     async def is_related_content_fetched(
@@ -243,3 +247,69 @@ class StoreMessageHandler(ContentHandler):
             await self._pin_and_tag_file(session=session, message=message)
 
         return messages, []
+
+    # TODO: should be probably be in the storage service
+    async def _garbage_collect(
+        self, session: DbSession, storage_hash: str, storage_type: ItemType
+    ):
+        """If a file does not have any reference left, delete or unpin it.
+
+        This is typically called after 'forgetting' a message.
+        """
+        LOGGER.debug(f"Garbage collecting {storage_hash}")
+
+        if is_pinned_file(session=session, file_hash=storage_hash):
+            LOGGER.debug(f"File {storage_hash} has at least one reference left")
+            return
+
+        # Unpin the file from IPFS or remove it from local storage
+        storage_detected: ItemType = item_type_from_hash(storage_hash)
+
+        if storage_type != storage_detected:
+            raise ValueError(
+                f"Inconsistent ItemType {storage_type} != {storage_detected} "
+                f"for hash '{storage_hash}'"
+            )
+
+        delete_file_db(session=session, file_hash=storage_hash)
+
+        if storage_type == ItemType.ipfs:
+            LOGGER.debug(f"Removing from IPFS: {storage_hash}")
+            ipfs_client = self.storage_service.ipfs_service.ipfs_client
+            try:
+                result = await ipfs_client.pin.rm(storage_hash)
+                print(result)
+
+                # Launch the IPFS garbage collector (`ipfs repo gc`)
+                async for _ in RepoAPI(driver=ipfs_client).gc():
+                    pass
+
+            except NotPinnedError:
+                LOGGER.debug("File not pinned")
+
+            LOGGER.debug(f"Removed from IPFS: {storage_hash}")
+        elif storage_type == ItemType.storage:
+            LOGGER.debug(f"Removing from local storage: {storage_hash}")
+            await self.storage_service.storage_engine.delete(storage_hash)
+            LOGGER.debug(f"Removed from local storage: {storage_hash}")
+        else:
+            raise ValueError(f"Invalid storage type {storage_type}")
+        LOGGER.debug(f"Removed from {storage_type}: {storage_hash}")
+
+    async def forget_message(self, session: DbSession, message: MessageDb):
+        content = _get_store_content(message)
+
+        delete_file_pin(session=session, item_hash=message.item_hash)
+        refresh_file_tag(
+            session=session,
+            tag=make_file_tag(
+                owner=content.address,
+                ref=content.ref,
+                item_hash=message.item_hash,
+            ),
+        )
+        await self._garbage_collect(
+            session=session,
+            storage_hash=content.item_hash,
+            storage_type=content.item_type,
+        )

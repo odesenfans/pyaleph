@@ -11,6 +11,9 @@ from aleph.db.accessors.posts import (
     MergedPost,
     get_matching_posts,
     count_matching_posts,
+    refresh_latest_amend,
+    get_original_post,
+    delete_post,
 )
 from aleph.db.models.posts import PostDb
 from aleph.types.channel import Channel
@@ -143,9 +146,7 @@ async def test_get_post_with_one_amend(
         )
 
         # Check that the query will not return a result when addressing the amend hash
-        amend_post = get_post(
-            session=session, item_hash=first_amend_post.item_hash
-        )
+        amend_post = get_post(session=session, item_hash=first_amend_post.item_hash)
         assert amend_post is None
 
 
@@ -295,9 +296,7 @@ async def test_get_matching_posts_sort_order(
 
     with session_factory() as session:
         # Ascending order first
-        asc_posts = get_matching_posts(
-            session=session, sort_order=SortOrder.ASCENDING
-        )
+        asc_posts = get_matching_posts(session=session, sort_order=SortOrder.ASCENDING)
         assert asc_posts
         assert_posts_equal(merged_post=asc_posts[0], original=post_from_second_user)
         assert_posts_equal(
@@ -307,9 +306,7 @@ async def test_get_matching_posts_sort_order(
         )
 
         # Descending order first
-        asc_posts = get_matching_posts(
-            session=session, sort_order=SortOrder.DESCENDING
-        )
+        asc_posts = get_matching_posts(session=session, sort_order=SortOrder.DESCENDING)
         assert asc_posts
         assert_posts_equal(
             merged_post=asc_posts[0],
@@ -330,3 +327,45 @@ async def test_get_matching_posts_no_data(
     with session_factory() as session:
         posts = list(get_matching_posts(session=session))
     assert posts == []
+
+
+@pytest.mark.asyncio
+async def test_refresh_latest_amend(
+    session_factory: DbSessionFactory,
+    original_post: PostDb,
+    first_amend_post: PostDb,
+    second_amend_post: PostDb,
+):
+    with session_factory() as session:
+        session.add(original_post)
+        session.add(first_amend_post)
+        session.add(second_amend_post)
+        session.commit()
+
+    with session_factory() as session:
+        refresh_latest_amend(session, original_post.item_hash)
+        session.commit()
+
+        original_post_db = get_original_post(session, item_hash=original_post.item_hash)
+        assert original_post_db
+        assert original_post_db.latest_amend == second_amend_post.item_hash
+
+    # Now, delete the second post and check that refreshing the latest amend works
+    with session_factory() as session:
+        delete_post(session, item_hash=second_amend_post.item_hash)
+        refresh_latest_amend(session=session, item_hash=original_post.item_hash)
+        session.commit()
+
+        original_post_db = get_original_post(session, item_hash=original_post.item_hash)
+        assert original_post_db
+        assert original_post_db.latest_amend == first_amend_post.item_hash
+
+    # Delete the last amend, check that latest_amend is now null
+    with session_factory() as session:
+        delete_post(session, item_hash=first_amend_post.item_hash)
+        refresh_latest_amend(session=session, item_hash=original_post.item_hash)
+        session.commit()
+
+        original_post_db = get_original_post(session, item_hash=original_post.item_hash)
+        assert original_post_db
+        assert original_post_db.latest_amend is None

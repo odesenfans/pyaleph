@@ -1,30 +1,17 @@
 from __future__ import annotations
 
 import logging
-from typing import List, Tuple, cast, Sequence
+from typing import List, Tuple, cast, Sequence, Dict
 
-from aioipfs.api import RepoAPI
-from aioipfs.exceptions import NotPinnedError
 from aleph_message.models import (
-    ItemType,
     MessageType,
     ForgetContent,
-    StoreContent,
-    AggregateContent,
     ItemHash,
 )
 from sqlalchemy import select
 
 from aleph.db.accessors.aggregates import (
     aggregate_exists,
-    delete_aggregate_element,
-    refresh_aggregate,
-)
-from aleph.db.accessors.files import (
-    is_pinned_file,
-    delete_file_pin,
-    delete_file as delete_file_db,
-    refresh_file_tag,
 )
 from aleph.db.accessors.messages import (
     message_exists,
@@ -33,29 +20,29 @@ from aleph.db.accessors.messages import (
     forget_message,
     get_message_by_item_hash,
 )
-from aleph.db.accessors.posts import delete_post
 from aleph.db.models import MessageDb, AggregateElementDb
 from aleph.handlers.content.content_handler import ContentHandler
-from aleph.handlers.content.store import make_file_tag
-from aleph.storage import StorageService
-from aleph.types.db_session import DbSessionFactory, DbSession
+from aleph.types.db_session import DbSession
 from aleph.types.message_status import (
     MessageStatus,
     PermissionDenied,
     CannotForgetForgetMessage,
-    ForgetTargetNotFound, NoForgetTarget, InternalError,
+    ForgetTargetNotFound,
+    NoForgetTarget,
+    InternalError,
 )
-from aleph.utils import item_type_from_hash
 
 logger = logging.getLogger(__name__)
 
 
 class ForgetMessageHandler(ContentHandler):
     def __init__(
-        self, session_factory: DbSessionFactory, storage_service: StorageService
+        self,
+        content_handlers: Dict[MessageType, ContentHandler],
     ):
-        self.session_factory = session_factory
-        self.storage_service = storage_service
+
+        self.content_handlers = content_handlers
+        self.content_handlers[MessageType.forget] = self
 
     async def check_dependencies(self, session: DbSession, message: MessageDb) -> None:
         """
@@ -82,87 +69,6 @@ class ForgetMessageHandler(ContentHandler):
                 session=session, key=aggregate_key, owner=content.address
             ):
                 raise ForgetTargetNotFound(aggregate_key=aggregate_key)
-
-    @staticmethod
-    async def delete_aggregate_element(
-        session: DbSession, aggregate_message: MessageDb
-    ):
-        content = cast(AggregateContent, aggregate_message.parsed_content)
-        logger.debug("Deleting aggregate element %s...", aggregate_message.item_hash)
-        delete_aggregate_element(
-            session=session, item_hash=aggregate_message.item_hash
-        )
-        logger.debug("Refreshing aggregate %s/%s...", content.address, content.key)
-        refresh_aggregate(session=session, owner=content.address, key=content.key)
-
-    @staticmethod
-    async def delete_post(session: DbSession, post_message: MessageDb):
-        logger.debug("Deleting post %s...", post_message.item_hash)
-        delete_post(session=session, item_hash=post_message.item_hash)
-
-    async def delete_store(self, session: DbSession, store_message: MessageDb):
-        store_content = cast(StoreContent, store_message.parsed_content)
-        delete_file_pin(session=session, item_hash=store_message.item_hash)
-        refresh_file_tag(
-            session=session,
-            tag=make_file_tag(
-                owner=store_content.address,
-                ref=store_content.ref,
-                item_hash=store_message.item_hash,
-            ),
-        )
-        await self.garbage_collect(
-            session=session,
-            storage_hash=store_content.item_hash,
-            storage_type=store_content.item_type,
-        )
-
-    async def garbage_collect(
-        self, session: DbSession, storage_hash: str, storage_type: ItemType
-    ):
-        """If a file does not have any reference left, delete or unpin it.
-
-        This is typically called after 'forgetting' a message.
-        """
-        logger.debug(f"Garbage collecting {storage_hash}")
-
-        if is_pinned_file(session=session, file_hash=storage_hash):
-            logger.debug(f"File {storage_hash} has at least one reference left")
-            return
-
-        # Unpin the file from IPFS or remove it from local storage
-        storage_detected: ItemType = item_type_from_hash(storage_hash)
-
-        if storage_type != storage_detected:
-            raise ValueError(
-                f"Inconsistent ItemType {storage_type} != {storage_detected} "
-                f"for hash '{storage_hash}'"
-            )
-
-        delete_file_db(session=session, file_hash=storage_hash)
-
-        if storage_type == ItemType.ipfs:
-            logger.debug(f"Removing from IPFS: {storage_hash}")
-            ipfs_client = self.storage_service.ipfs_service.ipfs_client
-            try:
-                result = await ipfs_client.pin.rm(storage_hash)
-                print(result)
-
-                # Launch the IPFS garbage collector (`ipfs repo gc`)
-                async for _ in RepoAPI(driver=ipfs_client).gc():
-                    pass
-
-            except NotPinnedError:
-                logger.debug("File not pinned")
-
-            logger.debug(f"Removed from IPFS: {storage_hash}")
-        elif storage_type == ItemType.storage:
-            logger.debug(f"Removing from local storage: {storage_hash}")
-            await self.storage_service.storage_engine.delete(storage_hash)
-            logger.debug(f"Removed from local storage: {storage_hash}")
-        else:
-            raise ValueError(f"Invalid storage type {storage_type}")
-        logger.debug(f"Removed from {storage_type}: {storage_hash}")
 
     @staticmethod
     async def _list_target_messages(
@@ -193,9 +99,7 @@ class ForgetMessageHandler(ContentHandler):
             session=session, forget_message=message
         )
         for target_hash in target_hashes:
-            target_status = get_message_status(
-                session=session, item_hash=target_hash
-            )
+            target_status = get_message_status(session=session, item_hash=target_hash)
             if not target_status:
                 raise ForgetTargetNotFound(target_hash=target_hash)
 
@@ -232,15 +136,8 @@ class ForgetMessageHandler(ContentHandler):
         When processing a FORGET message, performs additional cleanup depending
         on the type of message that is being forgotten.
         """
-
-        if message.type == MessageType.aggregate:
-            await self.delete_aggregate_element(
-                session=session, aggregate_message=message
-            )
-        elif message.type == MessageType.post:
-            await self.delete_post(session=session, post_message=message)
-        elif message.type == MessageType.store:
-            await self.delete_store(session=session, store_message=message)
+        content_handler = self.content_handlers[message.type]
+        await content_handler.forget_message(session=session, message=message)
 
     async def _forget_message(
         self, session: DbSession, message: MessageDb, forgotten_by: MessageDb
@@ -322,3 +219,6 @@ class ForgetMessageHandler(ContentHandler):
             await self._process_forget_message(session=session, message=message)
 
         return messages, []
+
+    async def forget_message(self, session: DbSession, message: MessageDb):
+        raise CannotForgetForgetMessage(target_hash=message.item_hash)

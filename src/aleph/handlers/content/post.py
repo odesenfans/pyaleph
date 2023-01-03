@@ -5,7 +5,12 @@ from aleph_message.models import PostContent, ChainRef, Chain
 from sqlalchemy import update
 
 from aleph.db.accessors.balances import update_balances as update_balances_db
-from aleph.db.accessors.posts import get_matching_posts, get_original_post
+from aleph.db.accessors.posts import (
+    get_matching_posts,
+    get_original_post,
+    delete_post,
+    refresh_latest_amend,
+)
 from aleph.db.models.messages import MessageDb
 from aleph.db.models.posts import PostDb
 from aleph.toolkit.timestamp import timestamp_to_datetime
@@ -15,6 +20,7 @@ from aleph.types.message_status import (
     CannotAmendAmend,
     AmendTargetNotFound,
     NoAmendTarget,
+    InternalError,
 )
 from .content_handler import ContentHandler
 
@@ -133,3 +139,19 @@ class PostMessageHandler(ContentHandler):
             await self.process_post(session=session, message=message)
 
         return messages, []
+
+    async def forget_message(self, session: DbSession, message: MessageDb):
+        content = get_post_content(message)
+
+        LOGGER.debug("Deleting post %s...", message.item_hash)
+        delete_post(session=session, item_hash=message.item_hash)
+
+        if content.type == "amend":
+            original_post = get_original_post(session, content.ref)
+            if original_post is None:
+                raise InternalError(
+                    f"Could not find original post ({content.ref} for amend ({message.item_hash})."
+                )
+
+            if original_post.latest_amend == message.item_hash:
+                refresh_latest_amend(session, original_post.item_hash)

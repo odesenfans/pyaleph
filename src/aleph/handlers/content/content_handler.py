@@ -11,7 +11,7 @@ class ContentHandler(abc.ABC):
         return True
 
     async def fetch_related_content(
-        self, session: DbSession, message: MessageDb
+            self, session: DbSession, message: MessageDb
     ) -> None:
         """
         Fetch additional content from the network based on the content of a message.
@@ -27,7 +27,7 @@ class ContentHandler(abc.ABC):
 
     @abc.abstractmethod
     async def process(
-        self, session: DbSession, messages: List[MessageDb]
+            self, session: DbSession, messages: List[MessageDb]
     ) -> Tuple[List[MessageDb], List[MessageDb]]:
         """
         Process several messages of the same type and applies the resulting changes.
@@ -36,10 +36,14 @@ class ContentHandler(abc.ABC):
         * checking permissions
         * applying DB updates.
         """
-        ...
+        pass
 
     async def check_dependencies(self, session: DbSession, message: MessageDb):
         pass
 
     async def check_permissions(self, session: DbSession, message: MessageDb):
         await check_sender_authorization(session=session, message=message)
+
+    @abc.abstractmethod
+    async def forget_message(self, session: DbSession, message: MessageDb):
+        pass

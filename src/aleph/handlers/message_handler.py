@@ -62,21 +62,18 @@ class MessageHandler:
         self.storage_service = storage_service
 
         self.content_handlers = {
-            MessageType.aggregate: AggregateMessageHandler(
-                session_factory=session_factory
-            ),
-            MessageType.forget: ForgetMessageHandler(
-                session_factory=session_factory, storage_service=storage_service
-            ),
+            MessageType.aggregate: AggregateMessageHandler(),
             MessageType.post: PostMessageHandler(
                 balances_address=config.aleph.balances.address.value,
                 balances_post_type=config.aleph.balances.post_type.value,
             ),
             MessageType.program: ProgramMessageHandler(),
-            MessageType.store: StoreMessageHandler(
-                session_factory=session_factory, storage_service=storage_service
-            ),
+            MessageType.store: StoreMessageHandler(storage_service=storage_service),
         }
+
+        self.content_handlers[MessageType.forget] = ForgetMessageHandler(
+            content_handlers=self.content_handlers,
+        )
 
     # TODO typing: make this function generic on message type
     def get_content_handler(self, message_type: MessageType) -> ContentHandler:

@@ -1,6 +1,5 @@
 import itertools
 import logging
-import time
 from typing import Tuple, List, cast, Sequence
 
 from aleph_message.models import AggregateContent
@@ -15,19 +14,27 @@ from aleph.db.accessors.aggregates import (
     count_aggregate_elements,
     mark_aggregate_as_dirty,
     get_aggregate_content_keys,
+    delete_aggregate_element,
 )
 from aleph.db.models import MessageDb, AggregateElementDb, AggregateDb
 from aleph.handlers.content.content_handler import ContentHandler
 from aleph.toolkit.timestamp import timestamp_to_datetime
 from aleph.types.db_session import DbSessionFactory, DbSession
+from aleph.types.message_status import InvalidMessageFormat
 
 LOGGER = logging.getLogger(__name__)
 
 
-class AggregateMessageHandler(ContentHandler):
-    def __init__(self, session_factory: DbSessionFactory):
-        self.session_factory = session_factory
+def _get_aggregate_content(message: MessageDb) -> AggregateContent:
+    content = message.parsed_content
+    if not isinstance(content, AggregateContent):
+        raise InvalidMessageFormat(
+            f"Unexpected content type for aggregate message: {message.item_hash}"
+        )
+    return content
 
+
+class AggregateMessageHandler(ContentHandler):
     async def fetch_related_content(
         self, session: DbSession, message: MessageDb
     ) -> None:
@@ -160,9 +167,7 @@ class AggregateMessageHandler(ContentHandler):
 
         # Last chance before a full refresh, check the keys of the aggregate
         # and determine if there's a conflict.
-        keys = set(
-            get_aggregate_content_keys(session=session, key=key, owner=owner)
-        )
+        keys = set(get_aggregate_content_keys(session=session, key=key, owner=owner))
         new_keys = set(itertools.chain(element.content.keys for element in elements))
         conflicting_keys = keys & new_keys
 
@@ -220,3 +225,12 @@ class AggregateMessageHandler(ContentHandler):
             )
 
         return messages, []
+
+    async def forget_message(self, session: DbSession, message: MessageDb):
+        content = _get_aggregate_content(message)
+
+        LOGGER.debug("Deleting aggregate element %s...", message.item_hash)
+        delete_aggregate_element(session=session, item_hash=message.item_hash)
+
+        LOGGER.debug("Refreshing aggregate %s/%s...", content.address, content.key)
+        refresh_aggregate(session=session, owner=content.address, key=content.key)
