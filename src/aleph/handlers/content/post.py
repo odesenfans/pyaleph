@@ -1,5 +1,5 @@
 import logging
-from typing import List, Tuple, Any, Dict, Mapping, Union, Optional
+from typing import List, Any, Dict, Mapping, Union, Optional
 
 from aleph_message.models import PostContent, ChainRef, Chain
 from sqlalchemy import update
@@ -131,16 +131,12 @@ class PostMessageHandler(ContentHandler):
             update_balances(session=session, content=content.content)
             LOGGER.info("Done updating balances")
 
-    async def process(
-        self, session: DbSession, messages: List[MessageDb]
-    ) -> Tuple[List[MessageDb], List[MessageDb]]:
+    async def process(self, session: DbSession, messages: List[MessageDb]) -> None:
 
         for message in messages:
             await self.process_post(session=session, message=message)
 
-        return messages, []
-
-    async def forget_message(self, session: DbSession, message: MessageDb):
+    async def forget_message(self, session: DbSession, message: MessageDb) -> None:
         content = get_post_content(message)
 
         LOGGER.debug("Deleting post %s...", message.item_hash)

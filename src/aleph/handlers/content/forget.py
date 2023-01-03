@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import List, Tuple, cast, Sequence, Dict
+from typing import List, cast, Sequence, Dict
 
 from aleph_message.models import (
     MessageType,
@@ -204,9 +204,7 @@ class ForgetMessageHandler(ContentHandler):
                 session=session, item_hash=item_hash, forgotten_by=message
             )
 
-    async def process(
-        self, session: DbSession, messages: List[MessageDb]
-    ) -> Tuple[List[MessageDb], List[MessageDb]]:
+    async def process(self, session: DbSession, messages: List[MessageDb]) -> None:
 
         # FORGET:
         # 0. Check permissions: separate step now
@@ -217,8 +215,6 @@ class ForgetMessageHandler(ContentHandler):
 
         for message in messages:
             await self._process_forget_message(session=session, message=message)
-
-        return messages, []
 
     async def forget_message(self, session: DbSession, message: MessageDb):
         raise CannotForgetForgetMessage(target_hash=message.item_hash)

@@ -1,5 +1,5 @@
 import abc
-from typing import List, Tuple
+from typing import List
 
 from aleph.db.models import MessageDb
 from aleph.permissions import check_sender_authorization
@@ -7,11 +7,13 @@ from aleph.types.db_session import DbSession
 
 
 class ContentHandler(abc.ABC):
-    async def is_related_content_fetched(self, session: DbSession, message: MessageDb) -> bool:
+    async def is_related_content_fetched(
+        self, session: DbSession, message: MessageDb
+    ) -> bool:
         return True
 
     async def fetch_related_content(
-            self, session: DbSession, message: MessageDb
+        self, session: DbSession, message: MessageDb
     ) -> None:
         """
         Fetch additional content from the network based on the content of a message.
@@ -26,9 +28,7 @@ class ContentHandler(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def process(
-            self, session: DbSession, messages: List[MessageDb]
-    ) -> Tuple[List[MessageDb], List[MessageDb]]:
+    async def process(self, session: DbSession, messages: List[MessageDb]) -> None:
         """
         Process several messages of the same type and applies the resulting changes.
 

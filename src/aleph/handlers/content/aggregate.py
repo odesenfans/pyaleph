@@ -1,6 +1,6 @@
 import itertools
 import logging
-from typing import Tuple, List, cast, Sequence
+from typing import List, cast, Sequence
 
 from aleph_message.models import AggregateContent
 
@@ -19,7 +19,7 @@ from aleph.db.accessors.aggregates import (
 from aleph.db.models import MessageDb, AggregateElementDb, AggregateDb
 from aleph.handlers.content.content_handler import ContentHandler
 from aleph.toolkit.timestamp import timestamp_to_datetime
-from aleph.types.db_session import DbSessionFactory, DbSession
+from aleph.types.db_session import DbSession
 from aleph.types.message_status import InvalidMessageFormat
 
 LOGGER = logging.getLogger(__name__)
@@ -203,9 +203,7 @@ class AggregateMessageHandler(ContentHandler):
         session.flush()
         refresh_aggregate(session=session, owner=owner, key=key)
 
-    async def process(
-        self, session: DbSession, messages: List[MessageDb]
-    ) -> Tuple[List[MessageDb], List[MessageDb]]:
+    async def process(self, session: DbSession, messages: List[MessageDb]) -> None:
         sorted_messages = sorted(
             messages,
             key=lambda m: (m.parsed_content.key, m.parsed_content.address, m.time),
@@ -224,9 +222,7 @@ class AggregateMessageHandler(ContentHandler):
                 session=session, key=key, owner=owner, elements=aggregate_elements
             )
 
-        return messages, []
-
-    async def forget_message(self, session: DbSession, message: MessageDb):
+    async def forget_message(self, session: DbSession, message: MessageDb) -> None:
         content = _get_aggregate_content(message)
 
         LOGGER.debug("Deleting aggregate element %s...", message.item_hash)

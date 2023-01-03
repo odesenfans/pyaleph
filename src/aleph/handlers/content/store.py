@@ -240,13 +240,9 @@ class StoreMessageHandler(ContentHandler):
             last_updated=timestamp_to_datetime(content.time),
         )
 
-    async def process(
-        self, session: DbSession, messages: List[MessageDb]
-    ) -> Tuple[List[MessageDb], List[MessageDb]]:
+    async def process(self, session: DbSession, messages: List[MessageDb]) -> None:
         for message in messages:
             await self._pin_and_tag_file(session=session, message=message)
-
-        return messages, []
 
     # TODO: should be probably be in the storage service
     async def _garbage_collect(
@@ -296,7 +292,7 @@ class StoreMessageHandler(ContentHandler):
             raise ValueError(f"Invalid storage type {storage_type}")
         LOGGER.debug(f"Removed from {storage_type}: {storage_hash}")
 
-    async def forget_message(self, session: DbSession, message: MessageDb):
+    async def forget_message(self, session: DbSession, message: MessageDb) -> None:
         content = _get_store_content(message)
 
         delete_file_pin(session=session, item_hash=message.item_hash)

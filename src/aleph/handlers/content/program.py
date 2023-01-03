@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List
 
 from aleph_message.models import ProgramContent
 from aleph_message.models.program import (
@@ -137,14 +137,9 @@ class ProgramMessageHandler(ContentHandler):
         program = program_message_to_db(message)
         session.add(program)
 
-    async def process(
-        self, session: DbSession, messages: List[MessageDb]
-    ) -> Tuple[List[MessageDb], List[MessageDb]]:
-
+    async def process(self, session: DbSession, messages: List[MessageDb]) -> None:
         for message in messages:
             await self.process_program_message(session=session, message=message)
 
-        return messages, []
-
-    async def forget_message(self, session: DbSession, message: MessageDb):
+    async def forget_message(self, session: DbSession, message: MessageDb) -> None:
         delete_program(session=session, item_hash=message.item_hash)
