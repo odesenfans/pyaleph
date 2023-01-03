@@ -242,8 +242,8 @@ async def fetch_and_process_messages_task(config: Config, shared_stats: Dict):
                 LOGGER.exception("Error in pending messages job")
                 session.rollback()
 
-        LOGGER.debug("Waiting 5 seconds for new pending messages...")
-        await asyncio.sleep(5)
+        LOGGER.info("Waiting 1 second(s) for new pending messages...")
+        await asyncio.sleep(1)
 
 
 def pending_messages_subprocess(
