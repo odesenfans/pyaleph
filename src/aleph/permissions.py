@@ -48,11 +48,11 @@ async def check_sender_authorization(session: DbSession, message: MessageDb) -> 
             continue
 
         if message.type == MessageType.post:
-            if len(ptypes) and message.content.type not in ptypes:
+            if len(ptypes) and message.parsed_content.type not in ptypes:
                 continue
 
         if message.type == MessageType.aggregate:
-            if len(akeys) and message.content.key not in akeys:
+            if len(akeys) and message.parsed_content.key not in akeys:
                 continue
 
         return True
