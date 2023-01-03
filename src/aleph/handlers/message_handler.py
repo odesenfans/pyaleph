@@ -303,7 +303,6 @@ class MessageHandler:
         return message
 
     async def check_permissions(self, session: DbSession, message: MessageDb):
-        # TODO: check balance
         content_handler = self.get_content_handler(message.type)
         await content_handler.check_permissions(session=session, message=message)
 

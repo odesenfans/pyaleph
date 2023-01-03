@@ -12,9 +12,13 @@ def get_address_balance(request: web.Request):
 
     session_factory: DbSessionFactory = request.app["session_factory"]
     with session_factory() as session:
-        balance = get_total_balance(session=session, address=address, include_dapps=False)
+        balance = get_total_balance(
+            session=session, address=address, include_dapps=False
+        )
 
     if balance is None:
         raise web.HTTPNotFound()
 
-    return GetBalanceResponse(address=address, balance=balance)
+    return web.json_response(
+        text=GetBalanceResponse(address=address, balance=balance).json()
+    )

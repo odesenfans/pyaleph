@@ -373,6 +373,13 @@ def mark_pending_message_as_rejected(
             )
         )
 
+    upsert_status_stmt = make_message_status_upsert_query(
+        item_hash=item_hash,
+        new_status=MessageStatus.REJECTED,
+        reception_time=pending_message_dict.get("reception_time", dt.datetime.utcnow()),
+        where=MessageStatusDb.status == MessageStatus.PENDING,
+    )
+
     upsert_rejected_message_stmt = make_upsert_rejected_message_statement(
         item_hash=item_hash,
         pending_message_dict=pending_message_dict,
@@ -381,6 +388,7 @@ def mark_pending_message_as_rejected(
         exc_traceback=exc_traceback,
     )
 
+    session.execute(upsert_status_stmt)
     session.execute(upsert_rejected_message_stmt)
 
 
