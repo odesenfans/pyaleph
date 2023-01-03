@@ -42,6 +42,8 @@ from aleph.types.message_status import (
     InvalidSignature,
     MessageContentUnavailable,
     MessageStatus,
+    InvalidMessageFormat,
+    MessageProcessingException,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -92,8 +94,18 @@ class MessageHandler:
         try:
             content = await self.storage_service.get_message_content(pending_message)
         except InvalidContent:
-            LOGGER.warning("Can't get content of message %r, won't retry.", item_hash)
-            raise InvalidMessageException(f"Can't get content of message {item_hash}")
+            # TODO: we only arrive here if one of the nodes in the network is malicious and
+            #       sends bad files. We should retry with another server instead and penalize
+            #       the malicious node. I leave the old code commented here for insight
+            #       on the previous implementation.
+            # LOGGER.warning("Can't get content of message %r, won't retry.", item_hash)
+            # raise InvalidMessageException(f"Can't get content of message {item_hash}")
+            LOGGER.warning(
+                "Can't get content of message %s: hash does not match.", item_hash
+            )
+            raise ContentCurrentlyUnavailable(
+                f"Can't get content of message {item_hash}: hash does not match."
+            )
 
         except (ContentCurrentlyUnavailable, Exception) as e:
             if not isinstance(e, ContentCurrentlyUnavailable):
@@ -107,7 +119,7 @@ class MessageHandler:
                 content_size=len(content.raw_value),
             )
         except ValidationError as e:
-            raise InvalidMessageException(f"Invalid message content: {e}") from e
+            raise InvalidMessageFormat(errors=e.errors()) from e
 
         return validated_message
 
@@ -119,16 +131,9 @@ class MessageHandler:
                 session=session, message=message
             )
         except UnknownHashError:
-            raise InvalidMessageException(
+            raise InvalidMessageFormat(
                 f"Invalid IPFS hash for message {message.item_hash}"
             )
-        except (InvalidMessageException, MessageContentUnavailable):
-            raise
-        except Exception as e:
-            LOGGER.exception("Error using the message type handler")
-            raise MessageContentUnavailable(
-                f"Unexpected error while fetching related content of {message.item_hash}"
-            ) from e
 
     @staticmethod
     async def confirm_existing_message(

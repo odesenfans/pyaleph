@@ -65,7 +65,7 @@ class StorageService:
             source = ContentSource.INLINE
         else:
             # unknown, could retry later? shouldn't have arrived this far though.
-            raise InvalidMessageException(f"Unknown item type: '{item_type}'.")
+            raise ValueError(f"Unknown item type: '{item_type}'.")
 
         check_for_u0000(item_content)
 
