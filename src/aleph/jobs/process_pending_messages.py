@@ -124,9 +124,10 @@ class PendingMessageProcessor:
                 )
             elif isinstance(exception, RetryMessageException):
                 LOGGER.warning(
-                    "Message %s marked for retry: %s",
+                    "%s error (%d) - message %s marked for retry",
+                    exception.error_code.name,
+                    exception.error_code.value,
                     pending_message.item_hash,
-                    str(exception),
                 )
                 increase_pending_message_retry_count(
                     session=session, pending_message=pending_message

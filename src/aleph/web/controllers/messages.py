@@ -8,9 +8,30 @@ from configmanager import Config
 from pydantic import BaseModel, Field, validator, ValidationError, root_validator
 
 import aleph.toolkit.json as aleph_json
-from aleph.db.accessors.messages import get_matching_messages, count_matching_messages
-from aleph.schemas.api.messages import format_message, MessageListResponse
-from aleph.types.db_session import DbSessionFactory
+from aleph.db.accessors.messages import (
+    get_matching_messages,
+    count_matching_messages,
+    get_message_status,
+    get_message_by_item_hash,
+    get_forgotten_message,
+    get_rejected_message,
+)
+from aleph.db.accessors.pending_messages import get_pending_messages
+from aleph.db.models import MessageStatusDb
+from aleph.schemas.api.messages import (
+    format_message,
+    MessageListResponse,
+    MessageWithStatus,
+    PendingMessageStatus,
+    ProcessedMessageStatus,
+    ForgottenMessageStatus,
+    ForgottenMessage,
+    RejectedMessageStatus,
+    PendingMessage,
+)
+from aleph.schemas.pending_messages import BasePendingMessage
+from aleph.types.db_session import DbSessionFactory, DbSession
+from aleph.types.message_status import MessageStatus
 from aleph.types.sort_order import SortOrder
 from aleph.web.controllers.utils import LIST_FIELD_SEPARATOR
 
@@ -226,3 +247,79 @@ async def messages_ws(request: web.Request):
 
     except ConnectionResetError:
         pass
+
+
+def _get_message_with_status(
+    session: DbSession, status_db: MessageStatusDb
+) -> MessageWithStatus:
+    status = status_db.status
+    item_hash = status_db.item_hash
+    reception_time = status_db.reception_time
+    if status == MessageStatus.PENDING:
+        # There may be several instances of the same pending message, return the first.
+        pending_messages_db = get_pending_messages(session=session, item_hash=item_hash)
+        pending_messages = [PendingMessage.from_orm(m) for m in pending_messages_db]
+        return PendingMessageStatus(
+            status=MessageStatus.PENDING,
+            item_hash=item_hash,
+            reception_time=reception_time,
+            messages=pending_messages,
+        )
+
+    if status == MessageStatus.PROCESSED:
+        message_db = get_message_by_item_hash(session=session, item_hash=item_hash)
+        if not message_db:
+            raise web.HTTPNotFound()
+
+        message = format_message(message_db)
+        return ProcessedMessageStatus(
+            item_hash=item_hash,
+            reception_time=reception_time,
+            message=message,
+        )
+
+    if status == MessageStatus.FORGOTTEN:
+        forgotten_message_db = get_forgotten_message(session=session, item_hash=item_hash)
+        if not forgotten_message_db:
+            raise web.HTTPNotFound()
+
+        return ForgottenMessageStatus(
+            item_hash=item_hash,
+            reception_time=reception_time,
+            message=ForgottenMessage.from_orm(forgotten_message_db),
+            forgotten_by=forgotten_message_db.forgotten_by,
+        )
+
+    if status == MessageStatus.REJECTED:
+        rejected_message_db = get_rejected_message(session=session, item_hash=item_hash)
+        if not rejected_message_db:
+            raise web.HTTPNotFound()
+
+        return RejectedMessageStatus(
+            item_hash=item_hash,
+            reception_time=reception_time,
+            error_code=rejected_message_db.error_code,
+            details=rejected_message_db.details,
+            message=rejected_message_db.message,
+        )
+
+    raise NotImplementedError(f"Unknown message status: {status}")
+
+
+async def view_message(request: web.Request):
+    item_hash_str = request.match_info.get("item_hash")
+    try:
+        item_hash = ItemHash(item_hash_str)
+    except ValueError:
+        raise web.HTTPUnprocessableEntity(body=f"Invalid message hash: {item_hash_str}")
+
+    session_factory: DbSessionFactory = request.app["session_factory"]
+    with session_factory() as session:
+        message_status_db = get_message_status(session=session, item_hash=item_hash)
+        if message_status_db is None:
+            raise web.HTTPNotFound()
+        message_with_status = _get_message_with_status(
+            session=session, status_db=message_status_db
+        )
+
+    return web.json_response(text=message_with_status.json())

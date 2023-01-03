@@ -24,7 +24,7 @@ from aleph.db.accessors.messages import (
 from aleph.db.accessors.pending_messages import (
     increase_pending_message_retry_count,
     make_pending_message_fetched_statement,
-    get_pending_messages,
+    get_next_pending_messages,
 )
 from aleph.db.connection import make_engine, make_session_factory
 from aleph.db.models import PendingMessageDb, MessageDb
@@ -152,7 +152,7 @@ class PendingMessageFetcher:
                         shared_stats["retry_messages_job_tasks"] -= 1
 
                 if len(fetch_tasks) < max_concurrent_tasks:
-                    pending_messages = get_pending_messages(
+                    pending_messages = get_next_pending_messages(
                         session=session,
                         limit=max_concurrent_tasks - len(fetch_tasks),
                         offset=len(fetch_tasks),

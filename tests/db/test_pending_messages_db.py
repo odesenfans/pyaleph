@@ -5,7 +5,7 @@ from aleph_message.models import ItemType, Chain, MessageType
 
 from aleph.db.accessors.pending_messages import (
     count_pending_messages,
-    get_pending_messages,
+    get_next_pending_messages,
 )
 from aleph.db.models import PendingMessageDb, ChainTxDb
 from aleph.types.chain_sync import ChainSyncProtocol
@@ -121,7 +121,7 @@ async def test_get_pending_messages(
         session.commit()
 
     with session_factory() as session:
-        pending_messages = list(get_pending_messages(session=session))
+        pending_messages = list(get_next_pending_messages(session=session))
 
         assert len(pending_messages) == 3
         # Check the order of messages
@@ -129,7 +129,7 @@ async def test_get_pending_messages(
 
         # Exclude hashes
         pending_messages = list(
-            get_pending_messages(
+            get_next_pending_messages(
                 session=session,
                 exclude_item_hashes={
                     "588ac154509de449b0915844fa1117c72b9136eaaabd078494ea5c5c39cd14b2"

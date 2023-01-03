@@ -130,10 +130,10 @@ class MessageHandler:
             await content_handler.fetch_related_content(
                 session=session, message=message
             )
-        except UnknownHashError:
+        except UnknownHashError as e:
             raise InvalidMessageFormat(
                 f"Invalid IPFS hash for message {message.item_hash}"
-            )
+            ) from e
 
     @staticmethod
     async def confirm_existing_message(

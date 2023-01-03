@@ -34,7 +34,7 @@ def get_next_pending_message(
     return (session.execute(select_stmt)).scalar()
 
 
-def get_pending_messages(
+def get_next_pending_messages(
     session: DbSession,
     limit: int = 10000,
     offset: int = 0,
@@ -58,6 +58,17 @@ def get_pending_messages(
 
     select_stmt = select_stmt.limit(limit)
     return (session.execute(select_stmt)).scalars()
+
+
+def get_pending_messages(
+    session: DbSession, item_hash: str
+) -> Iterable[PendingMessageDb]:
+    select_stmt = (
+        select(PendingMessageDb)
+        .order_by(PendingMessageDb.time)
+        .where(PendingMessageDb.item_hash == item_hash)
+    )
+    return session.execute(select_stmt).scalars()
 
 
 def count_pending_messages(session: DbSession, chain: Optional[Chain] = None) -> int:

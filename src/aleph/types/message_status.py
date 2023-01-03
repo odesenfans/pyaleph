@@ -4,7 +4,6 @@ from typing import Optional, Any, Dict, Sequence, Union
 
 class MessageStatus(str, Enum):
     PENDING = "pending"
-    FETCHED = "fetched"
     PROCESSED = "processed"
     REJECTED = "rejected"
     FORGOTTEN = "forgotten"

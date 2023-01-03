@@ -220,6 +220,15 @@ def get_message_status(session: DbSession, item_hash: str) -> Optional[MessageSt
     ).scalar()
 
 
+def get_rejected_message(
+    session: DbSession, item_hash: str
+) -> Optional[RejectedMessageDb]:
+    select_stmt = select(RejectedMessageDb).where(
+        RejectedMessageDb.item_hash == item_hash
+    )
+    return session.execute(select_stmt).scalar()
+
+
 # TODO typing: Find a correct type for `where`
 def make_message_status_upsert_query(
     item_hash: str, new_status: MessageStatus, reception_time: dt.datetime, where
@@ -354,7 +363,9 @@ def mark_pending_message_as_rejected(
         error_code = ErrorCode.INTERNAL_ERROR
         details = None
         exc_traceback = "\n".join(
-            traceback.format_exception(type(exception), exception, None)
+            traceback.format_exception(
+                type(exception), exception, exception.__traceback__
+            )
         )
 
     upsert_rejected_message_stmt = make_upsert_rejected_message_statement(
