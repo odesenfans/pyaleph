@@ -4,7 +4,6 @@ from typing import Optional
 
 import aiohttp_jinja2
 from aiohttp import web
-from bson import json_util
 
 DEFAULT_MESSAGES_PER_PAGE = 20
 DEFAULT_PAGE = 1
@@ -118,7 +117,7 @@ def cond_output(request, context, template):
         if "pagination" in context:
             context.pop("pagination")
         response = web.json_response(
-            context, dumps=lambda v: json.dumps(v, default=json_util.default)
+            context, dumps=lambda v: json.dumps(v)
         )
     else:
         response = aiohttp_jinja2.render_template(template, request, context)

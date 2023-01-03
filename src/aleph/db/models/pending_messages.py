@@ -68,7 +68,7 @@ class PendingMessageDb(Base):
             item_type=obj.item_type,
             item_content=obj.item_content,
             time=timestamp_to_datetime(obj.time),
-            channel=obj.channel,
+            channel=Channel(obj.channel) if obj.channel is not None else None,
             check_message=check_message,
             retries=0,
             tx_hash=tx_hash,
