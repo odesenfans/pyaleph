@@ -242,7 +242,7 @@ def make_message_status_upsert_query(
 
 def get_distinct_channels(session: DbSession) -> Iterable[Channel]:
     select_stmt = select(MessageDb.channel).distinct().order_by(MessageDb.channel)
-    return (session.execute(select_stmt)).scalars()
+    return session.execute(select_stmt).scalars()
 
 
 def get_forgotten_message(
