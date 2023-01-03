@@ -29,7 +29,6 @@ from aleph.schemas.api.messages import (
     RejectedMessageStatus,
     PendingMessage,
 )
-from aleph.schemas.pending_messages import BasePendingMessage
 from aleph.types.db_session import DbSessionFactory, DbSession
 from aleph.types.message_status import MessageStatus
 from aleph.types.sort_order import SortOrder

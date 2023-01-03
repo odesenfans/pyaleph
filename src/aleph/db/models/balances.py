@@ -1,4 +1,5 @@
 from decimal import Decimal
+from typing import Optional
 
 from aleph_message.models import Chain
 from sqlalchemy import Column, DECIMAL, String, Integer, UniqueConstraint, BigInteger
@@ -14,7 +15,7 @@ class AlephBalanceDb(Base):
 
     address: str = Column(String, nullable=False, index=True)
     chain: Chain = Column(ChoiceType(Chain), nullable=False)
-    dapp: str = Column(String, nullable=True)
+    dapp: Optional[str] = Column(String, nullable=True)
     eth_height: int = Column(Integer, nullable=False)
     balance: Decimal = Column(DECIMAL, nullable=False)
 

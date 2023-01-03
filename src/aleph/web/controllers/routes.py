@@ -12,7 +12,7 @@ from aleph.web.controllers import (
     posts,
     stats,
     storage,
-    version,
+    version, balances,
 )
 from aleph.web.controllers.programs import get_programs_on_message
 
@@ -41,7 +41,6 @@ def register_routes(app: web.Application):
     app.router.add_get("/api/v0/messages.json", messages.view_messages_list)
     app.router.add_get("/api/v0/messages/{item_hash}", messages.view_message)
     app.router.add_get("/api/v0/messages/page/{page}.json", messages.view_messages_list)
-    # TODO: reactivate message WS
     app.router.add_get("/api/ws0/messages", messages.messages_ws)
 
     app.router.add_post("/api/v0/ipfs/pubsub/pub", p2p.pub_json)
@@ -50,6 +49,7 @@ def register_routes(app: web.Application):
     app.router.add_get("/api/v0/posts.json", posts.view_posts_list)
     app.router.add_get("/api/v0/posts/page/{page}.json", posts.view_posts_list)
 
+    app.router.add_get("/api/v0/addresses/balances/{address}", balances.get_address_balance)
     app.router.add_get("/api/v0/addresses/stats.json", stats.addresses_stats_view)
 
     app.router.add_post("/api/v0/ipfs/add_json", storage.add_ipfs_json_controller)

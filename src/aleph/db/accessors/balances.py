@@ -3,7 +3,7 @@ from io import StringIO
 from typing import Optional, Mapping
 
 from aleph_message.models import Chain
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 from aleph.db.models import AlephBalanceDb
 from aleph.types.db_session import DbSession
@@ -19,6 +19,27 @@ def get_balance_by_chain(
             & (AlephBalanceDb.dapp == dapp)
         )
     ).scalar()
+
+
+def get_total_balance(
+    session: DbSession, address: str, include_dapps: bool = False
+) -> Optional[Decimal]:
+    where_clause = AlephBalanceDb.address == address
+    if not include_dapps:
+        where_clause = where_clause & AlephBalanceDb.dapp.is_(None)
+    select_stmt = (
+        select(
+            AlephBalanceDb.address, func.sum(AlephBalanceDb.balance).label("balance")
+        )
+        .where(where_clause)
+        .group_by(AlephBalanceDb.address)
+    )
+
+    result = session.execute(select_stmt).one_or_none()
+    if result is None:
+        return None
+
+    return result.balance
 
 
 def update_balances(

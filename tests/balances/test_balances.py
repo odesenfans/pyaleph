@@ -3,11 +3,11 @@ from typing import Optional, Mapping, Any
 import pytest
 from aleph_message.models import Chain
 
-from aleph.db.accessors.balances import get_balance_by_chain
+from aleph.db.accessors.balances import get_balance_by_chain, get_total_balance
 from aleph.db.models import AlephBalanceDb
 from aleph.handlers.content.post import update_balances
 from aleph.types.db_session import DbSessionFactory, DbSession
-
+from decimal import Decimal
 BALANCES_CONTENT_SOL: Mapping[str, Any] = {
     "tags": ["SOL", "SPL", "CsZ5LZkDS7h9TDKjrbL7VAwQZ9nsRu8vJLhRYfmGaN8K", "mainnet"],
     "chain": "SOL",
@@ -86,9 +86,7 @@ async def test_process_balances_solana(session_factory: DbSessionFactory):
         session.commit()
 
         balances = content["balances"]
-        compare_balances(
-            session=session, balances=balances, chain=Chain.SOL, dapp=None
-        )
+        compare_balances(session=session, balances=balances, chain=Chain.SOL, dapp=None)
 
 
 @pytest.mark.asyncio
@@ -146,3 +144,68 @@ async def test_update_balances(session_factory: DbSessionFactory):
 #     with session_factory() as session:
 #         await update_balances(session, content_2)
 #         session.commit()
+
+
+def test_get_total_balance(session_factory: DbSessionFactory):
+    address_1 = "my-address"
+    address_2 = "your-address"
+
+    with session_factory() as session:
+        session.add(
+            AlephBalanceDb(
+                address=address_1,
+                chain=Chain.ETH,
+                dapp=None,
+                balance=Decimal(100_000),
+                eth_height=0,
+            )
+        )
+        session.add(
+            AlephBalanceDb(
+                address=address_1,
+                chain=Chain.SOL,
+                dapp=None,
+                balance=Decimal(1_000_000),
+                eth_height=0,
+            )
+        )
+        session.add(
+            AlephBalanceDb(
+                address=address_1,
+                chain=Chain.ETH,
+                dapp="SABLIER",
+                balance=Decimal(1_000_000_000),
+                eth_height=0,
+            )
+        )
+        session.add(
+            AlephBalanceDb(
+                address=address_2,
+                chain=Chain.TEZOS,
+                dapp=None,
+                balance=Decimal(3),
+                eth_height=0,
+            )
+        )
+        session.commit()
+
+    with session_factory() as session:
+        balance_with_dapps = get_total_balance(
+            session=session, address=address_1, include_dapps=True
+        )
+        assert balance_with_dapps == 1_001_100_000
+
+        balance_no_dapps = get_total_balance(
+            session=session, address=address_1, include_dapps=False
+        )
+        assert balance_no_dapps == 1_100_000
+
+        balance_address_2 = get_total_balance(
+            session=session, address=address_2, include_dapps=False
+        )
+        assert balance_address_2 == 3
+
+        balance_unknown_address = get_total_balance(
+            session=session, address="unknown-address", include_dapps=False
+        )
+        assert balance_unknown_address is None
