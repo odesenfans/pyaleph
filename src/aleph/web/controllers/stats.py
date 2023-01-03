@@ -33,7 +33,7 @@ async def addresses_stats_view(request):
     session_factory: DbSessionFactory = request.app["session_factory"]
 
     with session_factory() as session:
-        stats = await get_message_stats_by_sender(session=session, addresses=addresses)
+        stats = get_message_stats_by_sender(session=session, addresses=addresses)
 
     stats_dict = make_stats_dict(stats)
 

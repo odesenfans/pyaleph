@@ -23,7 +23,7 @@ async def used_channels(request):
     session_factory: DbSessionFactory = request.app["session_factory"]
 
     with session_factory() as session:
-        channels = get_channels(session)
+        channels = await get_channels(session)
 
     response = web.json_response({"channels": channels})
     response.enable_compression()
