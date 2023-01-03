@@ -5,7 +5,6 @@ version: '2.2'
 
 volumes:
   pyaleph-ipfs:
-  pyaleph-mongodb:
   pyaleph-postgres:
 
 services:
@@ -72,17 +71,6 @@ services:
       POSTGRES_DB: aleph
     networks:
       - pyaleph
-
-  mongodb:
-    restart: always
-    image: mongo:4.4
-    volumes:
-      - pyaleph-mongodb:/data/db
-    command: mongod --storageEngine wiredTiger
-    networks:
-      - pyaleph
-    ports:
-      - "127.0.0.1:27017:27017"
 
 networks:
   pyaleph:

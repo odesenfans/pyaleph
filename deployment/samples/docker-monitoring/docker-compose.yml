@@ -3,7 +3,6 @@ version: '2.2'
 volumes:
   pyaleph-ipfs:
   pyaleph-local-storage:
-  pyaleph-mongodb:
   pyaleph-postgres:
   pyaleph-caddy-data:
   pyaleph-caddy-config:
@@ -21,7 +20,6 @@ services:
       - ./keys:/opt/pyaleph/keys
       - pyaleph-local-storage:/var/lib/pyaleph
     depends_on:
-      - mongodb
       - postgres
       - ipfs
       - p2p-service
@@ -91,15 +89,6 @@ services:
     networks:
       - pyaleph
     command: ["daemon", "--enable-pubsub-experiment", "--migrate"]
-
-  mongodb:
-    restart: always
-    image: mongo:4.4
-    volumes:
-      - pyaleph-mongodb:/data/db
-    command: mongod --storageEngine wiredTiger
-    networks:
-      - pyaleph
 
   prometheus:
     restart: always

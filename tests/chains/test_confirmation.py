@@ -28,10 +28,6 @@ MESSAGE_DICT: Mapping = {
 }
 
 
-def remove_id_key(mongodb_object: Dict) -> Dict:
-    return {k: v for k, v in mongodb_object.items() if k != "_id"}
-
-
 @pytest.fixture
 def chain_tx() -> ChainTxDb:
     return ChainTxDb(
