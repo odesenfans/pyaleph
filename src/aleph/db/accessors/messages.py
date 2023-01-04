@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload, load_only
 from sqlalchemy.sql import Insert, Select
 from sqlalchemy.sql.elements import literal
 
-from aleph.toolkit.timestamp import coerce_to_datetime
+from aleph.toolkit.timestamp import coerce_to_datetime, utc_now
 from aleph.types.channel import Channel
 from aleph.types.db_session import DbSession
 from aleph.types.message_status import (
@@ -376,7 +376,7 @@ def mark_pending_message_as_rejected(
     upsert_status_stmt = make_message_status_upsert_query(
         item_hash=item_hash,
         new_status=MessageStatus.REJECTED,
-        reception_time=pending_message_dict.get("reception_time", dt.datetime.utcnow()),
+        reception_time=utc_now(),
         where=MessageStatusDb.status == MessageStatus.PENDING,
     )
 
@@ -486,11 +486,6 @@ def reject_existing_pending_message(
     )
     pending_message_dict["time"] = pending_message_dict["time"].timestamp()
 
-    session.execute(
-        update(MessageStatusDb)
-        .values(status=MessageStatus.REJECTED)
-        .where(MessageStatusDb.item_hash == item_hash)
-    )
     mark_pending_message_as_rejected(
         session=session,
         item_hash=item_hash,

@@ -1,5 +1,4 @@
 import asyncio
-import datetime as dt
 import json
 from typing import Dict, Optional, List, Any, Mapping, Set
 
@@ -17,7 +16,7 @@ from aleph.exceptions import (
     ContentCurrentlyUnavailable,
 )
 from aleph.storage import StorageService
-from aleph.toolkit.timestamp import timestamp_to_datetime
+from aleph.toolkit.timestamp import timestamp_to_datetime, utc_now
 from aleph.types.chain_sync import ChainSyncProtocol
 from aleph.types.db_session import DbSessionFactory, DbSession
 from aleph.types.files import FileType
@@ -147,7 +146,7 @@ class ChainDataService:
                             session=session,
                             file_hash=chaindata["content"],
                             tx_hash=context.tx_hash,
-                            created=dt.datetime.utcnow(),
+                            created=utc_now(),
                         )
                         session.commit()
 

@@ -4,6 +4,7 @@ from typing import Optional, Sequence
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
+from aleph.toolkit.timestamp import utc_now
 from aleph.types.db_session import DbSession
 from ..models.peers import PeerDb, PeerType
 
@@ -23,7 +24,7 @@ def upsert_peer(
     source: PeerType,
     last_seen: Optional[dt.datetime] = None,
 ) -> None:
-    last_seen = last_seen or dt.datetime.utcnow()
+    last_seen = last_seen or utc_now()
 
     upsert_stmt = (
         insert(PeerDb)

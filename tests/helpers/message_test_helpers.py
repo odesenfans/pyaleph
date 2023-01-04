@@ -4,10 +4,10 @@ import json
 from typing import List, Optional, Union, Any, Mapping, Sequence, Iterable
 
 from aleph_message.models import ItemType, MessageConfirmation
-from configmanager import Config
 
 from aleph.db.models import MessageDb, PendingMessageDb, MessageStatusDb
 from aleph.jobs.process_pending_messages import PendingMessageProcessor
+from aleph.toolkit.timestamp import utc_now
 from aleph.types.db_session import DbSession
 from aleph.types.message_status import MessageStatus
 
@@ -53,7 +53,7 @@ async def process_pending_messages(
             MessageStatusDb(
                 item_hash=pending_message.item_hash,
                 status=MessageStatus.PENDING,
-                reception_time=dt.datetime.now(),
+                reception_time=utc_now(),
             )
         )
     session.add_all(pending_messages)

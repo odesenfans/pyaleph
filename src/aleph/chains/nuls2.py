@@ -1,6 +1,5 @@
 import asyncio
 import base64
-import datetime as dt
 import functools
 import json
 import logging
@@ -28,6 +27,7 @@ from aleph.db.accessors.messages import get_unconfirmed_messages
 from aleph.db.accessors.pending_messages import count_pending_messages
 from aleph.db.accessors.pending_txs import count_pending_txs
 from aleph.schemas.pending_messages import BasePendingMessage
+from aleph.toolkit.timestamp import utc_now
 from aleph.types.db_session import DbSessionFactory
 from aleph.utils import run_in_executor
 from .chaindata import ChainDataService
@@ -122,7 +122,7 @@ class Nuls2Connector(Verifier, ChainWriter):
                     session=session,
                     chain=Chain.NULS2,
                     height=last_height,
-                    update_datetime=dt.datetime.utcnow(),
+                    update_datetime=utc_now(),
                 )
                 session.commit()
 

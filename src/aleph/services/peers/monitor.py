@@ -1,5 +1,4 @@
 import asyncio
-import datetime as dt
 import json
 import logging
 from urllib.parse import unquote
@@ -9,6 +8,7 @@ from aleph_p2p_client import AlephP2PServiceClient
 from aleph.db.accessors.peers import upsert_peer
 from aleph.db.models import PeerType
 from aleph.services.ipfs import IpfsService
+from aleph.toolkit.timestamp import utc_now
 from aleph.types.db_session import DbSessionFactory
 
 LOGGER = logging.getLogger(__name__)
@@ -41,7 +41,7 @@ async def handle_incoming_host(
                 peer_type=peer_type,
                 address=content["address"],
                 source=source,
-                last_seen=dt.datetime.now(),
+                last_seen=utc_now(),
             )
             session.commit()
 

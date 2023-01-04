@@ -1,5 +1,4 @@
 import asyncio
-import datetime as dt
 import functools
 import json
 import logging
@@ -19,15 +18,16 @@ from web3.middleware.geth_poa import geth_poa_middleware
 
 from aleph.chains.common import get_verification_buffer
 from aleph.db.accessors.chains import get_last_height, upsert_chain_sync_status
+from aleph.db.accessors.messages import get_unconfirmed_messages
+from aleph.db.accessors.pending_messages import count_pending_messages
+from aleph.db.accessors.pending_txs import count_pending_txs
 from aleph.schemas.pending_messages import BasePendingMessage
+from aleph.toolkit.timestamp import utc_now
 from aleph.types.db_session import DbSessionFactory
 from aleph.utils import run_in_executor
 from .chaindata import ChainDataService
 from .connector import ChainWriter, Verifier
 from .tx_context import TxContext
-from aleph.db.accessors.messages import get_unconfirmed_messages
-from aleph.db.accessors.pending_messages import count_pending_messages
-from aleph.db.accessors.pending_txs import count_pending_txs
 
 LOGGER = logging.getLogger("chains.ethereum")
 CHAIN_NAME = "ETH"
@@ -206,7 +206,7 @@ class EthereumConnector(Verifier, ChainWriter):
                         session=session,
                         chain=Chain.ETH,
                         height=last_height,
-                        update_datetime=dt.datetime.utcnow(),
+                        update_datetime=utc_now(),
                     )
                     session.commit()
 
