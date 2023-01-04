@@ -57,14 +57,10 @@ async def get_contract(config, web3: Web3):
     )
 
 
-async def get_logs_query(web3: Web3, contract, start_height, end_height):
-    logs = await run_in_executor(
-        None,
-        web3.eth.getLogs,
-        {"address": contract.address, "fromBlock": start_height, "toBlock": end_height},
+def get_logs_query(web3: Web3, contract, start_height, end_height):
+    return web3.eth.get_logs(
+        {"address": contract.address, "fromBlock": start_height, "toBlock": end_height}
     )
-    for log in logs:
-        yield log
 
 
 class EthereumConnector(Verifier, ChainWriter):
@@ -119,8 +115,13 @@ class EthereumConnector(Verifier, ChainWriter):
     async def _get_logs(config, web3: Web3, contract, start_height):
         try:
             logs = get_logs_query(web3, contract, start_height + 1, "latest")
-            async for log in logs:
+            for log in logs:
                 yield log
+
+            if not logs:
+                LOGGER.info("No recent transactions, waiting 10 seconds.")
+                await asyncio.sleep(10)
+
         except ValueError as e:
             # we got an error, let's try the pagination aware version.
             if e.args[0]["code"] != -32005:
@@ -137,8 +138,13 @@ class EthereumConnector(Verifier, ChainWriter):
             while True:
                 try:
                     logs = get_logs_query(web3, contract, start_height, end_height)
-                    async for log in logs:
+
+                    for log in logs:
                         yield log
+
+                    if not logs:
+                        LOGGER.info("No recent transactions, waiting 10 seconds.")
+                        await asyncio.sleep(10)
 
                     start_height = end_height + 1
                     end_height = start_height + 1000
