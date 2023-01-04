@@ -93,23 +93,14 @@ class MessageHandler:
 
         try:
             content = await self.storage_service.get_message_content(pending_message)
-        except InvalidContent:
-            # TODO: we only arrive here if one of the nodes in the network is malicious and
-            #       sends bad files. We should retry with another server instead and penalize
-            #       the malicious node. I leave the old code commented here for insight
-            #       on the previous implementation.
-            # LOGGER.warning("Can't get content of message %r, won't retry.", item_hash)
-            # raise InvalidMessageException(f"Can't get content of message {item_hash}")
-            LOGGER.warning(
-                "Can't get content of message %s: hash does not match.", item_hash
-            )
-            raise ContentCurrentlyUnavailable(
-                f"Can't get content of message {item_hash}: hash does not match."
-            )
+        except InvalidContent as e:
+            error_msg = f"Invalid message content for {item_hash}: {str(e)}"
+            LOGGER.warning(error_msg)
+            raise InvalidMessageFormat(error_msg)
 
         except (ContentCurrentlyUnavailable, Exception) as e:
             if not isinstance(e, ContentCurrentlyUnavailable):
-                LOGGER.exception("Can't get content of object %r" % item_hash)
+                LOGGER.exception("Can't get content of object %s" % item_hash)
             raise MessageContentUnavailable(f"Could not fetch content for {item_hash}")
 
         try:
@@ -159,6 +150,8 @@ class MessageHandler:
             pending_message.fetched = False
             return pending_message
 
+        # We reuse fetch_pending_messages to load the inline content. The check
+        # above ensures we will not load content from the network here.
         message = await self.fetch_pending_message(pending_message=pending_message)
         content_handler = self.get_content_handler(message.type)
         is_fetched = await content_handler.is_related_content_fetched(
@@ -188,26 +181,16 @@ class MessageHandler:
                 session.commit()
                 return None
 
-            # we add it to the message queue... bad idea? should we process it asap?
-            try:
-                pending_message = PendingMessageDb.from_obj(
-                    message,
-                    reception_time=reception_time,
-                    tx_hash=tx_hash,
-                )
-            except ValueError as e:
-                LOGGER.warning("Invalid message: %s - %s", message.item_hash, str(e))
-                reject_new_pending_message(
-                    session=session, pending_message=message_dict, exception=e
-                )
-                session.commit()
-                return None
+            pending_message = PendingMessageDb.from_obj(
+                message,
+                reception_time=reception_time,
+                tx_hash=tx_hash,
+            )
 
             try:
-                with self.session_factory() as session:
-                    pending_message = await self.load_fetched_content(
-                        session, pending_message
-                    )
+                pending_message = await self.load_fetched_content(
+                    session, pending_message
+                )
             except InvalidMessageException as e:
                 LOGGER.warning("Invalid message: %s - %s", message.item_hash, str(e))
                 reject_new_pending_message(

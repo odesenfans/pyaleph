@@ -37,7 +37,7 @@ def check_for_u0000(item_content: aleph_json.SerializedJsonInput):
         contains_u0000 = U0000_BYTES in item_content
 
     if contains_u0000:
-        error_msg = f"Unsupported character in message: \u0000"
+        error_msg = f"Unsupported character in message: \\u0000"
         LOGGER.warning(error_msg)
         raise InvalidContent(error_msg)
 
