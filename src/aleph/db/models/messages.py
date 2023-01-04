@@ -221,17 +221,3 @@ class RejectedMessageDb(Base):
     error_code: int = Column(Integer, nullable=False)
     details: Optional[Dict[str, Any]] = Column(JSONB, nullable=True)
     traceback: Optional[str] = Column(String, nullable=True)
-
-
-# class MessageConfirmationDb(Base):
-#     __tablename__ = "message_confirmations"
-#     __table_args__ = (UniqueConstraint("item_hash", "tx_hash"),)
-#
-#     id = Column(Integer, primary_key=True)
-#     item_hash: str = Column(ForeignKey(MessageDb.item_hash), nullable=False, index=True)
-#     tx_hash: str = Column(
-#         ForeignKey("chain_txs.hash", ondelete="CASCADE"), nullable=False
-#     )
-#
-#     message: MessageDb = relationship(MessageDb, back_populates="confirmations")
-#     tx: ChainTxDb = relationship("ChainTxDb")
