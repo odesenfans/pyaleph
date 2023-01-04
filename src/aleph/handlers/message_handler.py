@@ -169,6 +169,7 @@ class MessageHandler:
         tx_hash: Optional[str] = None,
     ) -> Optional[PendingMessageDb]:
 
+        # TODO: this implementation is just messy, improve it.
         with self.session_factory() as session:
             try:
                 # we don't check signatures yet.
@@ -181,11 +182,19 @@ class MessageHandler:
                 session.commit()
                 return None
 
-            pending_message = PendingMessageDb.from_obj(
-                message,
-                reception_time=reception_time,
-                tx_hash=tx_hash,
-            )
+            try:
+                pending_message = PendingMessageDb.from_obj(
+                    message,
+                    reception_time=reception_time,
+                    tx_hash=tx_hash,
+                )
+            except ValueError as e:
+                LOGGER.warning("Invalid message: %s - %s", message.item_hash, str(e))
+                reject_new_pending_message(
+                    session=session, pending_message=message_dict, exception=e
+                )
+                session.commit()
+                return None
 
             try:
                 pending_message = await self.load_fetched_content(
