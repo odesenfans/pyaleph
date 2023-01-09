@@ -270,7 +270,9 @@ class MessageHandler:
         await self.fetch_related_content(session=session, message=validated_message)
         return validated_message
 
-    async def process(self, session: DbSession, pending_message: PendingMessageDb):
+    async def process(
+        self, session: DbSession, pending_message: PendingMessageDb
+    ) -> MessageDb:
         existing_message = get_message_by_item_hash(
             session=session, item_hash=pending_message.item_hash
         )
@@ -298,6 +300,7 @@ class MessageHandler:
         content_handler = self.get_content_handler(message.type)
         await content_handler.check_permissions(session=session, message=message)
 
+    # TODO: this method is only used in tests. Consider removing it.
     async def fetch_and_process_one_message_db(self, pending_message: PendingMessageDb):
         with self.session_factory() as session:
             await self.process(session=session, pending_message=pending_message)
