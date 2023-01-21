@@ -82,7 +82,7 @@ def get_defaults():
             "authorized_emitters": ["0x23eC28598DCeB2f7082Cc3a9D670592DfEd6e0dC"],
         },
         "postgres": {
-            "host": "127.0.0.1",
+            "host": "postgres",
             "port": 5432,
             "database": "aleph",
             "user": "aleph",
