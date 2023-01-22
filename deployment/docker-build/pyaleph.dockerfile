@@ -57,6 +57,9 @@ RUN useradd -s /bin/bash aleph
 COPY --from=builder --chown=aleph /opt/venv /opt/venv
 COPY --from=builder --chown=aleph /opt/pyaleph /opt/pyaleph
 
+RUN mkdir /var/lib/pyaleph
+RUN chown -R aleph:aleph /var/lib/pyaleph
+
 ENV PATH="/opt/venv/bin:${PATH}"
 WORKDIR /opt/pyaleph
 USER aleph
