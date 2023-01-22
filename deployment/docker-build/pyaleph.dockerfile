@@ -57,5 +57,6 @@ COPY --from=builder --chown=aleph /opt/venv /opt/venv
 COPY --from=builder --chown=aleph /opt/pyaleph /opt/pyaleph
 
 ENV PATH="/opt/venv/bin:${PATH}"
+WORKDIR /opt/pyaleph
 USER aleph
 ENTRYPOINT ["bash", "deployment/scripts/run_aleph_ccn.sh"]
