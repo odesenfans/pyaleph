@@ -14,6 +14,10 @@ RUN apt-get update && apt-get -y upgrade && apt-get install -y \
 
 FROM base as builder
 
+RUN openssl version
+RUN cat /etc/ssl/openssl.cnf
+RUN echo "$OPENSSL_CONF"
+
 # Build-only packages
 RUN apt-get update && apt-get install -y \
     build-essential \
@@ -46,7 +50,6 @@ COPY deployment/migrations ./deployment/migrations
 COPY deployment/scripts ./deployment/scripts
 COPY .git ./.git
 COPY src ./src
-RUN ls /opt/pyaleph
 RUN pip install -e .
 
 
@@ -56,6 +59,11 @@ RUN useradd -s /bin/bash aleph
 
 COPY --from=builder --chown=aleph /opt/venv /opt/venv
 COPY --from=builder --chown=aleph /opt/pyaleph /opt/pyaleph
+
+# OpenSSL 3 disabled some hash algorithms by default. They must be reenabled
+# by enabling the "legacy" providers in /etc/ssl/openssl.cnf.
+COPY ./deployment/docker-build/openssl.cnf.patch /etc/ssl/openssl.cnf.patch
+RUN patch /etc/ssl/openssl.cnf /etc/ssl/openssl.cnf.patch
 
 RUN mkdir /var/lib/pyaleph
 RUN chown -R aleph:aleph /var/lib/pyaleph
