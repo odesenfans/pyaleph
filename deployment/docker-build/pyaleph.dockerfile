@@ -42,6 +42,7 @@ ENV PATH="/opt/venv/bin:${PATH}"
 
 WORKDIR /opt/pyaleph
 COPY alembic.ini setup.cfg setup.py ./
+COPY deployment/migrations ./deployment/migrations
 COPY deployment/scripts ./deployment/scripts
 COPY .git ./.git
 COPY src ./src
