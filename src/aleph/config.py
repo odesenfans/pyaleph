@@ -14,6 +14,8 @@ def get_defaults():
             "host": "0.0.0.0",
             "port": 8000,
             "reference_node_url": None,
+            "dns_address": None,
+            "ipv6_support": False,
             "balances": {
                 "addresses": [
                     "0xB34f25f2c935bCA437C061547eA12851d719dEFb",

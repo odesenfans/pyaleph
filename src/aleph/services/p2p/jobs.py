@@ -67,9 +67,9 @@ async def tidy_http_peers_job(
     config: Config, session_factory: DbSessionFactory, api_servers: List[str]
 ) -> None:
     """Check that HTTP peers are reachable, else remove them from the list"""
-    from aleph.services.utils import get_IP
+    from aleph.services.utils import get_public_ip
 
-    my_ip = await get_IP()
+    my_ip = await get_public_ip(ip_version=4)
     await asyncio.sleep(2)
 
     while True:

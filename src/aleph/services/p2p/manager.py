@@ -9,13 +9,13 @@ from aleph.types.db_session import DbSessionFactory
 from aleph.services.ipfs import IpfsService
 from aleph.services.peers.monitor import monitor_hosts_ipfs, monitor_hosts_p2p
 from aleph.services.peers.publish import publish_host
-from aleph.services.utils import get_IP
+from aleph.services.utils import get_public_ip
 
 LOGGER = logging.getLogger(__name__)
 
 
-# Save published adress to present them in the web process later
-public_adresses = []
+# Save published address to present them in the web process later
+public_addresses = []
 
 
 async def initialize_host(
@@ -44,25 +44,29 @@ async def initialize_host(
         ),
     ]
     if listen:
-        start_time = time.perf_counter()
         peer_id = (await p2p_client.identify()).peer_id
-        LOGGER.info("Got identify info in %.3f seconds", time.perf_counter() - start_time)
         LOGGER.info("Listening on " + f"{transport_opt}/p2p/{peer_id}")
 
-        start_time = time.perf_counter()
-        ip = await get_IP()
-        LOGGER.info("Got IP info in %.3f seconds", time.perf_counter() - start_time)
-        public_address = f"/ip4/{ip}/tcp/{port}/p2p/{peer_id}"
+        if (dns_address := config.aleph.dns_address.value) is not None:
+            public_addresses.append(f"/dns/{dns_address}/tcp/{port}/")
+
+        ipv4 = await get_public_ip(ip_version=4)
+        public_ipv4_multiaddr = f"/ip4/{ipv4}/tcp/{port}/p2p/{peer_id}"
+        public_addresses.append(public_ipv4_multiaddr)
+
+        ipv6 = await get_public_ip(ip_version=6)
+        public_ipv6_multiaddr = f"/ip6/{ipv6}/tc/{port}/p2p/{peer_id}"
+        public_addresses.append(public_ipv6_multiaddr)
+
         http_port = config.p2p.http_port.value
-        public_adresses.append(public_address)
 
-        public_http_address = f"http://{ip}:{http_port}"
+        public_http_address = f"http://{ipv4}:{http_port}"
 
-        LOGGER.info("Probable public on " + public_address)
+        LOGGER.info("Probable public on " + public_ipv4_multiaddr)
         # TODO: set correct interests and args here
         tasks += [
             publish_host(
-                public_address,
+                public_ipv4_multiaddr,
                 p2p_client=p2p_client,
                 ipfs_service=ipfs_service,
                 p2p_alive_topic=config.p2p.alive_topic.value,

@@ -297,7 +297,7 @@ async def main(args):
         # Need to be passed here otherwise it gets lost in the fork
         from aleph.services.p2p import manager as p2p_manager
 
-        extra_web_config = {"public_adresses": p2p_manager.public_adresses}
+        extra_web_config = {"public_addresses": p2p_manager.public_addresses}
 
         p1 = Process(
             target=run_server_coroutine,

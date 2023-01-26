@@ -19,9 +19,9 @@ LOGGER = logging.getLogger("jobs.reconnect_ipfs")
 async def reconnect_ipfs_job(
     config: Config, session_factory: DbSessionFactory, ipfs_service: IpfsService
 ):
-    from aleph.services.utils import get_IP
+    from aleph.services.utils import get_public_ip
 
-    my_ip = await get_IP()
+    my_ip = await get_public_ip(ip_version=4)
     await asyncio.sleep(2)
     while True:
         try:

@@ -8,6 +8,6 @@ async def public_multiaddress(request):
     """
 
     output = {
-        "node_multi_addresses": request.config_dict["extra_config"]["public_adresses"],
+        "node_multi_addresses": request.config_dict["extra_config"]["public_addresses"],
     }
     return web.json_response(output)

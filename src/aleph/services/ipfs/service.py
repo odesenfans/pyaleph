@@ -7,7 +7,7 @@ from typing import IO, Optional, Union, Dict
 import aiohttp
 import aioipfs
 
-from aleph.services.utils import get_IP
+from aleph.services.utils import get_public_ip
 from aleph.utils import run_in_executor
 
 LOGGER = logging.getLogger(__name__)
@@ -23,7 +23,7 @@ class IpfsService:
         return await self.ipfs_client.swarm.connect(peer)
 
     async def get_public_address(self):
-        public_ip = await get_IP()
+        public_ip = await get_public_ip(ip_version=4)
 
         addresses = (await self.ipfs_client.id())["Addresses"]
         for address in addresses:
