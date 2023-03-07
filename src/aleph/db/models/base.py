@@ -22,8 +22,29 @@ class AugmentedBase:
     @classmethod
     def count(cls, session: DbSession) -> int:
         return (
-            session.execute(f"SELECT COUNT(*) FROM {cls.__tablename__}")  # type: ignore
+            session.execute(text(f"SELECT COUNT(*) FROM {cls.__tablename__}"))  # type: ignore
         ).scalar_one()
+
+    @classmethod
+    def estimated_count(cls, session: DbSession) -> int:
+        """
+        Returns an approximation of the number of rows in a table.
+
+        SELECT COUNT(*) can be quite slow. There are techniques to retrieve an
+        approximation of the number of rows in a table that are much faster.
+        Refer to https://wiki.postgresql.org/wiki/Count_estimate for an explanation.
+
+        :param session: DB session object.
+        :return: The approximate number of rows in a table.
+        """
+
+        estimate = session.execute(
+            text(
+                f"SELECT reltuples::bigint FROM pg_class WHERE relname = '{cls.__tablename__}'"
+            )
+        ).scalar_one()
+        # The estimate size can be negative
+        return max(estimate, 0)
 
     # TODO: set type of "where" to the SQLA boolean expression class
     @classmethod
@@ -34,9 +55,7 @@ class AugmentedBase:
         return result is not None
 
     @classmethod
-    def jsonb_keys(
-        cls, session: DbSession, column: Column, where
-    ) -> Iterable[str]:
+    def jsonb_keys(cls, session: DbSession, column: Column, where) -> Iterable[str]:
         select_stmt = select(func.jsonb_object_keys(column)).where(where)
         return session.execute(select_stmt).scalars()
 

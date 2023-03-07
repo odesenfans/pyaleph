@@ -161,6 +161,21 @@ async def test_message_exists(session_factory: DbSessionFactory, fixture_message
 
 
 @pytest.mark.asyncio
+async def test_message_count(session_factory: DbSessionFactory, fixture_message: MessageDb):
+    with session_factory() as session:
+        session.add(fixture_message)
+        session.commit()
+
+    with session_factory() as session:
+        exact_count = MessageDb.count(session)
+        assert exact_count == 1
+
+        estimate_count = MessageDb.estimated_count(session)
+        assert isinstance(estimate_count, int)
+        assert 0 <= estimate_count <= 100
+
+
+@pytest.mark.asyncio
 async def test_upsert_query_confirmation(
     session_factory: DbSessionFactory, fixture_message: MessageDb
 ):
