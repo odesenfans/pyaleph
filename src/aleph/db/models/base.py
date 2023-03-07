@@ -22,7 +22,7 @@ class AugmentedBase:
     @classmethod
     def count(cls, session: DbSession) -> int:
         return (
-            session.execute(text(f"SELECT COUNT(*) FROM {cls.__tablename__}"))  # type: ignore
+            session.execute(text(f"SELECT COUNT(*) FROM {cls.__tablename__}"))
         ).scalar_one()
 
     @classmethod
