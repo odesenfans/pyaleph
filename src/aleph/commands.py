@@ -157,7 +157,10 @@ def run_server_coroutine(
     )
 
     if enable_sentry:
-        setup_sentry(config)
+        if port == 8000:
+            setup_sentry(config, traces_sample_rate=1.0)
+        else:
+            setup_sentry(config)
 
     # Use a try-catch-capture_exception to work with multiprocessing, see
     # https://github.com/getsentry/raven-python/issues/1110
