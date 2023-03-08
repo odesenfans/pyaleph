@@ -8,3 +8,10 @@ class ChainSyncProtocol(str, Enum):
     OFF_CHAIN_SYNC = "aleph-offchain"
     # Messages sent by a smart contract
     SMART_CONTRACT = "smart-contract"
+
+
+class ChainSyncType(str, Enum):
+    # Messages sent on-chain using the Aleph smart contract.
+    MESSAGE = "message"
+    # Synchronisation messages sent by a CCN to the Aleph smart contract.
+    SYNC = "sync"
