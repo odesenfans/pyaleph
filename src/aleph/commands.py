@@ -233,8 +233,13 @@ async def main(args):
     config_values = config.dump_values()
 
     LOGGER.info("Initializing database...")
-    run_db_migrations(config)
+    with sentry_sdk.start_transaction(name="run-migrations"):
+        run_db_migrations(config)
     LOGGER.info("Database initialized.")
+
+    with sentry_sdk.start_transaction(name="init-sleep"):
+        from time import sleep
+        sleep(3)
 
     engine = make_engine(
         config,
