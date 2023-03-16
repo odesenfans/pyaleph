@@ -74,6 +74,7 @@ async def get_hash(request):
             use_ipfs=True,
             engine=engine,
             store_value=False,
+            timeout=300,    # 5 minute timeout, for large files.
         )
     except AlephStorageException:
         return web.HTTPNotFound(text=f"No file found for hash {item_hash}")
