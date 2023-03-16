@@ -112,6 +112,7 @@ async def get_raw_hash(request):
             use_ipfs=True,
             engine=engine,
             store_value=False,
+            timeout=300,  # 5 minute timeout, for large files.
         )
     except AlephStorageException as e:
         raise web.HTTPNotFound(text="Not found") from e
