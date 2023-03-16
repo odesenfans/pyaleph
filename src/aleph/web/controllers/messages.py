@@ -182,7 +182,8 @@ async def view_messages_list(request):
         )
 
         formatted_messages = [
-            format_message(message).dict(exclude_defaults=True) for message in messages
+            message.to_dict() for message in messages
+            # format_message(message).dict(exclude_defaults=True) for message in messages
         ]
 
         total_msgs = count_matching_messages(session, **find_filters)
