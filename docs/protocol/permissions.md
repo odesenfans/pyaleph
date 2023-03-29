@@ -1,7 +1,7 @@
 # Permissions
 
-All Aleph.im message types have an `address` content field. 
-This is the address of the owner of the object on the Aleph.im network.
+All aleph.im message types have an `address` content field. 
+This is the address of the owner of the object on the aleph.im network.
 Ex: a program, a file, a post, an aggregate.
 
 Core Channel Nodes validate that the message sender (the one signing the message) has the right to publish 

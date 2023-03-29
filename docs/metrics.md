@@ -18,7 +18,7 @@ improve this interface.
 | Field                                           | Type           | Description                                                                                      |
 |-------------------------------------------------|----------------|--------------------------------------------------------------------------------------------------|
 | pyaleph_build_info                              | dict           | Software build information.                                                                      |
-| pyaleph_status_peers_total                      | int            | Total number of peers of this node on the Aleph.im network.                                      |
+| pyaleph_status_peers_total                      | int            | Total number of peers of this node on the aleph.im network.                                      |
 | pyaleph_status_sync_messages_total              | int            | Number of messages processed by this node.                                                       |
 | pyaleph_status_sync_permanent_files_total       | int            | Total number of permanent files stored.                                                          |
 | pyaleph_status_sync_pending_messages_total      | int            | Number of messages received by the node and queued for processing.                               |

@@ -1,17 +1,25 @@
 # Messages
 
-All data transferred over the aleph.im network are Aleph messages and
-represent the core of the Aleph networking model.
+At its core, the aleph.im network is a messaging system.
+All the data that transits on the network is represented by aleph.im messages that represent
+all the possible operations on the network.
 
-Messages can be:
+With aleph.im messages, you can, for example:
+* store files
+* pin content on IPFS
+* create decentralized programs
+* set up key/value databases.
 
-- sent and received on the REST or other API interfaces
-- exchanged on the peer-to-peer network
-- stored on the underlying chains
+Users create, sign and transmit messages to the aleph.im network.
+This can be achieved in a variety of ways:
+
+* by posting a message to a Core Channel Node
+* by broadcasting the message on the aleph.im peer-to-peer network
+* by using the aleph.im smart contracts deployed on supported chains.
 
 ## Message format
 
-An Aleph.im message is made of multiple fields that can be split between header and content fields.
+An aleph.im message is made of multiple fields that can be split between header and content fields.
 
 ### Header fields
 
@@ -37,11 +45,11 @@ An Aleph.im message is made of multiple fields that can be split between header 
 
 Actual content sent by regular users can currently be of five types:
 
-- [AGGREGATE](./aggregate.md): key-value storage.
-- [FORGET](./forget.md): delete other messages.
-- [POST](./post.md): unique data posts (unique data points, events).
-- [PROGRAM](./program.md): create and update programs (ex: lambda functions).
-- [STORE](./store.md): store and update files.
+- [AGGREGATE](./messages/aggregate.md): key-value storage.
+- [FORGET](./messages/forget.md): delete other messages.
+- [POST](./messages/post.md): unique data posts (unique data points, events).
+- [PROGRAM](./messages/program.md): create and update programs (ex: lambda functions).
+- [STORE](./messages/store.md): store and update files.
 
 
 ## Item hash, type and content
@@ -56,9 +64,9 @@ In the first case, the item type will be set to `ipfs`.
 In the second case, the item type will either be `inline` if the content is included in the message (serialized as a
 string in the `item_content` field) or `storage`. 
 Inline storage will be used for content up to 200kB. Beyond this size, users must upload the content as a file 
-on an Aleph.im node prior to uploading the message.
+on an aleph.im node prior to uploading the message.
 
 ## Signature
 
-Aleph.im messages are cryptographically signed with the private key of the user. 
+aleph.im messages are cryptographically signed with the private key of the user. 
 The signature covers the `sender`, `chain`, `type` and `item_hash` fields of the message.

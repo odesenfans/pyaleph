@@ -108,7 +108,7 @@ sentry:
 
 ### Node secret keys
 
-An Aleph.im node must have a persistent public-private keypair to
+An aleph.im node must have a persistent public-private keypair to
 authenticate to the network. These keys can be created using the Docker
 image. We strongly advise to back up your keys once generated.
 
