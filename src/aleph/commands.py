@@ -24,6 +24,7 @@ from configmanager import Config
 from setproctitle import setproctitle
 
 import aleph.config
+from aleph.api_entrypoint import run_fastapi_server
 from aleph.chains.chain_service import ChainService
 from aleph.cli.args import parse_args
 from aleph.db.connection import make_engine, make_session_factory, make_db_url
