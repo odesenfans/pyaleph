@@ -74,6 +74,9 @@ async def init_node_cache(config: Config) -> NodeCache:
     node_cache = NodeCache(
         redis_host=config.redis.host.value, redis_port=config.redis.port.value
     )
+
+    # Reset the cache
+    await node_cache.reset()
     return node_cache
 
 
@@ -308,7 +311,7 @@ async def main(args):
         ),
     )
     p2 = Process(
-        target=run_server_coroutine,
+        target=run_fastapi_server,
         args=(
             config_values,
             config.aleph.host.value,

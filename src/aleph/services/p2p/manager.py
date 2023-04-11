@@ -57,6 +57,8 @@ async def initialize_host(
         LOGGER.info("Got IP info in %.3f seconds", time.perf_counter() - start_time)
         public_address = f"/ip4/{ip}/tcp/{port}/p2p/{peer_id}"
         http_port = config.p2p.http_port.value
+
+        await node_cache.add_public_address(public_address)
         public_adresses.append(public_address)
 
         public_http_address = f"http://{ip}:{http_port}"

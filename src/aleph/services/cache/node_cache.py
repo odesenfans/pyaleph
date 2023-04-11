@@ -1,4 +1,4 @@
-from typing import Any, Set, Optional
+from typing import Any, Set, Optional, List
 
 import redis.asyncio as redis_asyncio
 
@@ -8,6 +8,7 @@ CacheValue = bytes
 
 class NodeCache:
     API_SERVERS_KEY = "api_servers"
+    PUBLIC_ADDRESSES_KEY = "public_addresses"
     redis_client: redis_asyncio.Redis
 
     def __init__(self, redis_host: str, redis_port: int):
@@ -15,6 +16,12 @@ class NodeCache:
         self.redis_port = redis_port
 
         self.redis_client = redis_asyncio.Redis(host=redis_host, port=redis_port)
+
+    async def reset(self):
+        """
+        Resets the cache to sane defaults after a reboot of the node.
+        """
+        await self.redis_client.delete(self.PUBLIC_ADDRESSES_KEY)
 
     async def get(self, key: CacheKey) -> Optional[CacheValue]:
         return await self.redis_client.get(key)
@@ -42,3 +49,10 @@ class NodeCache:
 
     async def remove_api_server(self, api_server: str) -> None:
         await self.redis_client.srem(self.API_SERVERS_KEY, api_server)
+
+    async def add_public_address(self, public_address: str) -> None:
+        await self.redis_client.sadd(self.PUBLIC_ADDRESSES_KEY, public_address)
+
+    async def get_public_addresses(self) -> List[str]:
+        addresses = await self.redis_client.smembers(self.PUBLIC_ADDRESSES_KEY)
+        return [addr.decode() for addr in addresses]
