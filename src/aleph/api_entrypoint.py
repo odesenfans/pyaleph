@@ -6,7 +6,7 @@ from fastapi import FastAPI
 
 import aleph.config
 from aleph import __version__
-from aleph.web.controllers_fastapi.info import router as info_router
+from aleph.web.controllers_fastapi.main_routers import api_v0_router, api_v1_router
 
 LOGGER = logging.getLogger(__name__)
 
@@ -27,7 +27,8 @@ def run_fastapi_server(
 def create_fastapi_app():
     app = FastAPI(title="Aleph.im Core Channel Node API", version=__version__)
 
-    app.include_router(info_router)
+    app.include_router(api_v0_router)
+    app.include_router(api_v1_router)
 
     return app
 
