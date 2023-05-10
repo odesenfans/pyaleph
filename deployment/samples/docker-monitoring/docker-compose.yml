@@ -44,9 +44,17 @@ services:
       - pyaleph
     networks:
       - pyaleph
+      - traefik
     logging:
       options:
         max-size: 50m
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pyaleph-api.rule=Host(`mark.deathtoweb2.cloud`)"
+      - "traefik.http.routers.pyaleph-api.entrypoints=web,websecure"
+      - "traefik.http.routers.pyaleph-api.tls.certresolver=myresolver"
+      - "traefik.http.services.pyaleph-api.loadbalancer.server.port=4024"
+      - "traefik.docker.network=traefik"
 
   p2p-service:
     restart: always
@@ -141,25 +149,40 @@ services:
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=a440fc1aa53b6b313b85b004605b7647  # Warning, change this !
+      - GF_SERVER_DOMAIN=mark.deathtoweb2.cloud
+      - GF_SERVER_ROOT_URL=https://mark.deathtoweb2.cloud/grafana/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
     networks:
       - grafana
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`mark.deathtoweb2.cloud`) && PathPrefix(`/grafana`)"
+      - "traefik.http.routers.grafana.entrypoints=web,websecure"
+      - "traefik.http.routers.grafana.tls.certresolver=myresolver"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+      - "traefik.docker.network=traefik"
 
-  caddy:
-    restart: always
-    image: caddy:latest
-    command: caddy reverse-proxy --from :80 --to grafana:3000
-    # Use the following command with your own domain name to enable HTTPS instead
-#    command: caddy reverse-proxy --from grafana.aleph-node.example.org --to grafana:3000
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - pyaleph-caddy-data:/data
-      - pyaleph-caddy-config:/config
-    networks:
-      - pyaleph
-      - grafana
+#  caddy:
+#    restart: always
+#    image: caddy:latest
+#    command: caddy reverse-proxy --from :80 --to grafana:3000
+#    # Use the following command with your own domain name to enable HTTPS instead
+##    command: caddy reverse-proxy --from grafana.aleph-node.example.org --to grafana:3000
+#    ports:
+#      - "80:80"
+#      - "443:443"
+#    volumes:
+#      - pyaleph-caddy-data:/data
+#      - pyaleph-caddy-config:/config
+#    networks:
+#      - pyaleph
+#      - grafana
 
 networks:
   pyaleph:
+    name: pyaleph
   grafana:
+    name: grafana
+  traefik:
+    external: true
