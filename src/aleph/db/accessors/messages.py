@@ -11,7 +11,7 @@ from sqlalchemy.sql.elements import literal
 
 from aleph.toolkit.timestamp import coerce_to_datetime, utc_now
 from aleph.types.channel import Channel
-from aleph.types.db_session import DbSession
+from aleph.types.db_session import DbSession, AsyncDbSession
 from aleph.types.message_status import (
     MessageStatus,
     MessageProcessingException,
@@ -185,6 +185,34 @@ def count_matching_messages(
     return MessageDb.fast_count(session=session)
 
 
+async def count_matching_messages_async(
+    session: AsyncDbSession,
+    start_date: float = 0.0,
+    end_date: float = 0.0,
+    sort_by: SortBy = SortBy.TIME,
+    sort_order: SortOrder = SortOrder.DESCENDING,
+    page: int = 1,
+    pagination: int = 0,
+    **kwargs,
+) -> int:
+    # Note that we deliberately ignore the pagination parameters so that users can pass
+    # the same parameters as get_matching_messages and get the total number of messages,
+    # not just the number on a page.
+    if kwargs or start_date or end_date:
+        select_stmt = make_matching_messages_query(
+            **kwargs,
+            start_date=start_date,
+            end_date=end_date,
+            include_confirmations=False,
+            page=1,
+            pagination=0,
+        )
+        select_count_stmt = select(func.count()).select_from(select_stmt)
+        return (await session.execute(select_count_stmt)).scalar_one()
+
+    return await MessageDb.fast_count_async(session=session)
+
+
 def get_matching_messages(
     session: DbSession,
     **kwargs,  # Same as make_matching_messages_query
@@ -194,6 +222,14 @@ def get_matching_messages(
     """
     select_stmt = make_matching_messages_query(**kwargs)
     return (session.execute(select_stmt)).scalars()
+
+
+async def get_matching_messages_async(
+    session: AsyncDbSession,
+    **kwargs,  # Same as make_matching_messages_query
+) -> Iterable[MessageDb]:
+    select_stmt = make_matching_messages_query(**kwargs)
+    return (await session.execute(select_stmt)).scalars()
 
 
 def get_message_stats_by_address(
@@ -234,7 +270,6 @@ def refresh_address_stats_mat_view(session: DbSession) -> None:
 def get_unconfirmed_messages(
     session: DbSession, limit: int = 100, chain: Optional[Chain] = None
 ) -> Iterable[MessageDb]:
-
     if chain is None:
         select_message_confirmations = select(message_confirmations.c.item_hash).where(
             message_confirmations.c.item_hash == MessageDb.item_hash

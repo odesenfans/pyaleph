@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional, Any, Dict, Iterable
+from typing import List, Optional, Any, Dict, Iterable, Sized
 
 import aio_pika.abc
 import aiohttp.web_ws
@@ -10,11 +10,12 @@ from pydantic import BaseModel, Field, validator, ValidationError, root_validato
 import aleph.toolkit.json as aleph_json
 from aleph.db.accessors.messages import (
     get_matching_messages,
-    count_matching_messages,
     get_message_status,
     get_message_by_item_hash,
     get_forgotten_message,
     get_rejected_message,
+    get_matching_messages_async,
+    count_matching_messages_async,
 )
 from aleph.db.accessors.pending_messages import get_pending_messages
 from aleph.db.models import MessageStatusDb, MessageDb
@@ -28,13 +29,14 @@ from aleph.schemas.api.messages import (
     RejectedMessageStatus,
     PendingMessage,
 )
-from aleph.types.db_session import DbSessionFactory, DbSession
+from aleph.types.db_session import DbSessionFactory, DbSession, AsyncDbSession
 from aleph.types.message_status import MessageStatus
 from aleph.types.sort_order import SortOrder, SortBy
 from aleph.web.controllers.app_state_getters import (
     get_session_factory_from_request,
     get_mq_channel_from_request,
     get_config_from_request,
+    get_async_session_factory_from_request,
 )
 from aleph.web.controllers.utils import (
     DEFAULT_MESSAGES_PER_PAGE,
@@ -185,7 +187,7 @@ def format_response_dict(
     }
 
 
-def format_response(
+def _format_response(
     messages: Iterable[MessageDb], pagination: int, page: int, total_messages: int
 ) -> web.Response:
     formatted_messages = [format_message_dict(message) for message in messages]
@@ -198,6 +200,21 @@ def format_response(
     )
 
     return web.json_response(text=aleph_json.dumps(response).decode("utf-8"))
+
+
+async def _count_matching_messages(
+    session: AsyncDbSession,
+    messages: Sized,
+    filters: Dict[str, Any],
+    pagination_per_page: int,
+) -> int:
+    # Avoid hitting the DB if the number of messages is smaller than the page size.
+    # This allows to return faster for complex filters and guarantees an exact
+    # result in this case.
+    if len(messages) <= pagination_per_page:
+        return len(messages)
+
+    return await count_matching_messages_async(session=session, **filters)
 
 
 async def view_messages_list(request: web.Request) -> web.Response:
@@ -218,14 +235,21 @@ async def view_messages_list(request: web.Request) -> web.Response:
     pagination_page = query_params.page
     pagination_per_page = query_params.pagination
 
-    session_factory = get_session_factory_from_request(request)
-    with session_factory() as session:
-        messages = get_matching_messages(
-            session, include_confirmations=True, **find_filters
+    session_factory = get_async_session_factory_from_request(request)
+    async with session_factory() as session:
+        messages = list(
+            await get_matching_messages_async(
+                session, include_confirmations=True, **find_filters
+            )
         )
-        total_msgs = count_matching_messages(session, **find_filters)
+        total_msgs = await _count_matching_messages(
+            session=session,
+            messages=messages,
+            filters=find_filters,
+            pagination_per_page=pagination_per_page,
+        )
 
-        return format_response(
+        return _format_response(
             messages,
             pagination=pagination_per_page,
             page=pagination_page,
@@ -239,7 +263,6 @@ async def _send_history_to_ws(
     history: int,
     message_filters: Dict[str, Any],
 ) -> None:
-
     with session_factory() as session:
         messages = get_matching_messages(
             session=session,

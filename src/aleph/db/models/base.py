@@ -3,7 +3,7 @@ from typing import Dict, Any, Optional, Set, List, Iterable
 from sqlalchemy import Table, exists, text, Column, func, select
 from sqlalchemy.orm import declarative_base
 
-from aleph.types.db_session import DbSession
+from aleph.types.db_session import DbSession, AsyncDbSession
 
 
 class AugmentedBase:
@@ -23,6 +23,12 @@ class AugmentedBase:
     def count(cls, session: DbSession) -> int:
         return (
             session.execute(text(f"SELECT COUNT(*) FROM {cls.__tablename__}"))
+        ).scalar_one()
+
+    @classmethod
+    async def count_async(cls, session: AsyncDbSession) -> int:
+        return (
+            await session.execute(text(f"SELECT COUNT(*) FROM {cls.__tablename__}"))
         ).scalar_one()
 
     @classmethod
@@ -46,6 +52,20 @@ class AugmentedBase:
         ).scalar_one()
 
     @classmethod
+    async def estimate_count_async(cls, session: AsyncDbSession) -> int:
+        """
+        Async implementation of `estimate_count`.
+        """
+
+        return (
+            await session.execute(
+                text(
+                    f"SELECT reltuples::bigint FROM pg_class WHERE relname = '{cls.__tablename__}'"
+                )
+            )
+        ).scalar_one()
+
+    @classmethod
     def fast_count(cls, session: DbSession) -> int:
         """
         :param session: DB session.
@@ -58,10 +78,22 @@ class AugmentedBase:
 
         return estimate_count
 
+    @classmethod
+    async def fast_count_async(cls, session: AsyncDbSession) -> int:
+        """
+        :param session: DB session.
+        :return: The estimate count of the table if available from pg_class, otherwise
+                 the real count of rows.
+        """
+        estimate_count = await cls.estimate_count_async(session)
+        if estimate_count == -1:
+            return await cls.count_async(session)
+
+        return estimate_count
+
     # TODO: set type of "where" to the SQLA boolean expression class
     @classmethod
     def exists(cls, session: DbSession, where) -> bool:
-
         exists_stmt = exists(text("1")).select().where(where)
         result = (session.execute(exists_stmt)).scalar()
         return result is not None

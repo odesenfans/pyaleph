@@ -14,7 +14,7 @@ from configmanager import Config
 from aleph.services.cache.node_cache import NodeCache
 from aleph.services.ipfs import IpfsService
 from aleph.storage import StorageService
-from aleph.types.db_session import DbSessionFactory
+from aleph.types.db_session import DbSessionFactory, AsyncDbSessionFactory
 
 APP_STATE_CONFIG = "config"
 APP_STATE_MQ_CONN = "mq_conn"
@@ -22,6 +22,7 @@ APP_STATE_MQ_CHANNEL = "mq_channel"
 APP_STATE_NODE_CACHE = "node_cache"
 APP_STATE_P2P_CLIENT = "p2p_client"
 APP_STATE_SESSION_FACTORY = "session_factory"
+APP_STATE_ASYNC_SESSION_FACTORY = "async_session_factory"
 APP_STATE_STORAGE_SERVICE = "storage_service"
 
 
@@ -60,6 +61,10 @@ def get_p2p_client_from_request(request: web.Request) -> AlephP2PServiceClient:
 
 def get_session_factory_from_request(request: web.Request) -> DbSessionFactory:
     return cast(DbSessionFactory, request.app[APP_STATE_SESSION_FACTORY])
+
+
+def get_async_session_factory_from_request(request: web.Request) -> AsyncDbSessionFactory:
+    return cast(AsyncDbSessionFactory, request.app[APP_STATE_ASYNC_SESSION_FACTORY])
 
 
 def get_storage_service_from_request(request: web.Request) -> StorageService:

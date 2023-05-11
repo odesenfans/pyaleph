@@ -6,7 +6,12 @@ from aiohttp import web
 from configmanager import Config
 
 import aleph.config
-from aleph.db.connection import make_engine, make_session_factory
+from aleph.db.connection import (
+    make_engine,
+    make_session_factory,
+    make_async_engine,
+    make_async_session_factory,
+)
 from aleph.services.cache.node_cache import NodeCache
 from aleph.services.ipfs import IpfsService
 from aleph.services.ipfs.common import make_ipfs_client
@@ -21,7 +26,8 @@ from aleph.web.controllers.app_state_getters import (
     APP_STATE_NODE_CACHE,
     APP_STATE_P2P_CLIENT,
     APP_STATE_SESSION_FACTORY,
-    APP_STATE_STORAGE_SERVICE, APP_STATE_MQ_CHANNEL,
+    APP_STATE_STORAGE_SERVICE,
+    APP_STATE_MQ_CHANNEL, APP_STATE_ASYNC_SESSION_FACTORY,
 )
 
 
@@ -32,11 +38,17 @@ async def configure_aiohttp_app(
         p2p_client = await init_p2p_client(config, service_name=f"api-server-aiohttp")
 
         engine = make_engine(
-            config,
+            config=config,
             echo=config.logging.level.value == logging.DEBUG,
             application_name=f"aleph-api",
         )
+        async_engine = make_async_engine(
+            config=config,
+            echo=config.logging.level.value == logging.DEBUG,
+            application_name=f"aleph-api-async",
+        )
         session_factory = make_session_factory(engine)
+        async_session_factory = make_async_session_factory(async_engine)
 
         node_cache = NodeCache(
             redis_host=config.redis.host.value, redis_port=config.redis.port.value
@@ -65,6 +77,7 @@ async def configure_aiohttp_app(
         app[APP_STATE_NODE_CACHE] = node_cache
         app[APP_STATE_STORAGE_SERVICE] = storage_service
         app[APP_STATE_SESSION_FACTORY] = session_factory
+        app[APP_STATE_ASYNC_SESSION_FACTORY] = async_session_factory
 
     return app
 
@@ -86,4 +99,5 @@ async def create_app() -> web.Application:
 
 if __name__ == "__main__":
     import asyncio
+
     web.run_app(create_app(), host="localhost", port=8000)

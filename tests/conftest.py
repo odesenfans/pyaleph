@@ -13,18 +13,32 @@ import pytest_asyncio
 from configmanager import Config
 
 import aleph.config
-from aleph.db.connection import make_engine, make_session_factory, make_db_url
+from aleph.db.connection import (
+    make_engine,
+    make_session_factory,
+    make_db_url,
+    make_async_engine,
+    make_async_session_factory,
+)
 from aleph.services.cache.node_cache import NodeCache
 from aleph.services.ipfs import IpfsService
 from aleph.services.ipfs.common import make_ipfs_client
 from aleph.services.storage.fileystem_engine import FileSystemStorageEngine
 from aleph.storage import StorageService
-from aleph.types.db_session import DbSessionFactory
+from aleph.types.db_session import DbSessionFactory, AsyncDbSessionFactory
 from aleph.web import create_aiohttp_app
 
 # Add the helpers to the PYTHONPATH.
 # Note: mark the "helpers" directory as a source directory to tell PyCharm
 # about this trick and avoid IDE errors.
+from aleph.web.controllers.app_state_getters import (
+    APP_STATE_ASYNC_SESSION_FACTORY,
+    APP_STATE_CONFIG,
+    APP_STATE_P2P_CLIENT,
+    APP_STATE_SESSION_FACTORY,
+    APP_STATE_STORAGE_SERVICE,
+)
+
 sys.path.append(os.path.join(os.path.dirname(__file__), "helpers"))
 
 
@@ -62,6 +76,21 @@ def session_factory(mock_config):
 
     run_db_migrations(config=mock_config)
     return make_session_factory(engine)
+
+
+@pytest_asyncio.fixture
+async def async_session_factory(mock_config):
+    engine = make_async_engine(
+        config=mock_config, echo=False, application_name=None
+    )
+
+    # TODO: determine when to run migrations (fixture parameter?)
+    # with engine.begin() as conn:
+    #     conn.execute("drop schema public cascade")
+    #     conn.execute("create schema public")
+
+    # run_db_migrations(config=mock_config)
+    return make_async_session_factory(engine)
 
 
 @pytest.fixture
@@ -112,17 +141,22 @@ async def test_storage_service(mock_config: Config, mocker) -> StorageService:
 
 @pytest_asyncio.fixture
 async def ccn_api_client(
-    mocker, aiohttp_client, mock_config, session_factory: DbSessionFactory
+    mocker,
+    aiohttp_client,
+    mock_config,
+    session_factory: DbSessionFactory,
+    async_session_factory: AsyncDbSessionFactory,
 ):
     # Make aiohttp return the stack trace on 500 errors
     event_loop = asyncio.get_event_loop()
     event_loop.set_debug(True)
 
     app = create_aiohttp_app(debug=True)
-    app["config"] = mock_config
-    app["p2p_client"] = mocker.AsyncMock()
-    app["storage_service"] = mocker.AsyncMock()
-    app["session_factory"] = session_factory
+    app[APP_STATE_CONFIG] = mock_config
+    app[APP_STATE_P2P_CLIENT] = mocker.AsyncMock()
+    app[APP_STATE_STORAGE_SERVICE] = mocker.AsyncMock()
+    app[APP_STATE_SESSION_FACTORY] = session_factory
+    app[APP_STATE_ASYNC_SESSION_FACTORY] = async_session_factory
     client = await aiohttp_client(app)
 
     return client
